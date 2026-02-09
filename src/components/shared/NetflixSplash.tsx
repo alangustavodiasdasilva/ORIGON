@@ -5,9 +5,6 @@ export default function NetflixSplash({ onComplete }: { onComplete: () => void }
     const [progress, setProgress] = useState(0);
 
     useEffect(() => {
-        // Play cinematic sound on mount
-        playSound();
-
         // Intro fade-in: 0.5 seconds
         const introTimer = setTimeout(() => {
             setStage('logo');
@@ -39,69 +36,6 @@ export default function NetflixSplash({ onComplete }: { onComplete: () => void }
             clearInterval(progressInterval);
         };
     }, [onComplete]);
-
-    // Cinematic audio sequence
-    const playSound = () => {
-        try {
-            const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-            const masterGain = audioContext.createGain();
-            masterGain.connect(audioContext.destination);
-            masterGain.gain.value = 0.3; // Overall volume
-
-            // Deep bass hit at start
-            const bass = audioContext.createOscillator();
-            const bassGain = audioContext.createGain();
-            bass.type = 'sine';
-            bass.frequency.setValueAtTime(55, audioContext.currentTime); // Low A
-            bass.connect(bassGain);
-            bassGain.connect(masterGain);
-            bassGain.gain.setValueAtTime(0.5, audioContext.currentTime);
-            bassGain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 1.5);
-            bass.start(audioContext.currentTime);
-            bass.stop(audioContext.currentTime + 1.5);
-
-            // Rising harmonic pad
-            const playNote = (freq: number, startTime: number, duration: number, volume: number = 0.15) => {
-                const osc = audioContext.createOscillator();
-                const gain = audioContext.createGain();
-                osc.type = 'sine';
-                osc.frequency.setValueAtTime(freq, startTime);
-                osc.connect(gain);
-                gain.connect(masterGain);
-                gain.gain.setValueAtTime(0, startTime);
-                gain.gain.linearRampToValueAtTime(volume, startTime + 0.1);
-                gain.gain.exponentialRampToValueAtTime(0.01, startTime + duration);
-                osc.start(startTime);
-                osc.stop(startTime + duration);
-            };
-
-            // Cinematic chord progression
-            const now = audioContext.currentTime;
-
-            // C major chord (hopeful, opening)
-            playNote(261.63, now + 0.5, 3, 0.12); // C4
-            playNote(329.63, now + 0.5, 3, 0.10); // E4
-            playNote(392.00, now + 0.5, 3, 0.08); // G4
-
-            // A minor chord (depth)
-            playNote(220.00, now + 2.5, 3, 0.12); // A3
-            playNote(261.63, now + 2.5, 3, 0.10); // C4
-            playNote(329.63, now + 2.5, 3, 0.08); // E4
-
-            // F major chord (resolution)
-            playNote(174.61, now + 4.5, 3, 0.12); // F3
-            playNote(220.00, now + 4.5, 3, 0.10); // A3
-            playNote(261.63, now + 4.5, 3, 0.08); // C4
-
-            // Final G major (triumph)
-            playNote(196.00, now + 6.5, 3.5, 0.15); // G3
-            playNote(246.94, now + 6.5, 3.5, 0.12); // B3
-            playNote(293.66, now + 6.5, 3.5, 0.10); // D4
-
-        } catch (e) {
-            console.log('Audio not supported:', e);
-        }
-    };
 
     if (stage === 'complete') return null;
 

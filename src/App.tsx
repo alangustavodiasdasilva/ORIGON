@@ -54,16 +54,16 @@ function AppRoutes() {
 
 export default function App() {
   return (
-    <ThemeProvider>
-      <ToastProvider>
+    <BrowserRouter basename="/ORIGON">
+      <ThemeProvider>
         <LanguageProvider>
-          <AuthProvider>
-            <BrowserRouter>
+          <ToastProvider>
+            <AuthProvider>
               <AppRoutes />
-            </BrowserRouter>
-          </AuthProvider>
+            </AuthProvider>
+          </ToastProvider>
         </LanguageProvider>
-      </ToastProvider>
-    </ThemeProvider>
+      </ThemeProvider>
+    </BrowserRouter>
   );
 }
