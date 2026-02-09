@@ -14,7 +14,7 @@ export default function Login() {
     const [senha, setSenha] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [showSplash, setShowSplash] = useState(false);
-    const [showSplash, setShowSplash] = useState(false);
+
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();

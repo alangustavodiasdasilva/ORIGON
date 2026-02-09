@@ -71,6 +71,7 @@ export default function Home() {
             } else {
                 // Fallback if no lab text
                 const lastCity = localStorage.getItem("last_lote_city");
+                if (lastCity) setNewLoteCidade(lastCity);
             }
         };
         fetchLabCity();
