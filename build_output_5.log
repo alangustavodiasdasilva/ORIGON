@@ -1,0 +1,13 @@
+﻿
+> fibertech-hvi@0.0.0 build
+> tsc -b && vite build
+
+[36mvite v7.3.1 [32mbuilding client environment for production...[36m[39m
+transforming...
+[32mÔ£ô[39m 1841 modules transformed.
+rendering chunks...
+computing gzip size...
+[2mdist/[22m[32mindex.html                 [39m[1m[2m  0.46 kB[22m[1m[22m[2m Ôöé gzip:   0.29 kB[22m
+[2mdist/[22m[35massets/index-BjHkilEA.css  [39m[1m[2m 86.74 kB[22m[1m[22m[2m Ôöé gzip:  14.03 kB[22m
+[2mdist/[22m[36massets/index-BbbBBof9.js   [39m[1m[33m715.94 kB[39m[22m[2m Ôöé gzip: 203.29 kB[22m
+[32mÔ£ô built in 11.13s[39m
