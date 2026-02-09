@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Loader2, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -14,16 +14,7 @@ export default function Login() {
     const [senha, setSenha] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [showSplash, setShowSplash] = useState(false);
-    const [debugCount, setDebugCount] = useState<number | null>(null);
-
-    useEffect(() => {
-        const check = async () => {
-            const { AnalistaService } = await import("@/entities/Analista");
-            const list = await AnalistaService.list();
-            setDebugCount(list.length);
-        };
-        check();
-    }, []);
+    const [showSplash, setShowSplash] = useState(false);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -81,9 +72,7 @@ export default function Login() {
                 />
             )}
 
-            <div className="fixed bottom-2 right-2 text-[10px] text-red-500 opacity-70 z-[9999] pointer-events-none font-mono">
-                DB Users: {debugCount ?? "Loading..."} | Build: {new Date().toLocaleTimeString()}
-            </div>
+
 
             {/* Only show login screen when splash is NOT active */}
             {!showSplash && (
