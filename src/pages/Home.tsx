@@ -58,10 +58,19 @@ export default function Home() {
                     if (lab && lab.cidade) {
                         const cityState = lab.estado ? `${lab.cidade}/${lab.estado}` : lab.cidade;
                         setNewLoteCidade(cityState);
+                    } else {
+                        const lastCity = localStorage.getItem("last_lote_city");
+                        if (lastCity) setNewLoteCidade(lastCity);
                     }
                 } catch (error) {
                     console.error("Failed to fetch lab details", error);
+                    // Fallback on error too
+                    const lastCity = localStorage.getItem("last_lote_city");
+                    if (lastCity) setNewLoteCidade(lastCity);
                 }
+            } else {
+                // Fallback if no lab text
+                const lastCity = localStorage.getItem("last_lote_city");
             }
         };
         fetchLabCity();
@@ -138,6 +147,11 @@ export default function Home() {
                 type: "success"
             });
             setNewLoteName("");
+            localStorage.setItem("last_lote_city", newLoteCidade);
+            setNewLoteName("");
+            // Keep city for next time or rely on useEffect to reload it
+            // setNewLoteCidade(""); // Don't clear it, or rely on useEffect. 
+            // Better to clear and let useEffect/init restore it on next open.
             setNewLoteCidade("");
             setIsByLoteModalOpen(false);
             navigate(`/registro?loteId=${newLote.id}`);
