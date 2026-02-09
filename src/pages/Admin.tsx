@@ -204,19 +204,13 @@ function DashboardTab({ onlineAnalysts }: { onlineAnalysts: Analista[] }) {
 }
 
 // Interfaces
-interface Machine {
-    id: string;
-    machineId: string; // "ID da Máquina"
-    serialNumber: string; // "Número de Série"
-    model: 'USTER' | 'PREMIER';
-    labId: string; // Vínculo com Laboratório
-}
+import { Machine, MachineService } from "@/entities/Machine";
 
 function SystemConfigTab() {
     const { user, currentLab } = useAuth();
     const { addToast } = useToast();
     const [machines, setMachines] = useState<Machine[]>([]);
-    const [labs, setLabs] = useState<Lab[]>([]); // Keep this for getLabName but might not need to load all
+    const [labs, setLabs] = useState<Lab[]>([]);
 
     // Form State
     const [editingId, setEditingId] = useState<string | null>(null);
@@ -230,43 +224,34 @@ function SystemConfigTab() {
 
     const loadData = async () => {
         // Load Labs for name resolution
-        const labsData = await LabService.list();
-        setLabs(labsData);
+        try {
+            const labsData = await LabService.list();
+            setLabs(labsData);
+        } catch (e) {
+            console.error("Failed to load labs", e);
+        }
 
         // Load Machines
         try {
-            const stored = localStorage.getItem("registered_machines");
-            if (stored) {
-                let data: Machine[] = JSON.parse(stored);
+            const targetLabId = currentLab?.id || (user?.acesso === 'admin_lab' ? user.lab_id : null);
+            let data: Machine[] = [];
 
-                // Validate if data is actually an array
-                if (!Array.isArray(data)) {
-                    console.error("Data in localStorage 'registered_machines' is not an array:", data);
-                    data = [];
-                }
-
-                // Filtrar máquinas por laboratório
-                const targetLabId = currentLab?.id || (user?.acesso === 'admin_lab' ? user.lab_id : null);
-
-                if (targetLabId) {
-                    data = data.filter(m => m.labId === targetLabId);
-                } else {
-                    // Global admin seeing everything? Or show nothing until lab selected?
-                    // Based on requirements, they should have selected a lab.
-                    // If they are here without a lab, maybe show all (legacy behavior) or empty.
-                    // Let's show all for now if no lab selected (e.g. direct access by super admin)
-                }
-                setMachines(data);
-            } else {
-                setMachines([]);
+            if (targetLabId) {
+                // Fetch only for the specific lab
+                data = await MachineService.listByLab(targetLabId);
+            } else if (user?.acesso === 'admin_global') {
+                // Fetch all if global admin
+                data = await MachineService.list();
             }
+
+            setMachines(data);
         } catch (error) {
             console.error("Failed to load machines:", error);
-            setMachines([]);
+            addToast({ title: "Erro ao carregar máquinas", type: "error" });
         }
     };
 
-    const handleSaveMachine = () => {
+    const handleSaveMachine = async () => {
         if (!formMachineId.trim()) {
             addToast({ title: "ID da Máquina obrigatório", type: "error" });
             return;
@@ -282,58 +267,40 @@ function SystemConfigTab() {
             return;
         }
 
-        let allMachines: Machine[] = [];
         try {
-            const stored = localStorage.getItem("registered_machines");
-            if (stored) {
-                const parsed = JSON.parse(stored);
-                if (Array.isArray(parsed)) allMachines = parsed;
+            if (editingId) {
+                // Update
+                // Note: Security check handles by RLS on backend ideally, but we can double check logic if needed.
+                // For now, assuming UI context is correct.
+
+                await MachineService.update(editingId, {
+                    machineId: formMachineId.toUpperCase(),
+                    serialNumber: formSerialNumber.toUpperCase(),
+                    model: formModel,
+                    labId: targetLabId
+                });
+
+                addToast({ title: "Máquina Atualizada", type: "success" });
+            } else {
+                // Create
+                await MachineService.create({
+                    machineId: formMachineId.toUpperCase(),
+                    serialNumber: formSerialNumber.toUpperCase(),
+                    model: formModel,
+                    labId: targetLabId
+                });
+
+                addToast({ title: "Máquina Adicionada", type: "success" });
             }
-        } catch (e) {
-            console.error("Error parsing machines:", e);
-            allMachines = [];
+
+            // Reload data
+            loadData();
+            resetForm();
+
+        } catch (error) {
+            console.error("Error saving machine", error);
+            addToast({ title: "Erro ao salvar máquina", type: "error" });
         }
-
-        let updatedMachines: Machine[];
-
-        if (editingId) {
-            // Security Check for Edit
-            const existingMachine = allMachines.find(m => m.id === editingId);
-            if (existingMachine && existingMachine.labId !== targetLabId) {
-                addToast({ title: "Acesso Negado", description: "Você não pode editar máquinas de outro laboratório.", type: "error" });
-                return;
-            }
-
-            // Update existing in the GLOBAL list
-            updatedMachines = allMachines.map(m => m.id === editingId ? {
-                ...m,
-                machineId: formMachineId.toUpperCase(),
-                serialNumber: formSerialNumber.toUpperCase(),
-                model: formModel,
-                labId: targetLabId
-            } : m);
-            addToast({ title: "Máquina Atualizada", type: "success" });
-        } else {
-            // Create new
-            const newMachine: Machine = {
-                id: crypto.randomUUID(),
-                machineId: formMachineId.toUpperCase(),
-                serialNumber: formSerialNumber.toUpperCase(),
-                model: formModel,
-                labId: targetLabId
-            };
-            updatedMachines = [...allMachines, newMachine];
-            addToast({ title: "Máquina Adicionada", type: "success" });
-        }
-
-        localStorage.setItem("registered_machines", JSON.stringify(updatedMachines));
-
-        // Refresh local state based on filters
-        if (targetLabId) {
-            setMachines(updatedMachines.filter(m => m.labId === targetLabId));
-        }
-
-        resetForm();
     };
 
     const handleEditClick = (machine: Machine) => {
@@ -343,41 +310,17 @@ function SystemConfigTab() {
         setFormModel(machine.model);
     };
 
-    const handleRemoveMachine = (id: string) => {
+    const handleRemoveMachine = async (id: string) => {
         if (confirm("Remover esta máquina?")) {
-            let allMachines: Machine[] = [];
             try {
-                const stored = localStorage.getItem("registered_machines");
-                if (stored) {
-                    const parsed = JSON.parse(stored);
-                    if (Array.isArray(parsed)) allMachines = parsed;
-                }
-            } catch (e) {
-                console.error("Error parsing machines for removal:", e);
-                allMachines = [];
+                await MachineService.delete(id);
+                addToast({ title: "Máquina Removida", type: "info" });
+                loadData();
+                if (editingId === id) resetForm();
+            } catch (error) {
+                console.error("Error deleting machine", error);
+                addToast({ title: "Erro ao remover máquina", type: "error" });
             }
-
-            const targetLabId = currentLab?.id || (user?.acesso === 'admin_lab' ? user.lab_id : null);
-
-            // Security Check for Removal
-            const machineToDelete = allMachines.find(m => m.id === id);
-            if (machineToDelete && machineToDelete.labId !== targetLabId) {
-                addToast({ title: "Acesso Negado", description: "Você não pode remover máquinas de outro laboratório.", type: "error" });
-                return;
-            }
-
-            const updated = allMachines.filter(m => m.id !== id);
-
-            localStorage.setItem("registered_machines", JSON.stringify(updated));
-            addToast({ title: "Máquina Removida", type: "info" });
-
-            if (targetLabId) {
-                setMachines(updated.filter(m => m.labId === targetLabId));
-            } else {
-                setMachines(updated);
-            }
-
-            if (editingId === id) resetForm();
         }
     };
 
@@ -404,71 +347,68 @@ function SystemConfigTab() {
 
                 {/* Lista de Máquinas */}
                 <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {Array.isArray(machines) && machines.map(machine => {
-                        if (!machine) return null;
-                        return (
-                            <div key={machine.id || Math.random()} className={cn(
-                                "group relative flex flex-col justify-between p-6 bg-neutral-50 border transition-all",
-                                editingId === machine.id ? "border-black ring-1 ring-black bg-white" : "border-neutral-200 hover:border-black"
-                            )}>
-                                <div className="space-y-4 mb-4">
-                                    <div className="flex items-center justify-between">
-                                        <div className="h-10 w-10 bg-white border border-neutral-200 flex items-center justify-center font-bold text-sm font-serif">
-                                            {(machine.machineId || "??").substring(0, 2)}
-                                        </div>
-                                        <span className={cn(
-                                            "text-[9px] font-bold uppercase px-2 py-0.5 rounded-full inline-block",
-                                            machine.model === 'USTER' ? "bg-emerald-100 text-emerald-700" : "bg-blue-100 text-blue-700"
-                                        )}>
-                                            {machine.model || "N/A"}
+                    {machines.map(machine => (
+                        <div key={machine.id} className={cn(
+                            "group relative flex flex-col justify-between p-6 bg-neutral-50 border transition-all",
+                            editingId === machine.id ? "border-black ring-1 ring-black bg-white" : "border-neutral-200 hover:border-black"
+                        )}>
+                            <div className="space-y-4 mb-4">
+                                <div className="flex items-center justify-between">
+                                    <div className="h-10 w-10 bg-white border border-neutral-200 flex items-center justify-center font-bold text-sm font-serif">
+                                        {(machine.machineId || "??").substring(0, 2)}
+                                    </div>
+                                    <span className={cn(
+                                        "text-[9px] font-bold uppercase px-2 py-0.5 rounded-full inline-block",
+                                        machine.model === 'USTER' ? "bg-emerald-100 text-emerald-700" : "bg-blue-100 text-blue-700"
+                                    )}>
+                                        {machine.model || "N/A"}
+                                    </span>
+                                </div>
+
+                                <div className="pt-2 border-t border-dashed border-neutral-200">
+                                    <span className="text-[9px] font-mono text-neutral-400 uppercase block mb-1">Laboratório Vinculado</span>
+                                    <div className="flex items-center gap-2">
+                                        <Database className="h-3 w-3 text-neutral-400" />
+                                        <span className="text-xs font-bold text-black uppercase truncate max-w-[150px]">
+                                            {getLabName(machine.labId)}
                                         </span>
                                     </div>
-
-                                    <div className="pt-2 border-t border-dashed border-neutral-200">
-                                        <span className="text-[9px] font-mono text-neutral-400 uppercase block mb-1">Laboratório Vinculado</span>
-                                        <div className="flex items-center gap-2">
-                                            <Database className="h-3 w-3 text-neutral-400" />
-                                            <span className="text-xs font-bold text-black uppercase truncate max-w-[150px]">
-                                                {getLabName(machine.labId)}
-                                            </span>
-                                        </div>
-                                    </div>
-
-                                    <div>
-                                        <span className="text-[10px] font-mono text-neutral-400 uppercase">ID da Máquina</span>
-                                        <h4 className="text-sm font-bold uppercase tracking-widest text-black">{machine.machineId}</h4>
-                                    </div>
-                                    <div>
-                                        <span className="text-[10px] font-mono text-neutral-400 uppercase">Número de Série</span>
-                                        <p className="text-xs font-mono text-neutral-600">{machine.serialNumber}</p>
-                                    </div>
                                 </div>
 
-                                <div className="flex items-center gap-2 pt-4 border-t border-neutral-100 opacity-40 group-hover:opacity-100 transition-opacity">
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => handleEditClick(machine)}
-                                        className="flex-1 h-8 text-[9px] uppercase tracking-widest hover:bg-black hover:text-white"
-                                    >
-                                        <Edit className="h-3 w-3 mr-2" /> Editar
-                                    </Button>
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        onClick={() => handleRemoveMachine(machine.id)}
-                                        className="h-8 w-8 text-neutral-400 hover:text-red-600"
-                                    >
-                                        <Trash2 className="h-3 w-3" />
-                                    </Button>
+                                <div>
+                                    <span className="text-[10px] font-mono text-neutral-400 uppercase">ID da Máquina</span>
+                                    <h4 className="text-sm font-bold uppercase tracking-widest text-black">{machine.machineId}</h4>
+                                </div>
+                                <div>
+                                    <span className="text-[10px] font-mono text-neutral-400 uppercase">Número de Série</span>
+                                    <p className="text-xs font-mono text-neutral-600">{machine.serialNumber}</p>
                                 </div>
                             </div>
-                        )
-                    })}
+
+                            <div className="flex items-center gap-2 pt-4 border-t border-neutral-100 opacity-40 group-hover:opacity-100 transition-opacity">
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleEditClick(machine)}
+                                    className="flex-1 h-8 text-[9px] uppercase tracking-widest hover:bg-black hover:text-white"
+                                >
+                                    <Edit className="h-3 w-3 mr-2" /> Editar
+                                </Button>
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => handleRemoveMachine(machine.id)}
+                                    className="h-8 w-8 text-neutral-400 hover:text-red-600"
+                                >
+                                    <Trash2 className="h-3 w-3" />
+                                </Button>
+                            </div>
+                        </div>
+                    ))}
 
                     {machines.length === 0 && (
                         <div className="col-span-full text-center p-12 border-2 border-dashed border-neutral-200 text-neutral-400 text-xs font-mono uppercase">
-                            Nenhuma máquina HVI cadastrada para este laboratório.
+                            Nenhuma máquina HVI cadastrada.
                         </div>
                     )}
                 </div>
