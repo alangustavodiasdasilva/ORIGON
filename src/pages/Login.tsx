@@ -24,7 +24,11 @@ export default function Login() {
             // Validate credentials WITHOUT logging in yet
             const { AnalistaService } = await import("@/entities/Analista");
             const users = await AnalistaService.list();
-            const found = users.find(u => u.email === email && u.senha === senha);
+
+            console.log("Users found:", users.length, users); // Debugging
+
+            const normalizedEmail = email.toLowerCase().trim();
+            const found = users.find(u => u.email.toLowerCase() === normalizedEmail && u.senha === senha);
 
             if (found) {
                 // Show splash screen FIRST

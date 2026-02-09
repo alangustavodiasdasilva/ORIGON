@@ -52,9 +52,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     }
                 }
             }
-            setIsLoading(false);
             // Seed database if empty
-            checkAndSeed();
+            await checkAndSeed();
+
+            setIsLoading(false);
         };
         init();
     }, []);
