@@ -204,7 +204,8 @@ function DashboardTab({ onlineAnalysts }: { onlineAnalysts: Analista[] }) {
 }
 
 // Interfaces
-import { Machine, MachineService } from "@/entities/Machine";
+import { MachineService } from "@/entities/Machine";
+import type { Machine } from "@/entities/Machine";
 
 function SystemConfigTab() {
     const { user, currentLab } = useAuth();

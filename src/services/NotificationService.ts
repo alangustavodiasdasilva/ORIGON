@@ -27,7 +27,6 @@ const isSupabaseEnabled = () => !!import.meta.env.VITE_SUPABASE_URL && !!import.
 export class NotificationService {
     private static STORAGE_KEY = 'notifications';
     private static listeners: Set<(notifications: Notification[]) => void> = new Set();
-    private static cachedNotifications: Notification[] = []; // Cache for performance
 
     /**
      * Create a new notification
