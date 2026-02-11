@@ -66,5 +66,22 @@ export const ChatService = {
             return;
         }
         localStorage.removeItem(STORAGE_KEY);
+    },
+
+    subscribe(callback: () => void): () => void {
+        if (!isSupabaseEnabled()) return () => { };
+
+        const channel = supabase
+            .channel('chat-changes')
+            .on(
+                'postgres_changes',
+                { event: '*', schema: 'public', table: 'chat_mensagens' },
+                () => callback()
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
     }
 };

@@ -1,5 +1,6 @@
 
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import { type Sample } from "@/entities/Sample";
 import { X, Bot, Loader2, BarChart3, TrendingUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -83,7 +84,7 @@ export default function PatternAnalysisModal({ isOpen, onClose, samples, onApply
 
     if (!isOpen) return null;
 
-    return (
+    return createPortal(
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
 
@@ -299,6 +300,7 @@ export default function PatternAnalysisModal({ isOpen, onClose, samples, onApply
                     </div>
                 )}
             </div>
-        </div>
+        </div>,
+        document.body
     );
 }

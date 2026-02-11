@@ -151,5 +151,22 @@ export const MachineService = {
         const machines = getStoredMachines();
         const filtered = machines.filter(m => m.id !== id);
         saveStoredMachines(filtered);
+    },
+
+    subscribe(callback: () => void): () => void {
+        if (!isSupabaseEnabled()) return () => { };
+
+        const channel = supabase
+            .channel('maquinas-changes')
+            .on(
+                'postgres_changes',
+                { event: '*', schema: 'public', table: 'maquinas' },
+                () => callback()
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
     }
 };

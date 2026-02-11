@@ -58,10 +58,24 @@ export class NotificationService {
         };
 
         if (isSupabaseEnabled()) {
-            const { error } = await supabase.from('notificacoes').insert([notification]);
+            const payload = {
+                id: notification.id,
+                type: notification.type,
+                priority: notification.priority,
+                title: notification.title,
+                message: notification.message,
+                created_at: notification.timestamp, // Map timestamp -> created_at
+                read: notification.read,
+                user_id: notification.userId, // Map userId -> user_id
+                lab_id: notification.labId, // Map labId -> lab_id
+                action_url: notification.actionUrl, // Map actionUrl -> action_url
+                metadata: notification.metadata
+            };
+
+            const { error } = await supabase.from('notificacoes').insert([payload]);
             if (error) console.error("Error creating notification:", error);
-            // We can optimistic update or just fetch
-            this.notifyListeners(); // Will trigger fetch
+
+            this.notifyListeners();
             return notification;
         }
 
@@ -82,13 +96,25 @@ export class NotificationService {
             const { data, error } = await supabase
                 .from('notificacoes')
                 .select('*')
-                .order('timestamp', { ascending: false });
+                .order('created_at', { ascending: false }); // Order by created_at
 
             if (error) {
                 console.error("Error fetching notifications:", error);
                 return [];
             }
-            return data;
+            return (data || []).map((n: any) => ({
+                id: n.id,
+                type: n.type,
+                priority: n.priority,
+                title: n.title,
+                message: n.message,
+                timestamp: n.created_at || n.timestamp, // Map back
+                read: n.read,
+                userId: n.user_id || n.userId, // Map back
+                labId: n.lab_id || n.labId, // Map back
+                actionUrl: n.action_url || n.actionUrl, // Map back
+                metadata: n.metadata
+            }));
         }
         return this.getAllSync();
     }
@@ -107,8 +133,8 @@ export class NotificationService {
             let query = supabase
                 .from('notificacoes')
                 .select('*')
-                .eq('userId', userId)
-                .order('timestamp', { ascending: false });
+                .eq('user_id', userId) // Map userId -> user_id
+                .order('created_at', { ascending: false }); // Order by created_at
 
             if (unreadOnly) {
                 query = query.eq('read', false);
@@ -116,7 +142,20 @@ export class NotificationService {
 
             const { data, error } = await query;
             if (error) return [];
-            return data;
+
+            return (data || []).map((n: any) => ({
+                id: n.id,
+                type: n.type,
+                priority: n.priority,
+                title: n.title,
+                message: n.message,
+                timestamp: n.created_at || n.timestamp, // Map back
+                read: n.read,
+                userId: n.user_id || n.userId, // Map back
+                labId: n.lab_id || n.labId, // Map back
+                actionUrl: n.action_url || n.actionUrl, // Map back
+                metadata: n.metadata
+            }));
         }
 
         const all = this.getAllSync();
@@ -162,7 +201,7 @@ export class NotificationService {
      */
     static async markAllAsRead(userId: string): Promise<void> {
         if (isSupabaseEnabled()) {
-            await supabase.from('notificacoes').update({ read: true }).eq('userId', userId);
+            await supabase.from('notificacoes').update({ read: true }).eq('user_id', userId); // Map userId -> user_id
             this.notifyListeners();
             return;
         }
@@ -195,15 +234,34 @@ export class NotificationService {
 
     /**
      * Subscribe to notification changes
-     * Note: In a real app we would use realtime subscription from supabase
      */
     static subscribe(callback: (notifications: Notification[]) => void): () => void {
         this.listeners.add(callback);
+
         // Initial fetch
         this.getAll().then(n => callback(n));
 
-        // Simple polling for supabase updates for now if needed, or rely on manual triggers
-        return () => this.listeners.delete(callback);
+        let channel: any = null;
+
+        if (isSupabaseEnabled()) {
+            channel = supabase
+                .channel('notifications-changes')
+                .on(
+                    'postgres_changes',
+                    { event: '*', schema: 'public', table: 'notificacoes' },
+                    async () => {
+                        // Reload data when something changes
+                        const notifications = await this.getAll();
+                        callback(notifications);
+                    }
+                )
+                .subscribe();
+        }
+
+        return () => {
+            this.listeners.delete(callback);
+            if (channel) supabase.removeChannel(channel);
+        };
     }
 
     /**

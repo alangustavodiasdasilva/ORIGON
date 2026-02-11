@@ -294,9 +294,11 @@ const LanguageContext = createContext<LanguageContextType>({} as LanguageContext
 
 // Helper to access nested keys using dot notation (e.g., 'nav.home')
 function getNestedTranslation(obj: any, path: string): string {
-    return path.split('.').reduce((prev, curr) => {
-        return prev ? prev[curr] : null;
-    }, obj) || path;
+    if (!path || typeof path !== 'string') return '';
+    const result = path.split('.').reduce((prev, curr) => {
+        return (prev && typeof prev === 'object') ? prev[curr] : undefined;
+    }, obj);
+    return (result !== undefined && result !== null) ? String(result) : path;
 }
 
 export function LanguageProvider({ children }: { children: ReactNode }) {

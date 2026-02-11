@@ -15,6 +15,7 @@ export interface Analista {
     created_at: string;
     updated_at: string;
     last_active?: string;
+    current_lote_id?: string | null;
 }
 
 const STORAGE_KEY = 'fibertech_analistas';
@@ -40,7 +41,7 @@ export const AnalistaService = {
         if (isSupabaseEnabled()) {
             const { data, error } = await supabase.from('analistas').select('*');
             if (error) throw error;
-            return data;
+            return data || [];
         }
         return getStoredAnalistas();
     },
@@ -49,7 +50,7 @@ export const AnalistaService = {
         if (isSupabaseEnabled()) {
             const { data, error } = await supabase.from('analistas').select('*').eq('lab_id', labId);
             if (error) throw error;
-            return data;
+            return data || [];
         }
         return getStoredAnalistas().filter(a => a.lab_id === labId);
     },
@@ -88,7 +89,19 @@ export const AnalistaService = {
 
     async update(id: string, data: Partial<Analista>): Promise<Analista> {
         if (isSupabaseEnabled()) {
-            const { data: updated, error } = await supabase.from('analistas').update(data).eq('id', id).select().single();
+            // Ensure data keys are valid snake_case for DB
+            const validKeys = ['nome', 'email', 'foto', 'senha', 'lab_id', 'cargo', 'acesso', 'last_active', 'current_lote_id', 'updated_at'];
+            const payload: any = {};
+
+            Object.keys(data).forEach(key => {
+                if (validKeys.includes(key)) {
+                    payload[key] = (data as any)[key];
+                } else if (key === 'labId') {
+                    payload['lab_id'] = (data as any)['labId'];
+                }
+            });
+
+            const { data: updated, error } = await supabase.from('analistas').update(payload).eq('id', id).select().single();
             if (error) throw error;
             return updated;
         }
@@ -114,9 +127,12 @@ export const AnalistaService = {
         saveStoredAnalistas(filtered);
     },
 
-    async updateLastActive(id: string): Promise<void> {
+    async updateLastActive(id: string, loteId?: string | null): Promise<void> {
+        const updateData: any = { last_active: new Date().toISOString() };
+        if (loteId !== undefined) updateData.current_lote_id = loteId;
+
         if (isSupabaseEnabled()) {
-            await supabase.from('analistas').update({ last_active: new Date().toISOString() }).eq('id', id);
+            await supabase.from('analistas').update(updateData).eq('id', id);
             return;
         }
 
@@ -124,6 +140,7 @@ export const AnalistaService = {
         const index = analistas.findIndex(a => a.id === id);
         if (index !== -1) {
             analistas[index].last_active = new Date().toISOString();
+            if (loteId !== undefined) analistas[index].current_lote_id = loteId;
             saveStoredAnalistas(analistas);
         }
     }

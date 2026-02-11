@@ -12,7 +12,9 @@ import {
     Award,
     Package,
     Download,
-    Upload
+    Upload,
+    Menu,
+    X
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
@@ -40,18 +42,22 @@ export default function Layout() {
     const isAdmin = user?.acesso === 'admin_global';
 
     useEffect(() => {
-        // Heartbeat to keep user online
+        // Heartbeat to keep user online and track context
         if (user?.id) {
-            const heartbeat = setInterval(() => {
-                AnalistaService.updateLastActive(user.id);
-            }, 2000);
+            const updatePresence = () => {
+                const searchParams = new URLSearchParams(location.search);
+                const loteId = searchParams.get('loteId');
+                AnalistaService.updateLastActive(user.id, loteId || null);
+            };
+
+            const heartbeat = setInterval(updatePresence, 2000);
 
             // Initial call
-            AnalistaService.updateLastActive(user.id);
+            updatePresence();
 
             return () => clearInterval(heartbeat);
         }
-    }, [user?.id]);
+    }, [user?.id, location.search]);
 
     useEffect(() => {
         const loadOnline = async () => {
@@ -91,10 +97,83 @@ export default function Layout() {
 
     const latestToast = toasts[toasts.length - 1];
 
+    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
     return (
         <div className="flex min-h-screen bg-white text-black font-sans selection:bg-black selection:text-white">
             <ParticleBackground />
-            {/* Sidebar */}
+
+            {/* Mobile Sidebar Overlay */}
+            {isMobileMenuOpen && (
+                <div className="fixed inset-0 z-[60] lg:hidden">
+                    <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setIsMobileMenuOpen(false)} />
+                    <aside className="absolute left-0 top-0 bottom-0 w-72 bg-white border-r border-neutral-200 shadow-2xl flex flex-col animate-slide-right">
+                        <div className="p-8 border-b border-neutral-100 flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <svg width="24" height="24" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <circle cx="50" cy="50" r="48" stroke="#dc2626" strokeWidth="6" />
+                                    <circle cx="50" cy="50" r="10" fill="#dc2626" />
+                                </svg>
+                                <h1 className="text-xl font-serif tracking-[0.1em] text-black">ORIGO</h1>
+                            </div>
+                            <button onClick={() => setIsMobileMenuOpen(false)} className="p-2 hover:bg-neutral-100 rounded-full">
+                                <X className="h-5 w-5 text-neutral-500" />
+                            </button>
+                        </div>
+
+                        <nav className="flex-1 overflow-y-auto py-4">
+                            {navItems.map((item) => {
+                                const isAllowed = item.public || (user?.acesso && item.allowedRoles?.includes(user.acesso));
+                                if (!isAllowed) return null;
+
+                                const isActive = location.pathname === item.href || (item.href !== "/" && location.pathname.startsWith(item.href));
+                                const Icon = item.icon;
+
+                                return (
+                                    <Link
+                                        key={item.href}
+                                        to={item.href}
+                                        onClick={() => setIsMobileMenuOpen(false)}
+                                        className={cn(
+                                            "flex items-center gap-4 px-8 py-4 text-xs font-bold uppercase tracking-widest transition-colors border-l-4",
+                                            isActive
+                                                ? "border-black bg-neutral-50 text-black"
+                                                : "border-transparent text-neutral-500 hover:text-black hover:bg-neutral-50"
+                                        )}
+                                    >
+                                        <Icon className={cn("h-4 w-4", isActive ? "stroke-[2.5px]" : "stroke-[1.5px]")} />
+                                        <span>{item.label}</span>
+                                    </Link>
+                                );
+                            })}
+                        </nav>
+
+                        <div className="p-8 border-t border-neutral-100 bg-neutral-50">
+                            <div className="flex items-center gap-3 mb-6">
+                                <div className="w-10 h-10 bg-white border border-neutral-200 flex items-center justify-center text-xs font-bold uppercase overflow-hidden">
+                                    {user?.foto ? (
+                                        <img src={user.foto} className="w-full h-full object-cover" alt="User" />
+                                    ) : (
+                                        getInitials(user?.nome || "")
+                                    )}
+                                </div>
+                                <div>
+                                    <div className="text-xs font-bold uppercase text-black">{user?.nome || "Guest"}</div>
+                                    <div className="text-[10px] text-neutral-400 font-mono uppercase">{user?.cargo || "Viewer"}</div>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => { logout(); setIsMobileMenuOpen(false); }}
+                                className="w-full h-10 flex items-center justify-center gap-2 bg-white border border-neutral-200 hover:bg-red-50 hover:border-red-200 hover:text-red-600 transition-colors text-[10px] font-bold uppercase tracking-widest text-neutral-500"
+                            >
+                                <LogOut className="h-3 w-3" /> {t('common.logout')}
+                            </button>
+                        </div>
+                    </aside>
+                </div>
+            )}
+
+            {/* Desktop Sidebar */}
             <aside className="fixed inset-y-0 left-0 z-50 w-72 border-r border-black bg-white/80 backdrop-blur-md hidden lg:flex flex-col">
                 <div className="p-10 pb-12">
                     <div className="flex items-center gap-4">
@@ -195,25 +274,35 @@ export default function Layout() {
             </aside>
 
             {/* Main Content */}
-            <div className="lg:ml-72 flex-1 flex flex-col min-h-screen relative z-10">
-                <header className="sticky top-0 z-40 h-20 bg-white/80 backdrop-blur-sm border-b border-neutral-100 flex items-center justify-between px-10">
-                    <div className="flex items-center gap-8">
-                        <div className="flex items-center gap-3 text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400">
+            <div className="lg:ml-72 flex-1 flex flex-col min-h-screen relative z-10 transition-all duration-300">
+                <header className="sticky top-0 z-40 h-16 lg:h-20 bg-white/80 backdrop-blur-sm border-b border-neutral-100 flex items-center justify-between px-4 lg:px-10">
+                    <div className="flex items-center gap-4 lg:gap-8">
+                        {/* Mobile Menu Trigger */}
+                        <button
+                            onClick={() => setIsMobileMenuOpen(true)}
+                            className="lg:hidden p-2 -ml-2 hover:bg-neutral-100 rounded-md"
+                        >
+                            <Menu className="h-5 w-5 text-black" />
+                        </button>
+
+                        <div className="hidden md:flex items-center gap-3 text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400">
                             <span className="w-2 h-2 bg-black rounded-full"></span>
                             {t('status.system_status')}: {isAdmin ? t('status.admin') : t('status.operational')}
                         </div>
                     </div>
 
-                    <div className="flex items-center gap-4">
-                        {/* Global Search */}
-                        <GlobalSearch />
+                    <div className="flex items-center gap-3 lg:gap-4">
+                        {/* Global Search - Hidden on tiny screens if needed, but keeping for now */}
+                        <div className="hidden sm:block">
+                            <GlobalSearch />
+                        </div>
 
                         {/* Notification Center */}
                         <NotificationCenter />
 
                         {/* Admin Tools */}
                         {isAdmin && (
-                            <>
+                            <div className="hidden md:flex items-center gap-2">
                                 <button
                                     onClick={() => setLanguage(language === 'en' ? 'pt' : 'en')}
                                     className="flex items-center gap-2 px-3 py-2 text-xs font-bold uppercase tracking-widest text-neutral-600 hover:text-black hover:bg-neutral-100 rounded-lg transition-colors"
@@ -230,14 +319,14 @@ export default function Layout() {
                                     title={t('common.backup')}
                                 >
                                     <Download className="h-4 w-4" />
-                                    <span className="hidden md:inline">{t('common.backup')}</span>
+                                    <span className="hidden xl:inline">{t('common.backup')}</span>
                                 </button>
 
                                 <label className="flex items-center gap-2 px-3 py-2 text-xs font-bold uppercase tracking-widest text-neutral-600 hover:text-black hover:bg-neutral-100 rounded-lg transition-colors cursor-pointer"
                                     title={t('common.import')}
                                 >
                                     <Upload className="h-4 w-4" />
-                                    <span className="hidden md:inline">{t('common.import')}</span>
+                                    <span className="hidden xl:inline">{t('common.import')}</span>
                                     <input
                                         type="file"
                                         accept=".json"
@@ -254,18 +343,21 @@ export default function Layout() {
                                         }}
                                     />
                                 </label>
-                            </>
+                            </div>
                         )}
 
                         <div className="flex items-center gap-2 pl-4 border-l border-neutral-200">
                             <span className="h-2 w-2 bg-black animate-pulse rounded-full" />
-                            <span className="text-[10px] font-bold uppercase tracking-widest text-black">{onlineUsers.length + 1} {t('common.active_users')}</span>
+                            <span className="text-[10px] font-bold uppercase tracking-widest text-black whitespace-nowrap">
+                                <span className="hidden sm:inline">{onlineUsers.length + 1} {t('common.active_users')}</span>
+                                <span className="sm:hidden">{onlineUsers.length + 1} ON</span>
+                            </span>
                         </div>
                     </div>
                 </header>
 
-                <main className="flex-1 relative">
-                    <div className="p-10 max-w-7xl mx-auto w-full">
+                <main className="flex-1 relative w-full overflow-x-hidden">
+                    <div className="p-4 lg:p-10 max-w-[1600px] mx-auto w-full">
                         <Outlet />
                     </div>
                 </main>

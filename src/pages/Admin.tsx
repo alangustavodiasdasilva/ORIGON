@@ -46,7 +46,7 @@ export default function Admin() {
         };
 
         loadCount();
-        const interval = setInterval(loadCount, 2000);
+        const interval = setInterval(loadCount, 15000); // Poll every 15s instead of 2s
         return () => clearInterval(interval);
     }, [user, currentLab]);
 
@@ -221,6 +221,11 @@ function SystemConfigTab() {
 
     useEffect(() => {
         loadData();
+        // Subscribe to real-time changes
+        const unsubscribe = MachineService.subscribe(() => {
+            loadData();
+        });
+        return () => unsubscribe();
     }, [user, currentLab]);
 
     const loadData = async () => {

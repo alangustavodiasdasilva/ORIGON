@@ -19,6 +19,7 @@ import { useToast } from "@/contexts/ToastContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Modal } from "@/components/shared/Modal";
+import { AnalistaService } from "@/entities/Analista";
 
 export default function Home() {
     const [lotes, setLotes] = useState<Lote[]>([]);
@@ -45,6 +46,19 @@ export default function Home() {
 
     useEffect(() => {
         loadLotes();
+
+        // Subscribe to real-time changes
+        const unsubLotes = LoteService.subscribe(() => {
+            loadLotes();
+        });
+        const unsubSamples = SampleService.subscribe(() => {
+            loadLotes();
+        });
+
+        return () => {
+            unsubLotes();
+            unsubSamples();
+        };
     }, [user, currentLab]);
 
     // Auto-fill city from user's lab or selected lab
@@ -84,38 +98,58 @@ export default function Home() {
         LabService.list().then(setLabs).catch(console.error);
     }, []);
 
+    const [activeAnalysts, setActiveAnalysts] = useState<any[]>([]);
+
+    useEffect(() => {
+        const loadAnalysts = async () => {
+            try {
+                const data = await AnalistaService.list();
+                const now = new Date().getTime();
+                const active = data.filter(a =>
+                    a.last_active && (now - new Date(a.last_active).getTime() < 30000) // Increased threshold to 30s
+                );
+                setActiveAnalysts(active);
+            } catch (err) {
+                console.error("Failed to load active analysts", err);
+            }
+        };
+
+        loadAnalysts();
+        const interval = setInterval(loadAnalysts, 10000); // Check every 10s
+        return () => clearInterval(interval);
+    }, []);
+
     const loadLotes = async () => {
         setIsLoading(true);
         try {
             let data = await LoteService.list();
 
             // Filter logic (CORRECTED):
-            // 1. If currentLab is selected → Show ONLY batches from that lab
-            // 2. If NO currentLab AND admin_global → Show ALL batches
-            // 3. If admin_lab → Always show only their assigned lab
-
             if (currentLab) {
-                // Lab context is selected → filter by that lab
                 data = data.filter(l => l.lab_id === currentLab.id);
             } else if (user?.acesso === 'admin_lab' && user.lab_id) {
-                // Lab admin without selection → their assigned lab only
                 data = data.filter(l => l.lab_id === user.lab_id);
             }
-            // If admin_global with NO currentLab → show ALL (no filter)
 
             setLotes(data);
 
-            const counts: Record<string, number> = {};
-            for (const lote of data) {
-                const samples = await SampleService.listByLote(lote.id);
-                counts[lote.id] = samples.length;
-            }
+            // Optimized: Fetch all counts in one go
+            const counts = await SampleService.getLoteCounts();
             setSampleCounts(counts);
         } catch (error) {
             console.error(error);
+            addToast({ title: "Failed to load batches", type: "error" });
         } finally {
             setIsLoading(false);
         }
+    };
+
+    // ... [existing getLabName] ...
+
+    // Helper to get initials
+    const getInitials = (name: string) => {
+        if (!name) return "??";
+        return name.split(" ").map(n => n[0]).join("").substring(0, 2).toUpperCase();
     };
 
     const getLabName = (labId?: string) => {
@@ -263,6 +297,21 @@ export default function Home() {
                                                 <span className={`text-[10px] uppercase tracking-widest font-mono ${lote.status === 'aberto' ? 'text-emerald-600' : 'text-red-500'}`}>
                                                     {lote.status === 'aberto' ? t('home.active') : t('home.locked')}
                                                 </span>
+
+                                                {/* Active Users Indicator */}
+                                                {activeAnalysts.filter(a => a.current_lote_id === lote.id && a.id !== user?.id).length > 0 && (
+                                                    <div className="flex -space-x-2 ml-2">
+                                                        {activeAnalysts.filter(a => a.current_lote_id === lote.id && a.id !== user?.id).map((analyst, idx) => (
+                                                            <div key={idx} className="w-6 h-6 rounded-full border border-white bg-neutral-200 flex items-center justify-center text-[8px] font-bold overflow-hidden relative z-10" title={`${analyst.nome} is editing`}>
+                                                                {analyst.foto ? (
+                                                                    <img src={analyst.foto} className="w-full h-full object-cover" />
+                                                                ) : (
+                                                                    getInitials(analyst.nome)
+                                                                )}
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
                                             </div>
                                             <h3 className="text-xl font-serif text-black leading-tight">
                                                 {lote.nome}

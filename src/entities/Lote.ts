@@ -43,7 +43,7 @@ export const LoteService = {
         if (isSupabaseEnabled()) {
             const { data, error } = await supabase.from('lotes').select('*').order('created_at', { ascending: false });
             if (error) throw error;
-            return data;
+            return data || [];
         }
         return getStoredLotes();
     },
@@ -102,5 +102,22 @@ export const LoteService = {
         const lotes = getStoredLotes();
         const filtered = lotes.filter(l => l.id !== id);
         saveStoredLotes(filtered);
+    },
+
+    subscribe(callback: () => void): () => void {
+        if (!isSupabaseEnabled()) return () => { };
+
+        const channel = supabase
+            .channel(`lotes-changes-${Math.random().toString(36).substr(2, 9)}`)
+            .on(
+                'postgres_changes',
+                { event: '*', schema: 'public', table: 'lotes' },
+                () => callback()
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
     }
 };

@@ -1,4 +1,5 @@
 import { X, Download, Eye, ArrowRight } from 'lucide-react';
+import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/button';
 import type { Sample } from '@/entities/Sample';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -35,8 +36,9 @@ export default function HVIPreviewModal({
 
     if (!isOpen) return null;
 
-    return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in">
+    return createPortal(
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in">
+            {/* ... Modal Content ... */}
             <div className="w-full max-w-6xl max-h-[90vh] bg-white flex flex-col shadow-2xl border border-black">
                 {/* Header */}
                 <div className="h-16 bg-white border-b border-black flex items-center justify-between px-8 shrink-0">
@@ -212,6 +214,7 @@ export default function HVIPreviewModal({
                     </div>
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 }

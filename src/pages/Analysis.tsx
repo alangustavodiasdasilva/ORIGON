@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import {
     ArrowLeft,
@@ -72,6 +72,19 @@ export default function Analysis() {
     useEffect(() => {
         if (loteId) {
             loadData();
+
+            // Subscribe to real-time changes
+            const unsubSamples = SampleService.subscribe(() => {
+                loadData();
+            });
+            const unsubLotes = LoteService.subscribe(() => {
+                loadData();
+            });
+
+            return () => {
+                unsubSamples();
+                unsubLotes();
+            };
         }
     }, [loteId, user]);
 
@@ -92,7 +105,7 @@ export default function Analysis() {
         setSamples(s);
     };
 
-    const handleUpdateSample = async (id: string, field: string, value: any) => {
+    const handleUpdateSample = useCallback(async (id: string, field: string, value: any) => {
         setIsProcessing(true);
         try {
             await SampleService.update(id, { [field]: value });
@@ -103,9 +116,9 @@ export default function Analysis() {
         } finally {
             setIsProcessing(false);
         }
-    };
+    }, [addToast, loteId]); // Added loteId implicitly required by loadData if it was memoized, but loadData isn't yet.
 
-    const handleColorChange = async (id: string, color: string) => {
+    const handleColorChange = useCallback(async (id: string, color: string) => {
         setIsProcessing(true);
         try {
             await SampleService.update(id, { cor: color });
@@ -116,9 +129,9 @@ export default function Analysis() {
         } finally {
             setIsProcessing(false);
         }
-    };
+    }, [addToast, loteId]);
 
-    const handleDeleteSample = async (id: string) => {
+    const handleDeleteSample = useCallback(async (id: string) => {
         if (!confirm("This action is irreversible. Delete sample?")) return;
         setIsProcessing(true);
         try {
@@ -130,7 +143,7 @@ export default function Analysis() {
         } finally {
             setIsProcessing(false);
         }
-    };
+    }, [addToast, loteId]);
 
     const [isPatternModalOpen, setIsPatternModalOpen] = useState(false);
     const [isStatsModalOpen, setIsStatsModalOpen] = useState(false);
@@ -156,9 +169,9 @@ export default function Analysis() {
     if (!loteId) return <div className="p-10 text-center font-mono uppercase tracking-widest text-[10px]">NO_BATCH_ID</div>;
     if (!lote) return <div className="p-10 text-center animate-pulse font-mono uppercase tracking-widest text-[10px]">LOADING_METRICS...</div>;
 
-    const filteredSamples = filterColor
+    const filteredSamples = useMemo(() => filterColor
         ? samples.filter(s => s.cor === filterColor)
-        : samples;
+        : samples, [samples, filterColor]);
 
     return (
         <div className="space-y-12 animate-fade-in relative pb-24 text-black">
@@ -251,14 +264,16 @@ export default function Analysis() {
 
                 {/* Table Container */}
                 <div className="overflow-hidden border border-black">
-                    <AnalysisTable
-                        samples={filteredSamples}
-                        onUpdateSample={handleUpdateSample}
-                        onColorChange={handleColorChange}
-                        onDeleteSample={handleDeleteSample}
-                        isProcessing={isProcessing}
-                        highlightedSampleId={null}
-                    />
+                    <div className="overflow-x-auto">
+                        <AnalysisTable
+                            samples={filteredSamples}
+                            onUpdateSample={handleUpdateSample}
+                            onColorChange={handleColorChange}
+                            onDeleteSample={handleDeleteSample}
+                            isProcessing={isProcessing}
+                            highlightedSampleId={null}
+                        />
+                    </div>
                 </div>
             </div>
 

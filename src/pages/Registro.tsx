@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import {
     ArrowLeft,
@@ -18,6 +19,7 @@ import { SampleService } from "@/entities/Sample";
 import { OCRExtractionService, formatDecimalBR, type ExtractionResult, type HVIDataRow } from "@/services/ocrExtraction";
 import { useToast } from "@/contexts/ToastContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { AnalistaService } from "@/entities/Analista";
 import { Modal } from "@/components/shared/Modal";
 import { HVIFileGeneratorService } from "@/services/HVIFileGeneratorService";
 import { cn } from "@/lib/utils";
@@ -204,6 +206,19 @@ export default function Registro() {
     useEffect(() => {
         if (loteId) {
             loadData();
+
+            // Subscribe to real-time changes for samples
+            const unsubSamples = SampleService.subscribe(() => {
+                loadData();
+            });
+            const unsubLotes = LoteService.subscribe(() => {
+                loadData();
+            });
+
+            return () => {
+                unsubSamples();
+                unsubLotes();
+            };
         }
     }, [loteId, user]);
 
@@ -328,10 +343,10 @@ export default function Registro() {
     if (pendingReview && editingRows.length > 0) {
         const currentRow = editingRows[currentRowIndex];
 
-        return (
+        return createPortal(
 
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in">
-                <div className="w-full max-w-6xl h-[85vh] bg-white flex shadow-2xl border border-black overflow-hidden relative">
+            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in">
+                <div className="w-full max-w-6xl h-full lg:h-[85vh] max-h-screen bg-white flex flex-col lg:flex-row shadow-2xl border border-black overflow-hidden relative">
 
                     {/* Header Controls */}
                     <div className="absolute top-0 left-0 right-0 h-16 bg-white border-b border-black flex items-center justify-between px-8 z-20">
@@ -358,14 +373,14 @@ export default function Registro() {
                     </div>
 
                     {/* Left: Image Viewer Area */}
-                    <div className="w-1/2 bg-neutral-100 border-r border-black pt-16 flex flex-col relative group">
+                    <div className="w-full lg:w-1/2 h-[40vh] lg:h-auto bg-neutral-100 border-b lg:border-b-0 lg:border-r border-black pt-16 flex flex-col relative group shrink-0">
                         <div className="absolute top-20 left-6 z-10 flex gap-2">
                             <div className="bg-black text-white text-[9px] uppercase tracking-widest px-3 py-1 font-bold shadow-sm">
                                 Original Source
                             </div>
                         </div>
 
-                        <div className="flex-1 overflow-auto p-12 flex items-center justify-center">
+                        <div className="flex-1 overflow-auto p-6 lg:p-12 flex items-center justify-center">
                             <img
                                 src={pendingReview.previewUrl}
                                 alt="Source"
@@ -375,20 +390,20 @@ export default function Registro() {
 
                         {/* Filmstrip Navigation */}
                         {editingRows.length > 1 && (
-                            <div className="h-24 bg-white border-t border-black p-0 flex divide-x divide-black overflow-x-auto items-center shrink-0">
+                            <div className="h-16 lg:h-24 bg-white border-t border-black p-0 flex divide-x divide-black overflow-x-auto items-center shrink-0">
                                 {editingRows.map((row, idx) => (
                                     <button
                                         key={idx}
                                         onClick={() => setCurrentRowIndex(idx)}
                                         className={cn(
-                                            "h-full min-w-[80px] flex flex-col items-center justify-center transition-all px-2 relative group-hover/strip:opacity-50 hover:!opacity-100",
+                                            "h-full min-w-[60px] lg:min-w-[80px] flex flex-col items-center justify-center transition-all px-2 relative group-hover/strip:opacity-50 hover:!opacity-100",
                                             currentRowIndex === idx
                                                 ? "bg-black text-white"
                                                 : "bg-white text-black hover:bg-neutral-50"
                                         )}
                                     >
-                                        <span className="text-[10px] font-bold uppercase mb-1">Sample</span>
-                                        <span className="font-mono text-xl font-bold">#{row.numero}</span>
+                                        <span className="text-[8px] lg:text-[10px] font-bold uppercase mb-1">Sample</span>
+                                        <span className="font-mono text-lg lg:text-xl font-bold">#{row.numero}</span>
                                         {currentRowIndex === idx && (
                                             <div className="absolute bottom-2 w-1 h-1 bg-white rounded-full" />
                                         )}
@@ -399,7 +414,7 @@ export default function Registro() {
                     </div>
 
                     {/* Right: Data Editor Form */}
-                    <div className="w-1/2 bg-white pt-16 overflow-y-auto">
+                    <div className="w-full lg:w-1/2 bg-white lg:pt-16 overflow-y-auto flex-1 h-auto">
                         <div className="p-10 space-y-10">
 
                             {/* Section: Identifiers */}
@@ -468,9 +483,28 @@ export default function Registro() {
                         </div>
                     </div>
                 </div>
-            </div>
+            </div>,
+            document.body
         );
     }
+
+    // Presence Logic
+    const [coWorkers, setCoWorkers] = useState<any[]>([]);
+    useEffect(() => {
+        const checkPresence = async () => {
+            const all = await AnalistaService.list();
+            const now = new Date().getTime();
+            const others = all.filter(a =>
+                a.id !== user?.id &&
+                a.current_lote_id === loteId &&
+                a.last_active && (now - new Date(a.last_active).getTime() < 15000)
+            );
+            setCoWorkers(others);
+        };
+        const interval = setInterval(checkPresence, 3000);
+        checkPresence();
+        return () => clearInterval(interval);
+    }, [loteId, user?.id]);
 
     // --- MAIN VIEW ---
     return (
@@ -487,9 +521,29 @@ export default function Registro() {
                         <ArrowLeft className="h-4 w-4" />
                     </Button>
                     <div className="space-y-1">
-                        <h1 className="text-2xl font-serif text-black leading-none">
-                            Sample Registration
-                        </h1>
+                        <div className="flex items-center gap-3">
+                            <h1 className="text-2xl font-serif text-black leading-none">
+                                Sample Registration
+                            </h1>
+                            {coWorkers.length > 0 && (
+                                <div className="flex items-center gap-2 bg-yellow-100 px-2 py-1 rounded-full border border-yellow-200 animate-pulse">
+                                    <span className="text-[9px] font-bold uppercase text-yellow-700">{coWorkers.length} other(s) editing</span>
+                                    <div className="flex -space-x-1">
+                                        {coWorkers.map(cw => (
+                                            <div key={cw.id} className="w-5 h-5 rounded-full bg-neutral-200 border border-white overflow-hidden" title={cw.nome || 'Unknown'}>
+                                                {cw.foto ? (
+                                                    <img src={cw.foto} className="w-full h-full object-cover" alt={cw.nome} />
+                                                ) : (
+                                                    <div className="w-full h-full flex items-center justify-center text-[8px] font-bold">
+                                                        {(cw.nome && cw.nome[0] ? cw.nome[0] : "?").toUpperCase()}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
                         <p className="text-[10px] text-neutral-500 uppercase tracking-[0.2em] font-mono">
                             BATCH: {lote.nome}
                         </p>
@@ -556,69 +610,71 @@ export default function Registro() {
                         </div>
                     </div>
 
-                    <div className="flex-1 overflow-auto">
+                    <div className="flex-1 overflow-auto p-4">
                         {samples.length === 0 ? (
                             <div className="h-full flex flex-col items-center justify-center space-y-4 opacity-20">
                                 <Database className="h-12 w-12 text-black" />
                                 <span className="text-xs font-bold uppercase tracking-[0.25em]">No Records Found</span>
                             </div>
                         ) : (
-                            <table className="w-full text-left border-collapse">
-                                <thead className="bg-white sticky top-0 z-10 border-b border-black">
-                                    <tr className="text-[9px] font-bold text-black uppercase tracking-widest">
-                                        <th className="px-6 py-4 w-[60px] text-center font-mono">#ID</th>
-                                        <th className="px-4 py-4">Bag ID</th>
-                                        <th className="px-4 py-4">Tag</th>
-                                        <th className="px-4 py-4">Timestamp</th>
-                                        <th className="px-2 py-4 text-right font-mono">MIC</th>
-                                        <th className="px-2 py-4 text-right font-mono">LEN</th>
-                                        <th className="px-2 py-4 text-right font-mono">UNF</th>
-                                        <th className="px-2 py-4 text-right font-mono">STR</th>
-                                        <th className="px-2 py-4 text-right font-mono">RD</th>
-                                        <th className="px-2 py-4 text-right font-mono">+B</th>
-                                        <th className="px-6 py-4 text-right w-[120px]">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-neutral-100">
-                                    {samples.slice().reverse().map((s) => (
-                                        <tr key={s.id} className="group hover:bg-neutral-50 transition-colors">
-                                            <td className="px-6 py-4 font-mono text-xs text-neutral-400 text-center">#{s.amostra_id}</td>
-                                            <td className="px-4 py-4 font-mono text-xs font-bold text-black">{s.mala || "-"}</td>
-                                            <td className="px-4 py-4 font-mono text-xs text-neutral-500">{s.etiqueta || "-"}</td>
-                                            <td className="px-4 py-4 text-[10px] font-mono text-neutral-400">
-                                                {s.data_analise} <span className="opacity-50">{s.hora_analise}</span>
-                                            </td>
-                                            <td className="px-2 py-4 text-right font-mono text-xs tabular-nums">{formatDecimalBR(s.mic ?? 0, 2)}</td>
-                                            <td className="px-2 py-4 text-right font-mono text-xs tabular-nums text-neutral-500">{formatDecimalBR(s.len ?? 0, 2)}</td>
-                                            <td className="px-2 py-4 text-right font-mono text-xs tabular-nums text-neutral-500">{formatDecimalBR(s.unf ?? 0, 1)}</td>
-                                            <td className="px-2 py-4 text-right font-mono text-xs tabular-nums text-neutral-500">{formatDecimalBR(s.str ?? 0, 1)}</td>
-                                            <td className="px-2 py-4 text-right font-mono text-xs tabular-nums text-neutral-500">{formatDecimalBR(s.rd ?? 0, 1)}</td>
-                                            <td className="px-2 py-4 text-right font-mono text-xs tabular-nums text-neutral-500">{formatDecimalBR(s.b ?? 0, 1)}</td>
-                                            <td className="px-6 py-4 text-right">
-                                                <div className="flex items-center justify-end gap-2">
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        className="h-8 w-8 text-neutral-300 hover:text-white hover:bg-blue-600 rounded-none transition-all"
-                                                        onClick={() => handleExportHVI(s)}
-                                                        title="Gerar arquivo HVI"
-                                                    >
-                                                        <FileDown className="h-4 w-4" />
-                                                    </Button>
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        className="h-8 w-8 text-neutral-300 hover:text-white hover:bg-black rounded-none transition-all"
-                                                        onClick={() => setModalAction({ type: 'delete', id: s.id })}
-                                                    >
-                                                        <Trash2 className="h-4 w-4" />
-                                                    </Button>
-                                                </div>
-                                            </td>
+                            <div className="w-full overflow-x-auto">
+                                <table className="w-full text-left border-collapse min-w-[1000px]">
+                                    <thead className="bg-white sticky top-0 z-10 border-b border-black">
+                                        <tr className="text-[9px] font-bold text-black uppercase tracking-widest">
+                                            <th className="px-6 py-4 w-[60px] text-center font-mono">#ID</th>
+                                            <th className="px-4 py-4">Bag ID</th>
+                                            <th className="px-4 py-4">Tag</th>
+                                            <th className="px-4 py-4">Timestamp</th>
+                                            <th className="px-2 py-4 text-right font-mono">MIC</th>
+                                            <th className="px-2 py-4 text-right font-mono">LEN</th>
+                                            <th className="px-2 py-4 text-right font-mono">UNF</th>
+                                            <th className="px-2 py-4 text-right font-mono">STR</th>
+                                            <th className="px-2 py-4 text-right font-mono">RD</th>
+                                            <th className="px-2 py-4 text-right font-mono">+B</th>
+                                            <th className="px-6 py-4 text-right w-[120px]">Actions</th>
                                         </tr>
-                                    ))}
-                                </tbody>
-                            </table>
+                                    </thead>
+                                    <tbody className="divide-y divide-neutral-100">
+                                        {samples.slice().reverse().map((s) => (
+                                            <tr key={s.id} className="group hover:bg-neutral-50 transition-colors">
+                                                <td className="px-6 py-4 font-mono text-xs text-neutral-400 text-center">#{s.amostra_id}</td>
+                                                <td className="px-4 py-4 font-mono text-xs font-bold text-black">{s.mala || "-"}</td>
+                                                <td className="px-4 py-4 font-mono text-xs text-neutral-500">{s.etiqueta || "-"}</td>
+                                                <td className="px-4 py-4 text-[10px] font-mono text-neutral-400">
+                                                    {s.data_analise} <span className="opacity-50">{s.hora_analise}</span>
+                                                </td>
+                                                <td className="px-2 py-4 text-right font-mono text-xs tabular-nums">{formatDecimalBR(s.mic ?? 0, 2)}</td>
+                                                <td className="px-2 py-4 text-right font-mono text-xs tabular-nums text-neutral-500">{formatDecimalBR(s.len ?? 0, 2)}</td>
+                                                <td className="px-2 py-4 text-right font-mono text-xs tabular-nums text-neutral-500">{formatDecimalBR(s.unf ?? 0, 1)}</td>
+                                                <td className="px-2 py-4 text-right font-mono text-xs tabular-nums text-neutral-500">{formatDecimalBR(s.str ?? 0, 1)}</td>
+                                                <td className="px-2 py-4 text-right font-mono text-xs tabular-nums text-neutral-500">{formatDecimalBR(s.rd ?? 0, 1)}</td>
+                                                <td className="px-2 py-4 text-right font-mono text-xs tabular-nums text-neutral-500">{formatDecimalBR(s.b ?? 0, 1)}</td>
+                                                <td className="px-6 py-4 text-right">
+                                                    <div className="flex items-center justify-end gap-2">
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="h-8 w-8 text-neutral-300 hover:text-white hover:bg-blue-600 rounded-none transition-all"
+                                                            onClick={() => handleExportHVI(s)}
+                                                            title="Gerar arquivo HVI"
+                                                        >
+                                                            <FileDown className="h-4 w-4" />
+                                                        </Button>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="h-8 w-8 text-neutral-300 hover:text-white hover:bg-black rounded-none transition-all"
+                                                            onClick={() => setModalAction({ type: 'delete', id: s.id })}
+                                                        >
+                                                            <Trash2 className="h-4 w-4" />
+                                                        </Button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
                         )}
                     </div>
                 </div>

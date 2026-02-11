@@ -17,8 +17,8 @@ export default function ChatAssistant() {
 
     // Initial load and periodic refresh
     useEffect(() => {
-        const loadMessages = () => {
-            const history = ChatService.getMessages();
+        const loadMessages = async () => {
+            const history = await ChatService.getMessages();
 
             // Se houver novas mensagens ruidosas (não enviadas por mim)
             if (history.length > messages.length) {
@@ -39,8 +39,19 @@ export default function ChatAssistant() {
         };
 
         loadMessages();
-        const interval = setInterval(loadMessages, 2000);
-        return () => clearInterval(interval);
+
+        // Use Supabase Realtime subscription
+        const unsubscribe = ChatService.subscribe(() => {
+            loadMessages();
+        });
+
+        // Backup polling (optional, can reduce frequency or remove if realtime is reliable)
+        const interval = setInterval(loadMessages, 5000); // Increased interval to 5s as fallback
+
+        return () => {
+            unsubscribe();
+            clearInterval(interval);
+        };
     }, [messages.length, user?.id, soundEnabled, isOpen, isMinimized]);
 
     useEffect(() => {

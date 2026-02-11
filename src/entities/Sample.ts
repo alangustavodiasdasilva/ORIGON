@@ -57,16 +57,21 @@ export const SampleService = {
         if (isSupabaseEnabled()) {
             const { data, error } = await supabase.from('amostras').select('*');
             if (error) throw error;
-            return data;
+            return data || [];
         }
         return getStoredSamples();
     },
 
     async listByLote(loteId: string): Promise<Sample[]> {
         if (isSupabaseEnabled()) {
-            const { data, error } = await supabase.from('amostras').select('*').eq('lote_id', loteId).order('amostra_id');
+            // Optimized Select: Exclude 'historico_modificacoes' (heavy JSON) to speed up load
+            const { data, error } = await supabase
+                .from('amostras')
+                .select('id, lote_id, amostra_id, hvi, mic, len, unf, str, rd, b, mala, etiqueta, data_analise, hora_analise, cor')
+                .eq('lote_id', loteId)
+                .order('amostra_id');
             if (error) throw error;
-            return data;
+            return (data || []) as Sample[];
         }
         return getStoredSamples()
             .filter(s => s.lote_id === loteId)
@@ -156,5 +161,47 @@ export const SampleService = {
         const samples = getStoredSamples();
         const filtered = samples.filter(s => s.id !== id);
         saveStoredSamples(filtered);
+    },
+
+    async getLoteCounts(): Promise<Record<string, number>> {
+        if (isSupabaseEnabled()) {
+            // Optimization: Fetch only lote_id column instead of full rows
+            const { data, error } = await supabase.from('amostras').select('lote_id');
+            if (error) throw error;
+
+            const counts: Record<string, number> = {};
+            (data || []).forEach((row: any) => {
+                if (row.lote_id) {
+                    counts[row.lote_id] = (counts[row.lote_id] || 0) + 1;
+                }
+            });
+            return counts;
+        }
+
+        const samples = getStoredSamples();
+        const counts: Record<string, number> = {};
+        samples.forEach(s => {
+            if (s.lote_id) {
+                counts[s.lote_id] = (counts[s.lote_id] || 0) + 1;
+            }
+        });
+        return counts;
+    },
+
+    subscribe(callback: () => void): () => void {
+        if (!isSupabaseEnabled()) return () => { };
+
+        const channel = supabase
+            .channel(`amostras-changes-${Math.random().toString(36).substr(2, 9)}`)
+            .on(
+                'postgres_changes',
+                { event: '*', schema: 'public', table: 'amostras' },
+                () => callback()
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
     }
 };
