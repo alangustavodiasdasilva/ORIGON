@@ -16,18 +16,18 @@ export default function NetflixSplash({ onComplete }: { onComplete: () => void }
                 if (prev >= 100) return 100;
                 return prev + 1;
             });
-        }, 90); // 9 seconds total (90ms * 100 = 9000ms)
+        }, 40); // 4 seconds total (40ms * 100 = 4000ms)
 
-        // Logo animation: 9 seconds after intro
+        // Logo animation: 4.5 seconds after intro
         const logoTimer = setTimeout(() => {
             setStage('fade');
-        }, 9500);
+        }, 4500);
 
         // Fade out: 0.5 seconds
         const fadeTimer = setTimeout(() => {
             setStage('complete');
             onComplete();
-        }, 10000);
+        }, 5000);
 
         return () => {
             clearTimeout(introTimer);
