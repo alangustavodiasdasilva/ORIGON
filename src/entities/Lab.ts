@@ -50,15 +50,19 @@ export const LabService = {
 
     async create(data: Omit<Lab, 'id' | 'created_at' | 'updated_at'>): Promise<Lab> {
         if (isSupabaseEnabled()) {
-            const { data: newLab, error } = await supabase.from('laboratorios').insert([data]).select().single();
-            if (error) throw error;
+            const payload = { ...data, id: crypto.randomUUID() };
+            const { data: newLab, error } = await supabase.from('laboratorios').insert([payload]).select().single();
+            if (error) {
+                console.error("Supabase create lab error:", error);
+                throw error;
+            }
             return newLab;
         }
 
         const labs = getStoredLabs();
         const newLab: Lab = {
             ...data,
-            id: Math.random().toString(36).substr(2, 9),
+            id: crypto.randomUUID(),
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
         };
