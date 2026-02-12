@@ -44,6 +44,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 if (parsedUser.lab_id && parsedUser.acesso !== 'admin_global') {
                     const lab = await LabService.get(parsedUser.lab_id);
                     if (lab) setCurrentLab(lab);
+                } else {
+                    // Restore selected lab for global admin so F5 keeps them in the lab
+                    const storedLab = localStorage.getItem("fibertech_selected_lab");
+                    if (storedLab) {
+                        setCurrentLab(JSON.parse(storedLab));
+                    }
                 }
             }
             // Seed database if empty
@@ -102,7 +108,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 localStorage.setItem("fibertech_session", JSON.stringify(found));
 
                 // Load Lab Context
-                if (found.lab_id) {
+                if (found.acesso === 'admin_global') {
+                    // Force clear for global admin on login
+                    setCurrentLab(null);
+                    localStorage.removeItem("fibertech_selected_lab");
+                } else if (found.lab_id) {
                     const lab = await LabService.get(found.lab_id);
                     if (lab) {
                         setCurrentLab(lab);
