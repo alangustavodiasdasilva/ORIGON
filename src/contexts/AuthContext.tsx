@@ -40,8 +40,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 const parsedUser = JSON.parse(storedSession);
                 setUser(parsedUser);
 
-                // If user has a specific lab, load it
-                if (parsedUser.lab_id) {
+                // If user has a specific lab AND is not a global admin, load it
+                if (parsedUser.lab_id && parsedUser.acesso !== 'admin_global') {
                     const lab = await LabService.get(parsedUser.lab_id);
                     if (lab) setCurrentLab(lab);
                 }
