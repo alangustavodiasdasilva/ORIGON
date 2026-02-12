@@ -46,7 +46,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     if (lab) setCurrentLab(lab);
                 } else {
                     // Restore selected lab for global admin so F5 keeps them in the lab
-                    const storedLab = localStorage.getItem("fibertech_selected_lab");
+                    const storedLab = localStorage.getItem("fibertech_selected_lab_v2");
                     if (storedLab) {
                         setCurrentLab(JSON.parse(storedLab));
                     }
@@ -65,9 +65,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (isLoading) return; // Don't touch storage while loading initial state
 
         if (currentLab) {
-            localStorage.setItem("fibertech_selected_lab", JSON.stringify(currentLab));
+            localStorage.setItem("fibertech_selected_lab_v2", JSON.stringify(currentLab));
         } else {
-            localStorage.removeItem("fibertech_selected_lab");
+            localStorage.removeItem("fibertech_selected_lab_v2");
         }
     }, [currentLab, isLoading]);
 
@@ -122,16 +122,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 if (found.acesso === 'admin_global') {
                     // Force clear for global admin on login
                     setCurrentLab(null);
-                    localStorage.removeItem("fibertech_selected_lab");
+                    localStorage.removeItem("fibertech_selected_lab_v2");
                 } else if (found.lab_id) {
                     const lab = await LabService.get(found.lab_id);
                     if (lab) {
                         setCurrentLab(lab);
-                        localStorage.setItem("fibertech_selected_lab", JSON.stringify(lab));
+                        localStorage.setItem("fibertech_selected_lab_v2", JSON.stringify(lab));
                     }
                 } else {
                     setCurrentLab(null);
-                    localStorage.removeItem("fibertech_selected_lab");
+                    localStorage.removeItem("fibertech_selected_lab_v2");
                 }
 
                 return true;
@@ -149,20 +149,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const lab = await LabService.get(labId);
         if (lab) {
             setCurrentLab(lab);
-            localStorage.setItem("fibertech_selected_lab", JSON.stringify(lab));
+            localStorage.setItem("fibertech_selected_lab_v2", JSON.stringify(lab));
         }
     };
 
     const deselectLab = () => {
         setCurrentLab(null);
-        localStorage.removeItem("fibertech_selected_lab");
+        localStorage.removeItem("fibertech_selected_lab_v2");
     };
 
     const logout = () => {
         setUser(null);
         setCurrentLab(null);
         localStorage.removeItem("fibertech_session");
-        localStorage.removeItem("fibertech_selected_lab");
+        localStorage.removeItem("fibertech_selected_lab_v2");
     };
 
     return (
