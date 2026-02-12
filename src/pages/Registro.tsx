@@ -201,7 +201,26 @@ export default function Registro() {
     // Modal Confirmation State
     const [modalAction, setModalAction] = useState<{ type: 'delete', id?: string } | null>(null);
 
+    // Core Hooks
     const { user } = useAuth();
+
+    // Presence Logic
+    const [coWorkers, setCoWorkers] = useState<any[]>([]);
+    useEffect(() => {
+        const checkPresence = async () => {
+            const all = await AnalistaService.list();
+            const now = new Date().getTime();
+            const others = all.filter(a =>
+                a.id !== user?.id &&
+                a.current_lote_id === loteId &&
+                a.last_active && (now - new Date(a.last_active).getTime() < 15000)
+            );
+            setCoWorkers(others);
+        };
+        const interval = setInterval(checkPresence, 3000);
+        checkPresence();
+        return () => clearInterval(interval);
+    }, [loteId, user?.id]);
 
     useEffect(() => {
         if (loteId) {
@@ -500,23 +519,6 @@ export default function Registro() {
         );
     }
 
-    // Presence Logic
-    const [coWorkers, setCoWorkers] = useState<any[]>([]);
-    useEffect(() => {
-        const checkPresence = async () => {
-            const all = await AnalistaService.list();
-            const now = new Date().getTime();
-            const others = all.filter(a =>
-                a.id !== user?.id &&
-                a.current_lote_id === loteId &&
-                a.last_active && (now - new Date(a.last_active).getTime() < 15000)
-            );
-            setCoWorkers(others);
-        };
-        const interval = setInterval(checkPresence, 3000);
-        checkPresence();
-        return () => clearInterval(interval);
-    }, [loteId, user?.id]);
 
     // --- MAIN VIEW ---
     return (

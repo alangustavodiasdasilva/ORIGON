@@ -58,7 +58,22 @@ export class NotificationService {
         };
 
         if (isSupabaseEnabled()) {
-            const { error } = await supabase.from('notificacoes').insert([notification]);
+            // Clean payload
+            const dbPayload = {
+                id: notification.id,
+                type: notification.type,
+                priority: notification.priority,
+                title: notification.title,
+                message: notification.message,
+                created_at: notification.timestamp,
+                read: notification.read,
+                user_id: notification.userId,
+                lab_id: notification.labId,
+                action_url: notification.actionUrl,
+                metadata: notification.metadata
+            };
+
+            const { error } = await supabase.from('notificacoes').insert([dbPayload]);
             if (error) console.error("Error creating notification:", error);
             // We can optimistic update or just fetch
             this.notifyListeners(); // Will trigger fetch
@@ -81,14 +96,14 @@ export class NotificationService {
         if (isSupabaseEnabled()) {
             const { data, error } = await supabase
                 .from('notificacoes')
-                .select('*')
-                .order('timestamp', { ascending: false });
+                .select('*, userId:user_id, labId:lab_id, actionUrl:action_url, timestamp:created_at')
+                .order('created_at', { ascending: false });
 
             if (error) {
                 console.error("Error fetching notifications:", error);
                 return [];
             }
-            return data;
+            return data || [];
         }
         return this.getAllSync();
     }
@@ -106,9 +121,9 @@ export class NotificationService {
         if (isSupabaseEnabled()) {
             let query = supabase
                 .from('notificacoes')
-                .select('*')
-                .eq('userId', userId)
-                .order('timestamp', { ascending: false });
+                .select('*, userId:user_id, labId:lab_id, actionUrl:action_url, timestamp:created_at')
+                .eq('user_id', userId)
+                .order('created_at', { ascending: false });
 
             if (unreadOnly) {
                 query = query.eq('read', false);
@@ -116,7 +131,7 @@ export class NotificationService {
 
             const { data, error } = await query;
             if (error) return [];
-            return data;
+            return data || [];
         }
 
         const all = this.getAllSync();
@@ -162,7 +177,7 @@ export class NotificationService {
      */
     static async markAllAsRead(userId: string): Promise<void> {
         if (isSupabaseEnabled()) {
-            await supabase.from('notificacoes').update({ read: true }).eq('userId', userId);
+            await supabase.from('notificacoes').update({ read: true }).eq('user_id', userId);
             this.notifyListeners();
             return;
         }
