@@ -40,12 +40,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 const parsedUser = JSON.parse(storedSession);
                 setUser(parsedUser);
 
+                // SAFETY HATCH: If Global Admin is on Quality page (Selection Screen), do NOT auto-restore lab.
+                const isSelectionMode = window.location.pathname.includes('quality');
+                const shouldClear = parsedUser.acesso === 'admin_global' && isSelectionMode;
+
+                if (shouldClear) {
+                    localStorage.removeItem("fibertech_selected_lab_v2");
+                }
+
                 // If user has a specific lab AND is not a global admin, load it
                 if (parsedUser.lab_id && parsedUser.acesso !== 'admin_global') {
                     const lab = await LabService.get(parsedUser.lab_id);
                     if (lab) setCurrentLab(lab);
-                } else {
-                    // Restore selected lab for global admin so F5 keeps them in the lab
+                } else if (!shouldClear) {
+                    // Restore selected lab for global admin so F5 keeps them in the lab (UNLESS in selection mode)
                     const storedLab = localStorage.getItem("fibertech_selected_lab_v2");
                     if (storedLab) {
                         setCurrentLab(JSON.parse(storedLab));
