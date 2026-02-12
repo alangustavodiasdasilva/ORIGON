@@ -60,6 +60,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         init();
     }, []);
 
+    // Sync currentLab changes to localStorage automatically
+    useEffect(() => {
+        if (isLoading) return; // Don't touch storage while loading initial state
+
+        if (currentLab) {
+            localStorage.setItem("fibertech_selected_lab", JSON.stringify(currentLab));
+        } else {
+            localStorage.removeItem("fibertech_selected_lab");
+        }
+    }, [currentLab, isLoading]);
+
     const checkAndSeed = async () => {
         const users = await AnalistaService.list();
 
