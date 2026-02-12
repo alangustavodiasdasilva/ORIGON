@@ -43,10 +43,7 @@ export const AuditService = {
             // but usually camelCase columns work if created that way.
             const { data, error } = await supabase.from('auditoria_categorias').select('*');
             if (error) throw error;
-            return (data || []).map((c: any) => ({
-                ...c,
-                labId: c.lab_id || c.labId // Normalize snake_case to camelCase
-            }));
+            return data || [];
         }
         const data = localStorage.getItem(CATS_KEY);
         if (!data) {
@@ -62,7 +59,7 @@ export const AuditService = {
                 id: cat.id || self.crypto.randomUUID(),
                 name: cat.name,
                 description: cat.description,
-                lab_id: cat.labId // Assuming DB uses snake_case
+                lab_id: cat.labId
             };
             const { error } = await supabase.from('auditoria_categorias').upsert(payload);
             if (error) throw error;
@@ -93,25 +90,14 @@ export const AuditService = {
     // --- DOCUMENTS ---
     async list(): Promise<AuditDocument[]> {
         if (isSupabaseEnabled()) {
-            // Reverting to select * to avoid "column not found" errors if schema varies
-            // We manually strip 'data' to keep memory usage low
-            const { data, error } = await supabase.from('auditoria_documentos').select('*');
+            // Select everything EXCEPT 'data' for performance
+            // Use alias for lab_id -> labId so it matches the interface
+            const { data, error } = await supabase
+                .from('auditoria_documentos')
+                .select('id, name, fileName, fileSize, fileType, uploadDate, category, analystName, status, labId:lab_id');
 
             if (error) throw error;
-            return (data || []).map((d: any) => ({
-                id: d.id,
-                name: d.name,
-                // Robust mapping from snake_case DB columns to camelCase UI props
-                fileName: d.file_name || d.fileName || "arquivo_sem_nome",
-                fileSize: d.file_size || d.fileSize || 0,
-                fileType: d.file_type || d.fileType || "application/octet-stream",
-                category: d.category,
-                analystName: d.analyst_name || d.analystName || "Sistema",
-                uploadDate: d.created_at || d.upload_date || d.uploadDate || new Date().toISOString(),
-                status: d.status || 'pending',
-                labId: d.lab_id || d.labId,
-                data: undefined // Strip heavy data
-            }));
+            return data || [];
         }
         const data = localStorage.getItem(DOCS_KEY);
         if (!data) return [];
@@ -141,86 +127,23 @@ export const AuditService = {
     },
 
     async listByLab(labId: string): Promise<AuditDocument[]> {
-        if (isSupabaseEnabled()) {
-            const { data, error } = await supabase
-                .from('auditoria_documentos')
-                .select('*')
-                .eq('lab_id', labId);
-            if (error) throw error;
-            return (data || []).map((d: any) => ({
-                id: d.id,
-                name: d.name,
-                fileName: d.file_name || d.fileName || "arquivo_sem_nome",
-                fileSize: d.file_size || d.fileSize || 0,
-                fileType: d.file_type || d.fileType || "application/octet-stream",
-                category: d.category,
-                analystName: d.analyst_name || d.analystName || "Sistema",
-                uploadDate: d.created_at || d.upload_date || d.uploadDate || new Date().toISOString(),
-                status: d.status || 'pending',
-                labId: d.lab_id || d.labId,
-                data: undefined
-            }));
-        }
         const allDocs = await this.list();
         return allDocs.filter(d => d.labId === labId);
     },
 
     async upload(doc: Omit<AuditDocument, 'id' | 'uploadDate' | 'status'>): Promise<AuditDocument> {
-        console.group("AuditService.upload");
-        console.log("Input Doc:", doc);
-
         if (isSupabaseEnabled()) {
-            // Map camelCase DTO to snake_case DB columns
-            const { labId, analystName, fileName, fileSize, fileType, ...rest } = doc;
+            // Map labId to lab_id for partial match
+            const { labId, ...rest } = doc;
             const payload = {
-                name: rest.name,         // From rest (doc.name)
-                category: rest.category, // From rest (doc.category)
-                // data: rest.data,      // data might be in rest, but we don't save it to DB usually?
-                // Wait! 'data' IS passed in doc. If we don't save it to DB, where does it go?
-                // The DB seems to lack a 'data' column? 
-                // Step 2195 line 113 says 'data: undefined // Strip heavy data'. 
-                // But getContent fetches 'data'. So 'data' column MUST exist.
-                // Let's add it if it's there.
-                data: rest.data,
-
-                lab_id: labId || null,
-                file_name: fileName,
-                file_size: fileSize,
-                file_type: fileType,
+                ...rest,
+                lab_id: labId,
                 status: 'verified'
             };
-            console.log("Payload to DB (Explicit):", payload);
+            const { data, error } = await supabase.from('auditoria_documentos').insert([payload]).select().single();
 
-            try {
-                const { data, error, status } = await supabase
-                    .from('auditoria_documentos')
-                    .insert([payload])
-                    .select('id, name, file_name, file_size, file_type, category, created_at, status, lab_id')
-                    .single();
-
-                console.log("DB Response:", { status, data, error });
-
-                if (error) throw error;
-
-                console.log("Upload Success:", data);
-                return {
-                    id: data.id,
-                    name: data.name,
-                    fileName: data.file_name,
-                    fileSize: data.file_size,
-                    fileType: data.file_type,
-                    category: data.category,
-                    analystName: analystName, // Use input value since DB doesn't store/return it
-                    uploadDate: data.created_at, // Use created_at from DB
-                    status: data.status,
-                    labId: data.lab_id
-                };
-            } catch (err) {
-                console.error("Upload Failed:", err);
-                throw err;
-            } finally {
-                console.groupEnd();
-            }
+            if (error) throw error;
+            return data;
         }
         const docs = await this.list();
         const newDoc: AuditDocument = {
@@ -232,36 +155,6 @@ export const AuditService = {
         docs.push(newDoc);
         localStorage.setItem(DOCS_KEY, JSON.stringify(docs));
         return newDoc;
-    },
-
-    async updateDocument(id: string, updates: Partial<AuditDocument>): Promise<void> {
-        if (isSupabaseEnabled()) {
-            const payload: any = {};
-            if (updates.category) payload.category = updates.category;
-            if (updates.status) payload.status = updates.status;
-
-            const { error } = await supabase
-                .from('auditoria_documentos')
-                .update(payload)
-                .eq('id', id);
-            if (error) throw error;
-            return;
-        }
-
-        const raw = localStorage.getItem(DOCS_KEY);
-        if (!raw) return;
-
-        try {
-            const docs = JSON.parse(raw);
-            const index = docs.findIndex((d: AuditDocument) => d.id === id);
-
-            if (index >= 0) {
-                docs[index] = { ...docs[index], ...updates };
-                localStorage.setItem(DOCS_KEY, JSON.stringify(docs));
-            }
-        } catch (e) {
-            console.error("Failed to update local document", e);
-        }
     },
 
     async delete(id: string): Promise<void> {

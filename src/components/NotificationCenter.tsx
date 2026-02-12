@@ -14,30 +14,20 @@ export default function NotificationCenter() {
     const [unreadCount, setUnreadCount] = useState(0);
 
     useEffect(() => {
-        // Safe guard against null user inside effect, though component returns early if !user
         if (!user) return;
 
         const loadNotifications = async () => {
-            try {
-                const userNotifications = await NotificationService.getForUser(user.id);
-                setNotifications(userNotifications);
-                const count = await NotificationService.getUnreadCount(user.id);
-                setUnreadCount(count);
-            } catch (error) {
-                console.error("Failed to load notifications", error);
-            }
+            const userNotifications = await NotificationService.getForUser(user.id);
+            setNotifications(userNotifications);
+            const count = await NotificationService.getUnreadCount(user.id);
+            setUnreadCount(count);
         };
 
         loadNotifications();
 
         // Subscribe to changes
-        const unsubscribe = NotificationService.subscribe(() => {
-            loadNotifications();
-        });
-
-        return () => {
-            unsubscribe();
-        };
+        const unsubscribe = NotificationService.subscribe(loadNotifications);
+        return unsubscribe;
     }, [user]);
 
     if (!user) return null;

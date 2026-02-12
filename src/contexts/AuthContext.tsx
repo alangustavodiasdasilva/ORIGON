@@ -3,7 +3,6 @@ import type { ReactNode } from "react";
 import { AnalistaService } from "@/entities/Analista";
 import type { Analista } from "@/entities/Analista";
 import { LabService, type Lab } from "@/entities/Lab";
-import { supabase } from "@/lib/supabase";
 
 interface AuthContextType {
     user: Analista | null;
@@ -37,80 +36,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Check local storage for session
         const init = async () => {
             const storedSession = localStorage.getItem("fibertech_session");
-
             if (storedSession) {
-                try {
-                    const parsedUser = JSON.parse(storedSession);
-                    setUser(parsedUser);
+                const parsedUser = JSON.parse(storedSession);
+                setUser(parsedUser);
 
-                    // If user has a specific lab, load it
-                    if (parsedUser.lab_id) {
-                        const lab = await LabService.get(parsedUser.lab_id);
-                        if (lab) setCurrentLab(lab);
-                    } else {
-                        // Try to restore selected lab for global admin
-                        const storedLab = localStorage.getItem("fibertech_selected_lab");
-                        if (storedLab) {
-                            setCurrentLab(JSON.parse(storedLab));
-                        }
+                // If user has a specific lab, load it
+                if (parsedUser.lab_id) {
+                    const lab = await LabService.get(parsedUser.lab_id);
+                    if (lab) setCurrentLab(lab);
+                } else {
+                    // Try to restore selected lab for global admin
+                    const storedLab = localStorage.getItem("fibertech_selected_lab");
+                    if (storedLab) {
+                        setCurrentLab(JSON.parse(storedLab));
                     }
-                } catch (e) {
-                    console.error("Session restore failed", e);
-                    localStorage.removeItem("fibertech_session");
                 }
-
-                // Allow UI to load immediately for logged users
-                setIsLoading(false);
-
-                // Background seed check
-                checkAndSeed().catch(console.error);
-            } else {
-                // For new sessions, wait for seed
-                await checkAndSeed().catch(console.error);
-                setIsLoading(false);
             }
+            // Seed database if empty
+            await checkAndSeed();
+
+            setIsLoading(false);
         };
         init();
     }, []);
-
-    // Real-time User Updates
-    useEffect(() => {
-        if (!user) return;
-
-        const channel = supabase
-            .channel(`public:analistas:${user.id}`)
-            .on('postgres_changes', {
-                event: 'UPDATE',
-                schema: 'public',
-                table: 'analistas',
-                filter: `id=eq.${user.id}`
-            }, (payload) => {
-                console.log("User updated remotely", payload);
-                // Refresh user data
-                const updatedUser = payload.new as Analista;
-                setUser(updatedUser);
-                localStorage.setItem("fibertech_session", JSON.stringify(updatedUser));
-
-                // If lab context changed or removed, handle it
-                if (updatedUser.lab_id !== user.lab_id) {
-                    window.location.reload(); // Force reload to ensure context consistency
-                }
-            })
-            .on('postgres_changes', {
-                event: 'DELETE',
-                schema: 'public',
-                table: 'analistas',
-                filter: `id=eq.${user.id}`
-            }, () => {
-                console.warn("User deleted remotely");
-                logout(); // Logout immediately
-            })
-            .subscribe();
-
-        return () => {
-            supabase.removeChannel(channel);
-        };
-    }, [user?.id]); // Only re-subscribe if ID changes
 
     const checkAndSeed = async () => {
         const users = await AnalistaService.list();

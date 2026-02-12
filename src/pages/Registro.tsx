@@ -342,6 +342,18 @@ export default function Registro() {
     // --- SIDE-BY-SIDE CONFIRMATION VIEW ---
     if (pendingReview && editingRows.length > 0) {
         const currentRow = editingRows[currentRowIndex];
+        // Safety check to prevent crashes if index is out of bounds
+        if (!currentRow) {
+            console.error("Critical Error: Current row index out of bounds", currentRowIndex, editingRows.length);
+            // Attempt recovery
+            if (editingRows.length > 0) {
+                setCurrentRowIndex(0);
+                return null;
+            } else {
+                setPendingReview(null);
+                return null;
+            }
+        }
 
         return createPortal(
 

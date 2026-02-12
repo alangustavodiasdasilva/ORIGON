@@ -64,14 +64,9 @@ export const SampleService = {
 
     async listByLote(loteId: string): Promise<Sample[]> {
         if (isSupabaseEnabled()) {
-            // Optimized Select: Exclude 'historico_modificacoes' (heavy JSON) to speed up load
-            const { data, error } = await supabase
-                .from('amostras')
-                .select('id, lote_id, amostra_id, hvi, mic, len, unf, str, rd, b, mala, etiqueta, data_analise, hora_analise, cor')
-                .eq('lote_id', loteId)
-                .order('amostra_id');
+            const { data, error } = await supabase.from('amostras').select('*').eq('lote_id', loteId).order('amostra_id');
             if (error) throw error;
-            return (data || []) as Sample[];
+            return data || [];
         }
         return getStoredSamples()
             .filter(s => s.lote_id === loteId)
@@ -161,31 +156,6 @@ export const SampleService = {
         const samples = getStoredSamples();
         const filtered = samples.filter(s => s.id !== id);
         saveStoredSamples(filtered);
-    },
-
-    async getLoteCounts(): Promise<Record<string, number>> {
-        if (isSupabaseEnabled()) {
-            // Optimization: Fetch only lote_id column instead of full rows
-            const { data, error } = await supabase.from('amostras').select('lote_id');
-            if (error) throw error;
-
-            const counts: Record<string, number> = {};
-            (data || []).forEach((row: any) => {
-                if (row.lote_id) {
-                    counts[row.lote_id] = (counts[row.lote_id] || 0) + 1;
-                }
-            });
-            return counts;
-        }
-
-        const samples = getStoredSamples();
-        const counts: Record<string, number> = {};
-        samples.forEach(s => {
-            if (s.lote_id) {
-                counts[s.lote_id] = (counts[s.lote_id] || 0) + 1;
-            }
-        });
-        return counts;
     },
 
     subscribe(callback: () => void): () => void {

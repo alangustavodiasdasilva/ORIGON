@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { ShieldCheck, FileText, Download, Trash2, CheckSquare, Eye, X as CloseIcon, ArrowLeft, Plus, Settings, Edit3, ArrowRight } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
@@ -33,100 +33,53 @@ export default function Quality() {
     const [editingCategory, setEditingCategory] = useState<Partial<AuditCategory> | null>(null);
     const [labs, setLabs] = useState<any[]>([]);
 
-    const [isLoadingData, setIsLoadingData] = useState(true);
-
     useEffect(() => {
         loadInitialData();
     }, [user, currentLab]);
 
-    const loadInitialData = useCallback(async () => {
-        try {
-            setIsLoadingData(true);
-            const targetLabId = currentLab?.id || user?.lab_id;
+    const loadInitialData = async () => {
+        const targetLabId = currentLab?.id || user?.lab_id;
 
-            let docs: AuditDocument[] = [];
-            if (targetLabId) {
-                docs = await AuditService.listByLab(targetLabId);
-            } else {
-                docs = await AuditService.list();
-            }
-
-            const cats = await AuditService.listCategories();
-
-            // Load labs for displaying city/lab info
-            const { LabService } = await import('@/entities/Lab');
-            const labsData = await LabService.list();
-
-            setCategories(cats);
-            setDocuments(docs);
-            setLabs(labsData);
-        } catch (error) {
-            console.error("Failed to load initial data:", error);
-            addToast({ title: "Erro ao atualizar dados", description: "Verifique sua conexão.", type: "error" });
-        } finally {
-            setIsLoadingData(false);
+        let docs: AuditDocument[] = [];
+        if (targetLabId) {
+            docs = await AuditService.listByLab(targetLabId);
+        } else {
+            // If admin_global with no lab selected, maybe list all?
+            // Or empty? User said "don't mix".
+            // Let's list all but maybe the UI should show which lab they belong to in the future.
+            // For now, listing all is the safer default if no context.
+            docs = await AuditService.list();
         }
-    }, [user, currentLab, addToast]);
 
+        const cats = await AuditService.listCategories();
 
-    const categoryCounts = useMemo(() => {
-        const counts: Record<string, number> = {};
-        documents.forEach(d => {
-            counts[d.category] = (counts[d.category] || 0) + 1;
-        });
-        return counts;
-    }, [documents]);
+        // Load labs for displaying city/lab info
+        const { LabService } = await import('@/entities/Lab');
+        const labsData = await LabService.list();
 
-    const currentCategory = useMemo(() => categories.find(c => c.id === selectedCategoryId), [categories, selectedCategoryId]);
-    const categoryDocs = useMemo(() => documents.filter(d => d.category === currentCategory?.name), [documents, currentCategory]);
+        setCategories(cats);
+        setDocuments(docs);
+        setLabs(labsData);
+    };
 
 
 
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
-        // Ensure we have a selected category context
         const category = categories.find(c => c.id === selectedCategoryId);
-
-        console.log("Upload Attempt:", {
-            fileName: file?.name,
-            fileSize: file?.size,
-            selectedCategoryId,
-            categoryName: category?.name,
-            userLab: user?.lab_id
-        });
-
-        if (!file) return;
-
-        if (!category) {
-            addToast({ title: "Erro de Contexto", description: "Nenhuma categoria selecionada.", type: "error" });
-            if (fileInputRef.current) fileInputRef.current.value = ''; // Reset
-            return;
-        }
+        if (!file || !user || !category) return;
 
         const targetLabId = currentLab?.id || user?.lab_id;
-
-        // Allow global admin to upload without lab context (as generic template/doc) 
-        // OR warn if strictly required. 
-        // Logic: if !targetLabId and !admin_global, error.
-        if (!targetLabId && user?.acesso !== 'admin_global') {
+        if (!targetLabId && user.acesso !== 'admin_global') {
             addToast({ title: "Erro: Laboratório não identificado", type: "error" });
-            if (fileInputRef.current) fileInputRef.current.value = '';
-            return;
-        }
-
-        if (file.size > 10 * 1024 * 1024) {
-            addToast({ title: "Arquivo muito grande", description: "O limite é 10MB.", type: "error" });
-            if (fileInputRef.current) fileInputRef.current.value = '';
             return;
         }
 
         setIsUploading(true);
-        const reader = new FileReader();
-        reader.onload = async (event) => {
-            try {
+        try {
+            const reader = new FileReader();
+            reader.onload = async (event) => {
                 const base64 = event.target?.result as string;
-
-                console.log("File read success. Uploading...");
 
                 await AuditService.upload({
                     name: file.name.split('.')[0],
@@ -135,28 +88,19 @@ export default function Quality() {
                     fileType: file.type,
                     data: base64,
                     category: category.name,
-                    analystName: user?.nome || "Unknown",
+                    analystName: user.nome,
                     labId: targetLabId || undefined
                 });
 
                 addToast({ title: "Documento Anexado", type: "success" });
                 loadInitialData();
-            } catch (error: any) {
-                console.error("Upload error:", error);
-                const msg = error?.message?.includes('payload') ? "Arquivo muito grande para o servidor" : (error.message || "Não foi possível salvar o documento.");
-                addToast({ title: "Erro no Upload", description: msg, type: "error" });
-            } finally {
                 setIsUploading(false);
-                if (fileInputRef.current) fileInputRef.current.value = '';
-            }
-        };
-        reader.onerror = (err) => {
-            console.error("Reader error", err);
-            addToast({ title: "Erro na leitura do arquivo", type: "error" });
+            };
+            reader.readAsDataURL(file);
+        } catch (error) {
+            addToast({ title: "Erro no Upload", type: "error" });
             setIsUploading(false);
-            if (fileInputRef.current) fileInputRef.current.value = '';
-        };
-        reader.readAsDataURL(file);
+        }
     };
 
     const handleDownload = async (doc: AuditDocument) => {
@@ -207,82 +151,28 @@ export default function Quality() {
             addToast({ title: "Nome da categoria obrigatório", type: "error" });
             return;
         }
-
-        const trimmedName = editingCategory.name.trim();
-
-        // Duplicate check
-        const isDuplicate = categories.some(c =>
-            c.name.toLowerCase() === trimmedName.toLowerCase() &&
-            c.id !== editingCategory.id
-        );
-
-        if (isDuplicate) {
-            addToast({ title: "Categoria duplicada", description: "Já existe uma categoria com este nome.", type: "error" });
-            return;
-        }
-
         try {
-            setIsLoadingData(true);
             const targetLabId = currentLab?.id || user?.lab_id;
-
-            // Handle Renaming: Update associated documents if name changed
-            if (editingCategory.id) {
-                const oldCategory = categories.find(c => c.id === editingCategory.id);
-                if (oldCategory && oldCategory.name !== trimmedName) {
-                    const docsToUpdate = documents.filter(d => d.category === oldCategory.name);
-                    if (docsToUpdate.length > 0) {
-                        console.log(`Renaming category "${oldCategory.name}" to "${trimmedName}". Updating ${docsToUpdate.length} documents.`);
-                        await Promise.all(docsToUpdate.map(d =>
-                            AuditService.updateDocument(d.id, { category: trimmedName })
-                        ));
-                        addToast({ title: "Documentos atualizados", description: `${docsToUpdate.length} arquivos migrados para nova categoria.`, type: "info" });
-                    }
-                }
-            }
-
-            const labIdToSave = editingCategory.id ? editingCategory.labId : targetLabId;
-
             const categoryToSave = {
                 ...editingCategory,
-                name: trimmedName,
-                labId: labIdToSave
+                labId: targetLabId
             } as AuditCategory;
 
             await AuditService.saveCategory(categoryToSave);
             addToast({ title: "Categoria Salva", type: "success" });
             setEditingCategory(null);
             loadInitialData();
-        } catch (error: any) {
-            console.error("Save failed:", error);
-            const msg = error.message || "Erro desconhecido ao salvar.";
-            addToast({ title: "Erro ao salvar", description: msg, type: "error" });
-        } finally {
-            setIsLoadingData(false);
+        } catch (error) {
+            console.error(error);
+            addToast({ title: "Erro ao salvar categoria", type: "error" });
         }
     };
 
     const handleDeleteCategory = async (id: string) => {
-        const cat = categories.find(c => c.id === id);
-        if (!cat) return;
-
-        const docsToDelete = documents.filter(d => d.category === cat.name);
-        const count = docsToDelete.length;
-
-        if (confirm(`Remover a categoria "${cat.name}"?\n${count} documento(s) associado(s) serão excluídos permanentemente.`)) {
-            try {
-                // Cascading delete
-                if (count > 0) {
-                    addToast({ title: "Removendo documentos...", type: "info" });
-                    await Promise.all(docsToDelete.map(d => AuditService.delete(d.id)));
-                }
-
-                await AuditService.deleteCategory(id);
-                addToast({ title: "Categoria e documentos removidos", type: "success" });
-                loadInitialData();
-            } catch (error) {
-                console.error("Delete failed:", error);
-                addToast({ title: "Erro ao remover", description: "Falha ao excluir dependências.", type: "error" });
-            }
+        if (confirm("Remover esta categoria? Isso não excluirá os documentos já enviados, mas eles ficarão órfãos.")) {
+            await AuditService.deleteCategory(id);
+            addToast({ title: "Categoria Removida", type: "info" });
+            loadInitialData();
         }
     };
 
@@ -353,7 +243,8 @@ export default function Quality() {
         );
     }
 
-
+    const currentCategory = categories.find(c => c.id === selectedCategoryId);
+    const categoryDocs = documents.filter(d => d.category === currentCategory?.name);
 
     return (
         <div className="space-y-12 animate-fade-in text-black pb-24">
@@ -440,154 +331,150 @@ export default function Quality() {
             </div >
 
             {/* Content Area */}
-            {isLoadingData ? (
-                <div className="flex flex-col items-center justify-center py-32 space-y-4 animate-fade-in">
-                    <div className="h-12 w-12 border-4 border-neutral-200 border-t-black rounded-full animate-spin"></div>
-                    <p className="text-[10px] uppercase tracking-widest text-neutral-400 font-bold">Carregando Auditoria...</p>
-                </div>
-            ) : isConfigMode ? (
-                /* CONFIG MODE: List categories for editing */
-                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                    {categories.map((cat) => (
-                        <div key={cat.id} className="p-8 border border-neutral-200 bg-white flex flex-col justify-between h-64">
-                            <div>
-                                <div className="flex justify-between items-start mb-4">
-                                    <h3 className="text-xl font-serif">{cat.name}</h3>
-                                    <div className="flex gap-2">
-                                        <button
-                                            onClick={() => setEditingCategory(cat)}
-                                            className="h-8 w-8 border border-neutral-100 flex items-center justify-center hover:border-black transition-colors"
-                                        >
-                                            <Edit3 className="h-4 w-4" />
-                                        </button>
-                                        <button
-                                            onClick={() => handleDeleteCategory(cat.id)}
-                                            className="h-8 w-8 border border-neutral-100 flex items-center justify-center hover:text-red-600 hover:border-red-600 transition-colors"
-                                        >
-                                            <Trash2 className="h-4 w-4" />
-                                        </button>
+            {
+                isConfigMode ? (
+                    /* CONFIG MODE: List categories for editing */
+                    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                        {categories.map((cat) => (
+                            <div key={cat.id} className="p-8 border border-neutral-200 bg-white flex flex-col justify-between h-64">
+                                <div>
+                                    <div className="flex justify-between items-start mb-4">
+                                        <h3 className="text-xl font-serif">{cat.name}</h3>
+                                        <div className="flex gap-2">
+                                            <button
+                                                onClick={() => setEditingCategory(cat)}
+                                                className="h-8 w-8 border border-neutral-100 flex items-center justify-center hover:border-black transition-colors"
+                                            >
+                                                <Edit3 className="h-4 w-4" />
+                                            </button>
+                                            <button
+                                                onClick={() => handleDeleteCategory(cat.id)}
+                                                className="h-8 w-8 border border-neutral-100 flex items-center justify-center hover:text-red-600 hover:border-red-600 transition-colors"
+                                            >
+                                                <Trash2 className="h-4 w-4" />
+                                            </button>
+                                        </div>
                                     </div>
-                                </div>
-                                <p className="text-[10px] uppercase tracking-wider text-neutral-400 leading-relaxed truncate-2-lines">
-                                    {cat.description}
-                                </p>
-                            </div>
-                            <div className="text-[9px] font-mono text-neutral-300 mt-4">
-                                ID: {cat.id}
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            ) : !selectedCategoryId ? (
-                /* DASHBOARD VIEW: Category Cards */
-                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                    {categories.map((cat) => {
-                        const count = categoryCounts[cat.name] || 0;
-                        const isComplete = count > 0;
-
-                        return (
-                            <button
-                                key={cat.id}
-                                onClick={() => setSelectedCategoryId(cat.id)}
-                                className="group text-left flex flex-col h-64 border border-neutral-200 bg-white hover:border-black transition-all p-8 relative"
-                            >
-                                <div className="flex justify-between items-start mb-4">
-                                    <div className={cn(
-                                        "h-10 w-10 border flex items-center justify-center transition-colors",
-                                        isComplete ? "bg-black border-black text-white" : "border-neutral-200 text-neutral-300"
-                                    )}>
-                                        <CheckSquare className="h-5 w-5" />
-                                    </div>
-                                    <span className="text-[10px] font-mono font-bold text-neutral-400 group-hover:text-black transition-colors">
-                                        {count.toString().padStart(2, '0')} DOCS
-                                    </span>
-                                </div>
-                                <div className="mt-auto">
-                                    <h3 className="text-xl font-serif mb-2">{cat.name}</h3>
-                                    <p className="text-[10px] uppercase tracking-wider text-neutral-400 leading-relaxed max-w-[80%]">
+                                    <p className="text-[10px] uppercase tracking-wider text-neutral-400 leading-relaxed truncate-2-lines">
                                         {cat.description}
                                     </p>
                                 </div>
-                                <div className="absolute bottom-0 right-0 p-4 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <Plus className="h-4 w-4" />
-                                </div>
-                            </button>
-                        );
-                    })}
-
-                    {categories.length === 0 && (
-                        <div className="col-span-full py-32 border border-dashed border-neutral-100 flex flex-col items-center justify-center text-center">
-                            <h3 className="text-lg font-serif mb-2">Checklist Vazio</h3>
-                            <p className="text-[10px] uppercase tracking-widest text-neutral-400 mb-8">Nenhuma categoria cadastrada</p>
-                            <Button onClick={() => setIsConfigMode(true)} variant="outline" className="border-black rounded-none">
-                                <Settings className="mr-2 h-4 w-4" /> Configurar Checklist
-                            </Button>
-                        </div>
-                    )}
-                </div>
-            ) : (
-                /* DETAIL VIEW: Document Grid */
-                <div className="space-y-8 animate-fade-in-up">
-                    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                        {categoryDocs.map((doc) => (
-                            <div key={doc.id} className="group/card flex flex-col border border-neutral-200 bg-white hover:border-black transition-all h-full animate-fade-in">
-                                <div className="aspect-[4/3] bg-neutral-50 border-b border-neutral-100 relative overflow-hidden flex items-center justify-center group-hover/card:bg-white transition-colors">
-                                    {doc.fileType.startsWith('image/') ? (
-                                        <img src={doc.data} alt={doc.fileName} className="w-full h-full object-cover opacity-80 group-hover/card:opacity-100 transition-opacity" />
-                                    ) : (
-                                        <div className="flex flex-col items-center gap-2">
-                                            <FileText className="h-10 w-10 text-neutral-300" />
-                                            <span className="text-[9px] font-mono text-neutral-400 uppercase">{doc.fileType.split('/')[1] || 'FILE'}</span>
-                                        </div>
-                                    )}
-                                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/card:opacity-100 transition-opacity flex items-center justify-center">
-                                        <button onClick={() => handlePreview(doc)} className="h-10 w-10 bg-white flex items-center justify-center hover:bg-neutral-100 transition-colors">
-                                            <Eye className="h-5 w-5 text-black" />
-                                        </button>
-                                    </div>
-                                </div>
-                                <div className="p-4 flex-1 flex flex-col justify-between">
-                                    <div className="space-y-1 mb-4">
-                                        <p className="text-xs font-bold uppercase tracking-wider truncate mb-1">{doc.fileName}</p>
-                                        <div className="flex items-center justify-between">
-                                            <span className="text-[9px] text-neutral-400 font-mono">{(doc.fileSize / 1024).toFixed(1)} KB</span>
-                                            <span className="text-[9px] text-neutral-400 font-mono italic">{new Date(doc.uploadDate).toLocaleDateString()}</span>
-                                        </div>
-                                        {/* Lab/City Info Badge */}
-                                        {doc.labId && (() => {
-                                            const labInfo = getLabInfo(doc.labId);
-                                            return labInfo ? (
-                                                <div className="mt-2 pt-2 border-t border-neutral-100">
-                                                    <span className="text-[8px] font-mono font-bold text-black uppercase tracking-widest bg-neutral-100 px-2 py-1 rounded-sm inline-block">
-                                                        📍 {labInfo.name} - {labInfo.city}
-                                                    </span>
-                                                </div>
-                                            ) : null;
-                                        })()}
-                                    </div>
-                                    <div className="flex items-center gap-2 pt-4 border-t border-neutral-100">
-                                        <button onClick={() => handleDownload(doc)} className="flex-1 flex items-center justify-center py-2 border border-black hover:bg-black hover:text-white transition-colors text-[9px] font-bold uppercase tracking-widest">
-                                            <Download className="mr-2 h-3 w-3" /> DOWNLOAD
-                                        </button>
-                                        <button onClick={() => handleDeleteDoc(doc.id)} className="p-2 text-neutral-300 hover:text-red-600 transition-colors">
-                                            <Trash2 className="h-4 w-4" />
-                                        </button>
-                                    </div>
+                                <div className="text-[9px] font-mono text-neutral-300 mt-4">
+                                    ID: {cat.id}
                                 </div>
                             </div>
                         ))}
+                    </div>
+                ) : !selectedCategoryId ? (
+                    /* DASHBOARD VIEW: Category Cards */
+                    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                        {categories.map((cat) => {
+                            const count = documents.filter(d => d.category === cat.name).length;
+                            const isComplete = count > 0;
 
-                        {categoryDocs.length === 0 && (
-                            <div className="col-span-full py-24 border border-dashed border-neutral-100 flex flex-col items-center justify-center text-center">
-                                <FileText className="h-12 w-12 text-neutral-100 mb-4" />
-                                <p className="text-[10px] uppercase tracking-[0.2em] text-neutral-300 font-bold max-w-xs">
-                                    Nenhum documento anexado para esta categoria ainda.
-                                </p>
+                            return (
+                                <button
+                                    key={cat.id}
+                                    onClick={() => setSelectedCategoryId(cat.id)}
+                                    className="group text-left flex flex-col h-64 border border-neutral-200 bg-white hover:border-black transition-all p-8 relative"
+                                >
+                                    <div className="flex justify-between items-start mb-4">
+                                        <div className={cn(
+                                            "h-10 w-10 border flex items-center justify-center transition-colors",
+                                            isComplete ? "bg-black border-black text-white" : "border-neutral-200 text-neutral-300"
+                                        )}>
+                                            <CheckSquare className="h-5 w-5" />
+                                        </div>
+                                        <span className="text-[10px] font-mono font-bold text-neutral-400 group-hover:text-black transition-colors">
+                                            {count.toString().padStart(2, '0')} DOCS
+                                        </span>
+                                    </div>
+                                    <div className="mt-auto">
+                                        <h3 className="text-xl font-serif mb-2">{cat.name}</h3>
+                                        <p className="text-[10px] uppercase tracking-wider text-neutral-400 leading-relaxed max-w-[80%]">
+                                            {cat.description}
+                                        </p>
+                                    </div>
+                                    <div className="absolute bottom-0 right-0 p-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <Plus className="h-4 w-4" />
+                                    </div>
+                                </button>
+                            );
+                        })}
+
+                        {categories.length === 0 && (
+                            <div className="col-span-full py-32 border border-dashed border-neutral-100 flex flex-col items-center justify-center text-center">
+                                <h3 className="text-lg font-serif mb-2">Checklist Vazio</h3>
+                                <p className="text-[10px] uppercase tracking-widest text-neutral-400 mb-8">Nenhuma categoria cadastrada</p>
+                                <Button onClick={() => setIsConfigMode(true)} variant="outline" className="border-black rounded-none">
+                                    <Settings className="mr-2 h-4 w-4" /> Configurar Checklist
+                                </Button>
                             </div>
                         )}
                     </div>
-                </div>
-            )
+                ) : (
+                    /* DETAIL VIEW: Document Grid */
+                    <div className="space-y-8 animate-fade-in-up">
+                        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                            {categoryDocs.map((doc) => (
+                                <div key={doc.id} className="group/card flex flex-col border border-neutral-200 bg-white hover:border-black transition-all h-full animate-fade-in">
+                                    <div className="aspect-[4/3] bg-neutral-50 border-b border-neutral-100 relative overflow-hidden flex items-center justify-center group-hover/card:bg-white transition-colors">
+                                        {doc.fileType.startsWith('image/') ? (
+                                            <img src={doc.data} alt={doc.fileName} className="w-full h-full object-cover opacity-80 group-hover/card:opacity-100 transition-opacity" />
+                                        ) : (
+                                            <div className="flex flex-col items-center gap-2">
+                                                <FileText className="h-10 w-10 text-neutral-300" />
+                                                <span className="text-[9px] font-mono text-neutral-400 uppercase">{doc.fileType.split('/')[1] || 'FILE'}</span>
+                                            </div>
+                                        )}
+                                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/card:opacity-100 transition-opacity flex items-center justify-center">
+                                            <button onClick={() => handlePreview(doc)} className="h-10 w-10 bg-white flex items-center justify-center hover:bg-neutral-100 transition-colors">
+                                                <Eye className="h-5 w-5 text-black" />
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div className="p-4 flex-1 flex flex-col justify-between">
+                                        <div className="space-y-1 mb-4">
+                                            <p className="text-xs font-bold uppercase tracking-wider truncate mb-1">{doc.fileName}</p>
+                                            <div className="flex items-center justify-between">
+                                                <span className="text-[9px] text-neutral-400 font-mono">{(doc.fileSize / 1024).toFixed(1)} KB</span>
+                                                <span className="text-[9px] text-neutral-400 font-mono italic">{new Date(doc.uploadDate).toLocaleDateString()}</span>
+                                            </div>
+                                            {/* Lab/City Info Badge */}
+                                            {doc.labId && (() => {
+                                                const labInfo = getLabInfo(doc.labId);
+                                                return labInfo ? (
+                                                    <div className="mt-2 pt-2 border-t border-neutral-100">
+                                                        <span className="text-[8px] font-mono font-bold text-black uppercase tracking-widest bg-neutral-100 px-2 py-1 rounded-sm inline-block">
+                                                            📍 {labInfo.name} - {labInfo.city}
+                                                        </span>
+                                                    </div>
+                                                ) : null;
+                                            })()}
+                                        </div>
+                                        <div className="flex items-center gap-2 pt-4 border-t border-neutral-100">
+                                            <button onClick={() => handleDownload(doc)} className="flex-1 flex items-center justify-center py-2 border border-black hover:bg-black hover:text-white transition-colors text-[9px] font-bold uppercase tracking-widest">
+                                                <Download className="mr-2 h-3 w-3" /> DOWNLOAD
+                                            </button>
+                                            <button onClick={() => handleDeleteDoc(doc.id)} className="p-2 text-neutral-300 hover:text-red-600 transition-colors">
+                                                <Trash2 className="h-4 w-4" />
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+
+                            {categoryDocs.length === 0 && (
+                                <div className="col-span-full py-24 border border-dashed border-neutral-100 flex flex-col items-center justify-center text-center">
+                                    <FileText className="h-12 w-12 text-neutral-100 mb-4" />
+                                    <p className="text-[10px] uppercase tracking-[0.2em] text-neutral-300 font-bold max-w-xs">
+                                        Nenhum documento anexado para esta categoria ainda.
+                                    </p>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )
             }
 
             {/* Global Summary Status (Only on Main Dashboard) */}

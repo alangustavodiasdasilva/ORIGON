@@ -89,19 +89,7 @@ export const AnalistaService = {
 
     async update(id: string, data: Partial<Analista>): Promise<Analista> {
         if (isSupabaseEnabled()) {
-            // Ensure data keys are valid snake_case for DB
-            const validKeys = ['nome', 'email', 'foto', 'senha', 'lab_id', 'cargo', 'acesso', 'last_active', 'current_lote_id', 'updated_at'];
-            const payload: any = {};
-
-            Object.keys(data).forEach(key => {
-                if (validKeys.includes(key)) {
-                    payload[key] = (data as any)[key];
-                } else if (key === 'labId') {
-                    payload['lab_id'] = (data as any)['labId'];
-                }
-            });
-
-            const { data: updated, error } = await supabase.from('analistas').update(payload).eq('id', id).select().single();
+            const { data: updated, error } = await supabase.from('analistas').update(data).eq('id', id).select().single();
             if (error) throw error;
             return updated;
         }

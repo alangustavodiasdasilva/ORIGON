@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import {
     ArrowLeft,
@@ -105,7 +105,7 @@ export default function Analysis() {
         setSamples(s);
     };
 
-    const handleUpdateSample = useCallback(async (id: string, field: string, value: any) => {
+    const handleUpdateSample = async (id: string, field: string, value: any) => {
         setIsProcessing(true);
         try {
             await SampleService.update(id, { [field]: value });
@@ -116,9 +116,9 @@ export default function Analysis() {
         } finally {
             setIsProcessing(false);
         }
-    }, [addToast, loteId]); // Added loteId implicitly required by loadData if it was memoized, but loadData isn't yet.
+    };
 
-    const handleColorChange = useCallback(async (id: string, color: string) => {
+    const handleColorChange = async (id: string, color: string) => {
         setIsProcessing(true);
         try {
             await SampleService.update(id, { cor: color });
@@ -129,9 +129,9 @@ export default function Analysis() {
         } finally {
             setIsProcessing(false);
         }
-    }, [addToast, loteId]);
+    };
 
-    const handleDeleteSample = useCallback(async (id: string) => {
+    const handleDeleteSample = async (id: string) => {
         if (!confirm("This action is irreversible. Delete sample?")) return;
         setIsProcessing(true);
         try {
@@ -143,7 +143,7 @@ export default function Analysis() {
         } finally {
             setIsProcessing(false);
         }
-    }, [addToast, loteId]);
+    };
 
     const [isPatternModalOpen, setIsPatternModalOpen] = useState(false);
     const [isStatsModalOpen, setIsStatsModalOpen] = useState(false);
@@ -169,9 +169,9 @@ export default function Analysis() {
     if (!loteId) return <div className="p-10 text-center font-mono uppercase tracking-widest text-[10px]">NO_BATCH_ID</div>;
     if (!lote) return <div className="p-10 text-center animate-pulse font-mono uppercase tracking-widest text-[10px]">LOADING_METRICS...</div>;
 
-    const filteredSamples = useMemo(() => filterColor
+    const filteredSamples = filterColor
         ? samples.filter(s => s.cor === filterColor)
-        : samples, [samples, filterColor]);
+        : samples;
 
     return (
         <div className="space-y-12 animate-fade-in relative pb-24 text-black">

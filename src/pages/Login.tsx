@@ -43,7 +43,7 @@ export default function Login() {
                         description: "Welcome to ORIGO Terminal.",
                         type: "success"
                     });
-                }, 2500); // Wait for splash to finish
+                }, 10000); // Wait for splash to finish
             } else {
                 addToast({
                     title: "Authentication Failed",

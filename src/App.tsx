@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { HashRouter, Routes, Route, Navigate } from "react-router-dom";
 import Layout from "@/components/shared/Layout";
 import LoadingScreen from "@/components/shared/LoadingScreen";
 import { ToastProvider } from "@/contexts/ToastContext";
@@ -54,7 +54,7 @@ function AppRoutes() {
 
 export default function App() {
   return (
-    <BrowserRouter basename="/ORIGON">
+    <HashRouter>
       <ThemeProvider>
         <LanguageProvider>
           <ToastProvider>
@@ -64,6 +64,6 @@ export default function App() {
           </ToastProvider>
         </LanguageProvider>
       </ThemeProvider>
-    </BrowserRouter>
+    </HashRouter>
   );
 }

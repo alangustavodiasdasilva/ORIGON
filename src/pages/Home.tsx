@@ -102,20 +102,16 @@ export default function Home() {
 
     useEffect(() => {
         const loadAnalysts = async () => {
-            try {
-                const data = await AnalistaService.list();
-                const now = new Date().getTime();
-                const active = data.filter(a =>
-                    a.last_active && (now - new Date(a.last_active).getTime() < 30000) // Increased threshold to 30s
-                );
-                setActiveAnalysts(active);
-            } catch (err) {
-                console.error("Failed to load active analysts", err);
-            }
+            const data = await AnalistaService.list();
+            const now = new Date().getTime();
+            const active = data.filter(a =>
+                a.last_active && (now - new Date(a.last_active).getTime() < 15000)
+            );
+            setActiveAnalysts(active);
         };
 
         loadAnalysts();
-        const interval = setInterval(loadAnalysts, 10000); // Check every 10s
+        const interval = setInterval(loadAnalysts, 3000);
         return () => clearInterval(interval);
     }, []);
 
@@ -125,20 +121,29 @@ export default function Home() {
             let data = await LoteService.list();
 
             // Filter logic (CORRECTED):
+            // 1. If currentLab is selected → Show ONLY batches from that lab
+            // 2. If NO currentLab AND admin_global → Show ALL batches
+            // 3. If admin_lab → Always show only their assigned lab
+
             if (currentLab) {
+                // Lab context is selected → filter by that lab
                 data = data.filter(l => l.lab_id === currentLab.id);
             } else if (user?.acesso === 'admin_lab' && user.lab_id) {
+                // Lab admin without selection → their assigned lab only
                 data = data.filter(l => l.lab_id === user.lab_id);
             }
+            // If admin_global with NO currentLab → show ALL (no filter)
 
             setLotes(data);
 
-            // Optimized: Fetch all counts in one go
-            const counts = await SampleService.getLoteCounts();
+            const counts: Record<string, number> = {};
+            for (const lote of data) {
+                const samples = await SampleService.listByLote(lote.id);
+                counts[lote.id] = samples.length;
+            }
             setSampleCounts(counts);
         } catch (error) {
             console.error(error);
-            addToast({ title: "Failed to load batches", type: "error" });
         } finally {
             setIsLoading(false);
         }
