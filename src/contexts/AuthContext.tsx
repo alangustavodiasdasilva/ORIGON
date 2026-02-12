@@ -44,12 +44,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 if (parsedUser.lab_id) {
                     const lab = await LabService.get(parsedUser.lab_id);
                     if (lab) setCurrentLab(lab);
-                } else {
-                    // Try to restore selected lab for global admin
-                    const storedLab = localStorage.getItem("fibertech_selected_lab");
-                    if (storedLab) {
-                        setCurrentLab(JSON.parse(storedLab));
-                    }
                 }
             }
             // Seed database if empty

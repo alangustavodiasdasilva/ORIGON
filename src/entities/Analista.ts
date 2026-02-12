@@ -87,20 +87,36 @@ export const AnalistaService = {
         return newAnalista;
     },
 
-    async update(id: string, data: Partial<Analista>): Promise<Analista> {
+    async update(id: string, data: Partial<Analista>): Promise<Analista | undefined> {
         if (isSupabaseEnabled()) {
-            const { data: updated, error } = await supabase.from('analistas').update(data).eq('id', id).select().single();
-            if (error) throw error;
-            return updated;
+            try {
+                // Remove undefined fields which cause 400 Bad Request
+                const cleanData = { ...data };
+                Object.keys(cleanData).forEach(key => (cleanData as any)[key] === undefined && delete (cleanData as any)[key]);
+
+                if (Object.keys(cleanData).length === 0) return undefined;
+
+                const { data: updated, error } = await supabase.from('analistas').update(cleanData).eq('id', id).select().single();
+
+                if (error) {
+                    console.warn(`Supabase update warning for analista ${id}:`, error);
+                    return undefined;
+                }
+                return updated;
+            } catch (err) {
+                console.warn(`Unexpected error updating analista ${id}:`, err);
+                return undefined;
+            }
         }
 
         const analistas = getStoredAnalistas();
         const index = analistas.findIndex(a => a.id === id);
         if (index === -1) throw new Error("Analista not found");
 
-        analistas[index] = { ...analistas[index], ...data, updated_at: new Date().toISOString() };
+        const updatedAnalista = { ...analistas[index], ...data, updated_at: new Date().toISOString() };
+        analistas[index] = updatedAnalista;
         saveStoredAnalistas(analistas);
-        return analistas[index];
+        return updatedAnalista;
     },
 
     async delete(id: string): Promise<void> {
