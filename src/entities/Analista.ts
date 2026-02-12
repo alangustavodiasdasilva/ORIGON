@@ -116,20 +116,29 @@ export const AnalistaService = {
     },
 
     async updateLastActive(id: string, loteId?: string | null): Promise<void> {
-        const updateData: any = { last_active: new Date().toISOString() };
-        if (loteId !== undefined) updateData.current_lote_id = loteId;
+        try {
+            const updateData: any = { last_active: new Date().toISOString() };
 
-        if (isSupabaseEnabled()) {
-            await supabase.from('analistas').update(updateData).eq('id', id);
-            return;
-        }
+            // Treat empty string as null for UUID columns
+            if (loteId !== undefined) {
+                updateData.current_lote_id = loteId === "" ? null : loteId;
+            }
 
-        const analistas = getStoredAnalistas();
-        const index = analistas.findIndex(a => a.id === id);
-        if (index !== -1) {
-            analistas[index].last_active = new Date().toISOString();
-            if (loteId !== undefined) analistas[index].current_lote_id = loteId;
-            saveStoredAnalistas(analistas);
+            if (isSupabaseEnabled()) {
+                await supabase.from('analistas').update(updateData).eq('id', id);
+                return;
+            }
+
+            const analistas = getStoredAnalistas();
+            const index = analistas.findIndex(a => a.id === id);
+            if (index !== -1) {
+                analistas[index].last_active = new Date().toISOString();
+                if (loteId !== undefined) analistas[index].current_lote_id = loteId;
+                saveStoredAnalistas(analistas);
+            }
+        } catch (error) {
+            // Suppress heartburn errors, just log warning
+            console.warn("Failed to update user presence", error);
         }
     }
 };

@@ -32,34 +32,54 @@ export default function Quality() {
     const [isConfigMode, setIsConfigMode] = useState(false);
     const [editingCategory, setEditingCategory] = useState<Partial<AuditCategory> | null>(null);
     const [labs, setLabs] = useState<any[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
         loadInitialData();
     }, [user, currentLab]);
 
     const loadInitialData = async () => {
-        const targetLabId = currentLab?.id || user?.lab_id;
+        setIsLoading(true);
+        try {
+            // 1. Load Labs (Critical for navigation)
+            const { LabService } = await import('@/entities/Lab');
+            const labsData = await LabService.list().catch(e => {
+                console.error("Failed to load labs:", e);
+                throw new Error("Falha ao listar laboratórios.");
+            });
+            setLabs(labsData);
 
-        let docs: AuditDocument[] = [];
-        if (targetLabId) {
-            docs = await AuditService.listByLab(targetLabId);
-        } else {
-            // If admin_global with no lab selected, maybe list all?
-            // Or empty? User said "don't mix".
-            // Let's list all but maybe the UI should show which lab they belong to in the future.
-            // For now, listing all is the safer default if no context.
-            docs = await AuditService.list();
+            // 2. Load Audit Data (Can fail without blocking navigation)
+            try {
+                const targetLabId = currentLab?.id || user?.lab_id;
+                const [docs, cats] = await Promise.all([
+                    targetLabId ? AuditService.listByLab(targetLabId) : AuditService.list(),
+                    AuditService.listCategories()
+                ]);
+
+                setDocuments(docs);
+                setCategories(cats);
+            } catch (auditError: any) {
+                console.error("Audit data load error:", auditError);
+                // Alert the user more specifically
+                const msg = auditError.message || JSON.stringify(auditError);
+                addToast({
+                    title: "Erro ao carregar auditoria (" + (auditError.code || "?") + ")",
+                    description: msg,
+                    type: "error"
+                });
+            }
+
+        } catch (error: any) {
+            console.error("Critical error in Quality load:", error);
+            addToast({
+                title: "Erro de Carregamento",
+                description: error.message || "Falha crítica ao inicializar módulo.",
+                type: "error"
+            });
+        } finally {
+            setIsLoading(false);
         }
-
-        const cats = await AuditService.listCategories();
-
-        // Load labs for displaying city/lab info
-        const { LabService } = await import('@/entities/Lab');
-        const labsData = await LabService.list();
-
-        setCategories(cats);
-        setDocuments(docs);
-        setLabs(labsData);
     };
 
 
@@ -79,22 +99,28 @@ export default function Quality() {
         try {
             const reader = new FileReader();
             reader.onload = async (event) => {
-                const base64 = event.target?.result as string;
+                try {
+                    const base64 = event.target?.result as string;
 
-                await AuditService.upload({
-                    name: file.name.split('.')[0],
-                    fileName: file.name,
-                    fileSize: file.size,
-                    fileType: file.type,
-                    data: base64,
-                    category: category.name,
-                    analystName: user.nome,
-                    labId: targetLabId || undefined
-                });
+                    await AuditService.upload({
+                        name: file.name.split('.')[0],
+                        fileName: file.name,
+                        fileSize: file.size,
+                        fileType: file.type,
+                        data: base64,
+                        category: category.name,
+                        analystName: user.nome,
+                        labId: targetLabId || undefined
+                    }, file);
 
-                addToast({ title: "Documento Anexado", type: "success" });
-                loadInitialData();
-                setIsUploading(false);
+                    addToast({ title: "Documento Anexado", type: "success" });
+                    loadInitialData();
+                } catch (err: any) {
+                    console.error("Upload errored:", err);
+                    addToast({ title: "Erro ao anexar: " + (err.message || 'Desconhecido'), type: "error" });
+                } finally {
+                    setIsUploading(false);
+                }
             };
             reader.readAsDataURL(file);
         } catch (error) {
@@ -105,36 +131,58 @@ export default function Quality() {
 
     const handleDownload = async (doc: AuditDocument) => {
         let fileData = doc.data;
-        if (!fileData) {
-            addToast({ title: "Baixando...", type: "info" });
-            const content = await AuditService.getContent(doc.id);
-            if (content) fileData = content;
-            else {
-                addToast({ title: "Erro ao baixar arquivo", type: "error" });
+        try {
+            let data = doc.data;
+            // Se não tem dados ou parece ser um caminho relativo (storage path), busca URL assinada nova
+            if (!data || (!data.startsWith('http') && !data.startsWith('data:'))) {
+                console.log("DEBUG: Buscando URL assinada para download...", doc.fileName);
+                const refreshed = await AuditService.getContent(doc.id);
+                if (refreshed) data = refreshed;
+            }
+
+            if (!data) {
+                addToast({ title: "Arquivo indisponível", description: "Não foi possível gerar o link de download.", type: "error" });
                 return;
             }
-        }
 
-        const link = document.createElement('a');
-        link.href = fileData;
-        link.download = doc.fileName;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+            // Cria link temporário para download forçado
+            const link = document.createElement('a');
+            link.href = data;
+            link.download = doc.fileName || 'documento';
+
+            // Se for URL externa (Storage), abre em nova aba para garantir
+            if (data.startsWith('http')) {
+                link.target = '_blank';
+                link.rel = 'noopener noreferrer';
+            }
+
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        } catch (error) {
+            console.error("Erro no download:", error);
+            addToast({ title: "Erro ao baixar", type: "error" });
+        }
     };
 
     const handlePreview = async (doc: AuditDocument) => {
-        let fileData = doc.data;
-        if (!fileData) {
-            // addToast({ title: "Carregando visualização...", type: "info" });
-            const content = await AuditService.getContent(doc.id);
-            if (content) fileData = content;
-            else {
+        try {
+            let data = doc.data;
+            if (!data || (!data.startsWith('http') && !data.startsWith('data:'))) {
+                const content = await AuditService.getContent(doc.id);
+                if (content) data = content;
+            }
+
+            if (!data) {
                 addToast({ title: "Erro ao carregar visualização", type: "error" });
                 return;
             }
+
+            setPreviewDoc({ ...doc, data: data });
+        } catch (e) {
+            console.error("Erro preview:", e);
+            addToast({ title: "Erro ao abrir visualização", type: "error" });
         }
-        setPreviewDoc({ ...doc, data: fileData });
     };
 
     const handleDeleteDoc = async (id: string) => {
@@ -162,9 +210,16 @@ export default function Quality() {
             addToast({ title: "Categoria Salva", type: "success" });
             setEditingCategory(null);
             loadInitialData();
-        } catch (error) {
-            console.error(error);
-            addToast({ title: "Erro ao salvar categoria", type: "error" });
+        } catch (error: any) {
+            console.error("Failed to save category:", error);
+            const errorMsg = error.message || "Erro desconhecido";
+            // Alert in case toast is missed
+            alert(`Erro ao salvar categoria: ${errorMsg}`);
+            addToast({
+                title: "Erro ao salvar categoria",
+                description: errorMsg,
+                type: "error"
+            });
         }
     };
 
@@ -199,10 +254,17 @@ export default function Quality() {
                     </p>
                 </div>
 
-                {labs.length === 0 ? (
+                {isLoading ? (
                     <div className="animate-pulse flex gap-4">
                         <div className="h-48 w-64 bg-neutral-200 rounded-2xl"></div>
                         <div className="h-48 w-64 bg-neutral-200 rounded-2xl"></div>
+                    </div>
+                ) : labs.length === 0 ? (
+                    <div className="text-center p-8 border-2 border-dashed border-neutral-300 rounded-2xl">
+                        <p className="text-neutral-500 font-mono">Nenhum laboratório encontrado.</p>
+                        <div className="mt-4 p-2 bg-yellow-50 text-yellow-800 text-xs rounded border border-yellow-200">
+                            Verifique se existem laboratórios cadastrados no módulo Admin.
+                        </div>
                     </div>
                 ) : (
                     <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 w-full max-w-5xl">
@@ -312,7 +374,7 @@ export default function Quality() {
                                     ref={fileInputRef}
                                     onChange={handleFileUpload}
                                     className="hidden"
-                                    accept=".pdf,.doc,.docx,.jpg,.png,.xlsx"
+                                    accept=".pdf,.doc,.docx,.jpg,.png,.xlsx,.xls,.pptx,.csv"
                                 />
                             </div>
                         )}

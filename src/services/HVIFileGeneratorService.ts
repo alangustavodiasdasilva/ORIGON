@@ -5,14 +5,7 @@
  */
 
 import type { Sample } from '@/entities/Sample';
-
-interface Machine {
-    id: string;
-    machineId: string;
-    serialNumber: string;
-    model: 'USTER' | 'PREMIER';
-    labId: string;
-}
+import { MachineService, type Machine } from '@/entities/Machine';
 
 export interface HVIPreviewData {
     content: string;
@@ -33,13 +26,22 @@ export class HVIFileGeneratorService {
     /**
      * Get machine by HVI number
      */
-    private static getMachineByHVI(hviNumber: string): Machine | null {
+    /**
+     * Get machine by HVI number
+     */
+    private static async getMachineByHVI(hviNumber: string): Promise<Machine | null> {
         try {
-            const stored = localStorage.getItem('registered_machines');
-            if (!stored) return null;
+            const machines = await MachineService.list();
 
-            const machines: Machine[] = JSON.parse(stored);
-            return machines.find(m => m.machineId === hviNumber) || null;
+            // Try exact match
+            const exactMatch = machines.find(m => m.machineId === hviNumber);
+            if (exactMatch) return exactMatch;
+
+            // Try loose match (ignoring spaces, case)
+            const looseMatch = machines.find(m =>
+                m.machineId.trim().toUpperCase() === hviNumber.trim().toUpperCase()
+            );
+            return looseMatch || null;
         } catch (error) {
             console.error('Error loading machines:', error);
             return null;
@@ -500,7 +502,7 @@ export class HVIFileGeneratorService {
             }
 
             // Get machine info
-            const machine = this.getMachineByHVI(sample.hvi);
+            const machine = await this.getMachineByHVI(sample.hvi);
             if (!machine) {
                 return {
                     success: false,
