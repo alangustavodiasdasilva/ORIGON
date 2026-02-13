@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
-import { TrendingUp, Activity, BarChart3, Target, CalendarDays, ChevronDown } from "lucide-react";
+import { TrendingUp, Activity, BarChart3, Target, CalendarDays, ChevronDown, Save, Loader2 } from "lucide-react";
+import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface ProductionData {
     id: string;
@@ -31,6 +33,9 @@ const MACHINE_COLORS = [
 ];
 
 export default function ProductionTrendChart({ data }: ProductionTrendChartProps) {
+    const { currentLab, user } = useAuth();
+    const labId = currentLab?.id || user?.lab_id;
+
     const [hoveredPoint, setHoveredPoint] = useState<any | null>(null);
     const [viewMode, setViewMode] = useState<'general' | 'detailed' | 'machine_comparison' | 'compare_machines_total'>('general');
     const [selectedShift, setSelectedShift] = useState<string>("TURNO 1");
@@ -40,12 +45,51 @@ export default function ProductionTrendChart({ data }: ProductionTrendChartProps
     const [dateStart, setDateStart] = useState<string>('');
     const [dateEnd, setDateEnd] = useState<string>('');
 
-    const [targetValue, setTargetValue] = useState<number>(0);
+    const [targetValue, setTargetValue] = useState<number | null>(null);
+    const [isSavingTarget, setIsSavingTarget] = useState(false);
+
+    // Carregar Meta do Banco de Dados
+    useEffect(() => {
+        const loadTarget = async () => {
+            if (!labId) return;
+            const { data: config } = await supabase
+                .from('operacao_producao_config') // Usando uma tabela de config
+                .select('meta_producao')
+                .eq('lab_id', labId)
+                .maybeSingle();
+
+            if (config?.meta_producao) {
+                setTargetValue(config.meta_producao);
+                setShowTargetLine(true);
+            }
+        };
+        loadTarget();
+    }, [labId]);
+
+    const saveTargetToDB = async (val: number) => {
+        if (!labId) return;
+        setIsSavingTarget(true);
+        try {
+            await supabase
+                .from('operacao_producao_config')
+                .upsert({
+                    lab_id: labId,
+                    meta_producao: val,
+                    updated_at: new Date().toISOString()
+                }, { onConflict: 'lab_id' });
+        } catch (e) {
+            console.error("Erro ao salvar meta:", e);
+        } finally {
+            setIsSavingTarget(false);
+        }
+    };
+
     const [showTargetLine, setShowTargetLine] = useState(false);
     const [showMovingAverage, setShowMovingAverage] = useState(false);
 
     // Filtro interativo pela legenda (Novas lógica de isolamento)
-    const [selectedSeries, setSelectedSeries] = useState<string[]>([]);
+    // Filtro interativo pela legenda
+    const [selectedSeries, setSelectedSeries] = useState<string[] | null>(null);
 
     // Granularidade Temporal
     const [granularity, setGranularity] = useState<'day' | 'week' | 'month'>('day');
@@ -307,22 +351,27 @@ export default function ProductionTrendChart({ data }: ProductionTrendChartProps
         return { uniqueDates: [], series: seriesMap }; // Fallback
     }, [filteredData, viewMode, selectedShift, selectedMachine, availableShifts, availableMachines, granularity]);
 
-    // Inicializar séries selecionadas
+    // Sincronizar séries selecionadas quando o conjunto de dados muda (Troca de Filtro)
     useEffect(() => {
         const names = Array.from(sortedData.series.keys());
+        // Se mudou o conjunto de séries (ex: trocou de turno), seleciona tudo por padrão
         setSelectedSeries(names);
     }, [sortedData.series]);
 
+    const activeSelections = selectedSeries || Array.from(sortedData.series.keys());
+
     const toggleSeries = (name: string, e: React.MouseEvent) => {
+        const allNames = Array.from(sortedData.series.keys());
         if (e.ctrlKey || e.metaKey || e.shiftKey) {
-            setSelectedSeries(prev =>
-                prev.includes(name)
-                    ? prev.filter(n => n !== name)
-                    : [...prev, name]
-            );
+            setSelectedSeries(prev => {
+                const current = prev || allNames;
+                return current.includes(name)
+                    ? current.filter(n => n !== name)
+                    : [...current, name];
+            });
         } else {
-            if (selectedSeries.length === 1 && selectedSeries[0] === name) {
-                setSelectedSeries(Array.from(sortedData.series.keys()));
+            if (activeSelections.length === 1 && activeSelections[0] === name) {
+                setSelectedSeries(allNames);
             } else {
                 setSelectedSeries([name]);
             }
@@ -366,7 +415,7 @@ export default function ProductionTrendChart({ data }: ProductionTrendChartProps
         };
 
         const finalSeries = Array.from(sortedData.series.entries())
-            .filter(([name]) => selectedSeries.includes(name))
+            .filter(([name]) => activeSelections.includes(name))
             .map(([name, points], idx) => {
                 const chartPoints = points.map(p => ({
                     x: dateToX(p.date),
@@ -593,10 +642,13 @@ export default function ProductionTrendChart({ data }: ProductionTrendChartProps
                             className="w-20 text-[10px] border-none p-0 focus:ring-0 font-mono text-black placeholder:text-neutral-300 bg-transparent"
                             value={targetValue || ''}
                             onChange={(e) => {
-                                setTargetValue(Number(e.target.value));
+                                const val = Number(e.target.value);
+                                setTargetValue(val);
                                 setShowTargetLine(true);
                             }}
+                            onBlur={() => targetValue && saveTargetToDB(targetValue)}
                         />
+                        {isSavingTarget && <Loader2 className="h-3 w-3 animate-spin text-neutral-400" />}
                     </div>
 
                     <div className="h-6 w-px bg-neutral-300 mx-1 hidden sm:block" />
@@ -753,7 +805,7 @@ export default function ProductionTrendChart({ data }: ProductionTrendChartProps
                                     ></span>
                                     <span className={cn(
                                         "text-[10px] font-bold uppercase truncate transition-colors",
-                                        selectedSeries.includes(s.name) ? "text-black" : "text-neutral-600"
+                                        activeSelections.includes(s.name) ? "text-black" : "text-neutral-600"
                                     )}>
                                         {formatName(s.name)}
                                     </span>
