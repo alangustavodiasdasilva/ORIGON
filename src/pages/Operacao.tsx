@@ -206,7 +206,29 @@ export default function Operacao() {
 
             const text = result.data.text;
             const words = (result.data as any).words;
-            const lines = text.split('\n').map(l => l.trim()).filter(l => l);
+
+            // --- RECONSTRUÇÃO TABULAR POR COORDENADAS ---
+            const lineThreshold = 20; // px
+            const lines: { y: number; text: string; words: any[] }[] = [];
+
+            words.forEach((w: any) => {
+                const centerY = (w.bbox.y0 + w.bbox.y1) / 2;
+                let line = lines.find(l => Math.abs(l.y - centerY) < lineThreshold);
+                if (!line) {
+                    line = { y: centerY, text: "", words: [] };
+                    lines.push(line);
+                }
+                line.words.push(w);
+            });
+
+            // Ordena linhas de cima para baixo
+            lines.sort((a, b) => a.y - b.y);
+
+            // Ordena palavras em cada linha da esquerda para a direita e gera o texto
+            lines.forEach(l => {
+                l.words.sort((a, b) => a.bbox.x0 - b.bbox.x0);
+                l.text = l.words.map(w => w.text).join(" ");
+            });
 
             const blocks: OCRBlock[] = [];
             const allBoxes: OCRBox[] = words.map((w: any) => ({
@@ -221,7 +243,8 @@ export default function Operacao() {
             let currentBlock: OCRBlock | null = null;
             const dateRegex = /(\d{1,2})[\/\.](\d{1,2})[\/\.](\d{4})/;
 
-            lines.forEach(line => {
+            lines.forEach(lineObj => {
+                const line = lineObj.text;
                 const upperLine = line.toUpperCase();
                 const dateMatch = line.match(dateRegex);
 
@@ -244,25 +267,27 @@ export default function Operacao() {
 
                 if (currentBlock && hasTurno) {
                     const turnoNameMatch = line.match(/(TURNO|TURMO|TUR)\s*(\d+)?/i);
-                    const turnoName = turnoNameMatch ? `TURNO ${turnoNameMatch[2] || 'GERAL'}` : "TURNO GERAL";
+                    const turnoNum = turnoNameMatch ? (turnoNameMatch[2] || '1') : '1';
+                    const turnoName = `TURNO ${turnoNum}`;
 
                     const cleanLine = fixOCRCharacters(line);
-                    const totalMatch = cleanLine.match(/(\d{3,})\s*$/);
-                    const identifiedTotal = totalMatch ? parseInt(totalMatch[1]) : undefined;
-                    const lineWords = words.filter((w: any) => line.includes(w.text));
-
                     const tokens = cleanLine.split(/[\s-]+/);
                     const rowValues: { val: string; bbox?: OCRBox }[] = [];
 
                     tokens.forEach(t => {
-                        const cleanT = t.replace(/[.,]/g, '').replace(/\D/g, '');
-                        if (cleanT.length === 0) return;
+                        // Limpeza BR: remove pontos de milhar, trata vírgula como decimal se houver
+                        let cleanT = t.replace(/\./g, '');
+                        if (cleanT.includes(',')) cleanT = cleanT.replace(',', '.');
 
-                        const val = parseInt(cleanT);
+                        const numOnly = cleanT.replace(/[^\d.]/g, '');
+                        if (numOnly.length === 0) return;
+
+                        const val = parseFloat(numOnly);
                         if (!isNaN(val)) {
-                            if (turnoName.includes(String(val)) && rowValues.length === 0) return;
+                            // Ignora o número do próprio turno se for o primeiro token
+                            if (val === parseInt(turnoNum) && rowValues.length === 0) return;
 
-                            const wordBox = lineWords.find((w: any) => w.text.includes(t) || t.includes(w.text));
+                            const wordBox = lineObj.words.find((w: any) => w.text.includes(t) || t.includes(w.text));
                             const bbox: OCRBox | undefined = wordBox ? {
                                 text: wordBox.text,
                                 x0: wordBox.bbox.x0,
@@ -276,21 +301,25 @@ export default function Operacao() {
                         }
                     });
 
-                    if (identifiedTotal && rowValues.length > 0) {
+                    if (rowValues.length > 0) {
+                        // A última coluna suspeita de ser o Total
                         const lastItem = rowValues[rowValues.length - 1];
-                        if (Math.abs(parseInt(lastItem.val) - identifiedTotal) < 5) {
-                            const totalItem = rowValues.pop();
+                        const prevItems = rowValues.slice(0, -1);
+                        const sumPrev = prevItems.reduce((acc, curr) => acc + (parseFloat(curr.val) || 0), 0);
+                        const lastVal = parseFloat(lastItem.val);
+
+                        // Validação Matemática de Linha
+                        if (prevItems.length > 0 && Math.abs(sumPrev - lastVal) < 5) {
+                            // É o Total!
                             currentBlock.turnos.push({
                                 nome: turnoName,
-                                valores: rowValues,
-                                totalOriginal: identifiedTotal,
-                                totalBbox: totalItem?.bbox
+                                valores: prevItems,
+                                totalOriginal: lastVal,
+                                totalBbox: lastItem.bbox
                             });
                         } else {
                             currentBlock.turnos.push({ nome: turnoName, valores: rowValues });
                         }
-                    } else if (rowValues.length > 0) {
-                        currentBlock.turnos.push({ nome: turnoName, valores: rowValues });
                     }
                 }
             });
@@ -301,17 +330,17 @@ export default function Operacao() {
                     data: new Date().toISOString().split('T')[0],
                     turnos: []
                 };
-                lines.forEach(line => {
-                    const cleanLine = fixOCRCharacters(line);
+                lines.forEach(lineObj => {
+                    const cleanLine = fixOCRCharacters(lineObj.text);
                     const tokens = cleanLine.split(/[\s-]+/);
                     const rowValues: { val: string; bbox?: OCRBox }[] = [];
                     tokens.forEach(t => {
-                        const cleanT = t.replace(/[.,]/g, '').replace(/\D/g, '');
-                        const val = parseInt(cleanT);
+                        const numOnly = t.replace(/\./g, '').replace(/[^\d]/g, '');
+                        const val = parseInt(numOnly);
                         if (!isNaN(val) && val > 10) rowValues.push({ val: String(val) });
                     });
                     if (rowValues.length > 0) {
-                        fallbackBlock.turnos.push({ nome: "TURNO DETECTADO", valores: rowValues });
+                        fallbackBlock.turnos.push({ nome: "LINHA IDENTIFICADA", valores: rowValues });
                     }
                 });
                 if (fallbackBlock.turnos.length > 0) blocks.push(fallbackBlock);
