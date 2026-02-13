@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
@@ -686,9 +686,16 @@ export default function Operacao() {
 
                                     {/* Overlay de Bounding Boxes */}
                                     {ocrData?.allBoxes && ocrData.allBoxes.map((box, idx) => {
-                                        // Precisamos calcular a posição relativa à imagem no preview (que tem escala 2x no OCR mas pode ter tamanho variável no CSS)
-                                        // Como o OCR rodou em escala 2x, as coordenadas estão em 2x.
-                                        // O preview no CSS é w-full.
+                                        const boxStyle = {
+                                            "--x0": `${(box.x0 / 2 / ((document.getElementById('ocr-image-preview') as HTMLImageElement)?.naturalWidth || 1)) * 100}%`,
+                                            "--y0": `${(box.y0 / 2 / ((document.getElementById('ocr-image-preview') as HTMLImageElement)?.naturalHeight || 1)) * 100}%`,
+                                            "--w": `${((box.x1 - box.x0) / 2 / ((document.getElementById('ocr-image-preview') as HTMLImageElement)?.naturalWidth || 1)) * 100}%`,
+                                            "--h": `${((box.y1 - box.y0) / 2 / ((document.getElementById('ocr-image-preview') as HTMLImageElement)?.naturalHeight || 1)) * 100}%`,
+                                            left: "var(--x0)",
+                                            top: "var(--y0)",
+                                            width: "var(--w)",
+                                            height: "var(--h)"
+                                        } as React.CSSProperties;
 
                                         return (
                                             <div
@@ -701,20 +708,12 @@ export default function Operacao() {
                                                         (t.valores.some(v => v.bbox?.text === box.text) || t.totalBbox?.text === box.text)
                                                     )) && "border-red-600 bg-red-600/10 z-30 ring-2 ring-red-600/50"
                                                 )}
-                                                style={{
-                                                    "--x0": `${(box.x0 / 2 / ((document.getElementById('ocr-image-preview') as HTMLImageElement)?.naturalWidth || 1)) * 100}%`,
-                                                    "--y0": `${(box.y0 / 2 / ((document.getElementById('ocr-image-preview') as HTMLImageElement)?.naturalHeight || 1)) * 100}%`,
-                                                    "--w": `${((box.x1 - box.x0) / 2 / ((document.getElementById('ocr-image-preview') as HTMLImageElement)?.naturalWidth || 1)) * 100}%`,
-                                                    "--h": `${((box.y1 - box.y0) / 2 / ((document.getElementById('ocr-image-preview') as HTMLImageElement)?.naturalHeight || 1)) * 100}%`,
-                                                    left: "var(--x0)",
-                                                    top: "var(--y0)",
-                                                    width: "var(--w)",
-                                                    height: "var(--h)"
-                                                } as React.CSSProperties}
+                                                style={boxStyle}
                                                 onClick={() => {
                                                     const inputId = `ocr-input-${idx}`;
-                                                    document.getElementById(inputId)?.focus();
-                                                    document.getElementById(inputId)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                                    const el = document.getElementById(inputId);
+                                                    el?.focus();
+                                                    el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
                                                 }}
                                             >
                                                 <div className="absolute bottom-full left-0 bg-black text-white text-[8px] px-1 rounded opacity-0 group-hover:opacity-100 whitespace-nowrap z-50 pointer-events-none">
@@ -831,7 +830,8 @@ export default function Operacao() {
                     </div>
                 </div>,
                 document.body
-            )}
+            )
+            }
 
             {/* Header Page */}
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-8 border-b border-black pb-8">
@@ -1114,6 +1114,6 @@ export default function Operacao() {
                     )}
                 </div>
             </div>
-        </div>
+        </div >
     );
 }

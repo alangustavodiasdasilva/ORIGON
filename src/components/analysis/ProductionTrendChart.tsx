@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 import { TrendingUp, Activity, BarChart3, Target, CalendarDays, ChevronDown, Loader2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";

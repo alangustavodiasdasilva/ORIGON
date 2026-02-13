@@ -53,11 +53,16 @@ export default function Admin() {
     // Filtrar abas baseadas no nível de acesso
     const tabs = [
         { id: "dashboard", label: "Visão Geral", icon: Activity },
-        // Admin Lab não gerencia Labs, apenas visualiza o seu (ou removemos a aba)
-        ...(user?.acesso === 'admin_global' ? [{ id: "labs", label: "Laboratories", icon: Database }] : []),
+        // A aba de laboratórios deve estar visível para administradores globais
+        { id: "labs", label: "Laboratórios", icon: Database },
         { id: "analysts", label: "Access Control", icon: Users },
         { id: "machines", label: "Máquinas", icon: Server },
     ];
+
+    // Se não for admin_global, removemos a aba de labs (ou podemos mantê-la e restringir dentro do componente)
+    const filteredTabs = user?.acesso === 'admin_global'
+        ? tabs
+        : tabs.filter(t => t.id !== 'labs');
 
     return (
         <div className="max-w-7xl mx-auto space-y-16 animate-fade-in text-black pb-24">
@@ -109,7 +114,7 @@ export default function Admin() {
 
             {/* Tabs */}
             <div className="flex flex-wrap gap-8 border-b border-neutral-200 pb-px">
-                {tabs.map((tab) => (
+                {filteredTabs.map((tab) => (
                     <button
                         key={tab.id}
                         onClick={() => setActiveTab(tab.id)}
