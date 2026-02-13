@@ -140,7 +140,6 @@ export default function Quality() {
     };
 
     const handleDownload = async (doc: AuditDocument) => {
-        let fileData = doc.data;
         try {
             let data = doc.data;
             // Se não tem dados ou parece ser um caminho relativo (storage path), busca URL assinada nova
