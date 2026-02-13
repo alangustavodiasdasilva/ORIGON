@@ -190,7 +190,7 @@ export default function Analysis() {
                         <div className="space-y-1">
                             <div className="flex items-center gap-3">
                                 <h1 className="text-3xl font-serif text-black leading-none">
-                                    Global Analysis
+                                    Global Analysis <span className="text-[10px] text-slate-400 align-top">v1.1</span>
                                 </h1>
                                 <span className={`text-[9px] font-bold uppercase tracking-widest border border-black px-2 py-0.5 ${lote.status === 'aberto' ? 'bg-black text-white' : 'bg-transparent text-black'}`}>
                                     {lote.status === 'aberto' ? 'Active' : 'Archived'}
