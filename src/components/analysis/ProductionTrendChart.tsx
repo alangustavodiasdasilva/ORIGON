@@ -483,9 +483,29 @@ export default function ProductionTrendChart({ data }: ProductionTrendChartProps
             }
         }
 
-        return { width, height, padding, uniqueDates, dateToX, finalSeries, gridLines, chartHeight, targetY, movingAveragePath };
+        // Gerar as séries visuais para a legenda (Todas as disponíveis na visão atual)
+        const legendSeries = Array.from(sortedData.series.keys()).map((name, idx) => {
+            let color = "#000";
+            if (viewMode === 'general' || viewMode === 'machine_comparison') {
+                color = COLORS_MAP[name] || "#888";
+            } else {
+                color = MACHINE_COLORS[idx % MACHINE_COLORS.length];
+            }
+            return { name, color };
+        });
 
-    }, [sortedData, viewMode, showTargetLine, targetValue, showMovingAverage]);
+        return {
+            width, height, padding,
+            dateToX, valToY,
+            finalSeries,
+            gridLines,
+            targetY,
+            uniqueDates,
+            movingAveragePath,
+            legendSeries,
+            chartHeight
+        };
+    }, [sortedData, activeSelections, showTargetLine, targetValue, showMovingAverage, granularity, viewMode]);
 
 
     if (!chartCalculations) return (
@@ -789,28 +809,34 @@ export default function ProductionTrendChart({ data }: ProductionTrendChartProps
                         <span className="text-[10px] font-bold uppercase tracking-widest text-neutral-400 block border-b border-neutral-200 pb-2">
                             Séries Ativas
                         </span>
-                        <div className="flex flex-wrap gap-2 max-h-[200px] overflow-y-auto custom-scrollbar">
-                            {finalSeries.map(s => (
-                                <div
-                                    key={s.name}
-                                    onClick={(e) => toggleSeries(s.name, e)}
-                                    className={cn(
-                                        "flex items-center gap-2 w-full group cursor-pointer p-1 rounded transition-colors",
-                                        "hover:bg-neutral-100"
-                                    )}
-                                >
-                                    <span
-                                        className="w-3 h-3 rounded-full shrink-0 ring-2 ring-transparent group-hover:ring-black/10 transition-all"
-                                        ref={(el) => { if (el) el.style.backgroundColor = s.color || '#000'; }}
-                                    ></span>
-                                    <span className={cn(
-                                        "text-[10px] font-bold uppercase truncate transition-colors",
-                                        activeSelections.includes(s.name) ? "text-black" : "text-neutral-600"
-                                    )}>
-                                        {formatName(s.name)}
-                                    </span>
-                                </div>
-                            ))}
+                        <div className="flex flex-col gap-1 max-h-[300px] overflow-y-auto custom-scrollbar pr-2">
+                            {chartCalculations.legendSeries.map(s => {
+                                const isSelected = activeSelections.includes(s.name);
+                                return (
+                                    <div
+                                        key={s.name}
+                                        onClick={(e) => toggleSeries(s.name, e)}
+                                        className={cn(
+                                            "flex items-center gap-2 w-full group cursor-pointer p-2 rounded transition-all",
+                                            isSelected
+                                                ? "bg-white shadow-sm ring-1 ring-black/5"
+                                                : "opacity-40 grayscale hover:opacity-100 hover:grayscale-0"
+                                        )}
+                                        title="Clique para isolar, Ctrl+Clique para múltiplo"
+                                    >
+                                        <div
+                                            className="w-2.5 h-2.5 rounded-full shrink-0 shadow-sm"
+                                            style={{ backgroundColor: s.color }}
+                                        />
+                                        <span className={cn(
+                                            "text-[10px] font-bold uppercase truncate transition-colors",
+                                            isSelected ? "text-black" : "text-neutral-500"
+                                        )}>
+                                            {formatName(s.name)}
+                                        </span>
+                                    </div>
+                                );
+                            })}
                         </div>
                     </div>
 
