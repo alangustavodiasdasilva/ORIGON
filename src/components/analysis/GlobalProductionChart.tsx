@@ -34,7 +34,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
                             <div className="flex items-center gap-2">
                                 <div
                                     className="w-2 h-2 rounded-full"
-                                    style={{ backgroundColor: entry.color }}
+                                    style={{ backgroundColor: entry.color } as React.CSSProperties}
                                 />
                                 <span className="text-xs text-neutral-500 uppercase tracking-widest truncate max-w-[100px]">
                                     {entry.name}
@@ -42,7 +42,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
                             </div>
                             <span
                                 className="font-mono font-bold"
-                                style={{ color: entry.color }}
+                                style={{ color: entry.color } as React.CSSProperties}
                             >
                                 {entry.value.toLocaleString('pt-BR')}
                             </span>
@@ -195,7 +195,7 @@ export default function GlobalProductionChart({ data, labs }: GlobalProductionCh
                                     "w-3 h-3 rounded-full shadow-sm transition-all duration-300",
                                     isSelected ? "scale-110" : "scale-90"
                                 )}
-                                style={{ backgroundColor: color }}
+                                style={{ backgroundColor: color } as React.CSSProperties}
                             />
                             <span className={cn(
                                 "text-[10px] font-bold uppercase tracking-widest transition-colors",

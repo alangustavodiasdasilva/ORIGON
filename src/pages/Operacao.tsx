@@ -201,34 +201,38 @@ export default function Operacao() {
                 tessedit_pageseg_mode: Tesseract.PSM.AUTO,
             });
 
-            const result = await worker.recognize(processedImageUrl);
+            const result = (await worker.recognize(processedImageUrl)) as any;
             await worker.terminate();
 
-            const text = result.data.text;
-            const words = (result.data as any).words;
+            const words = result.data.words;
 
-            // --- RECONSTRUÇÃO TABULAR POR COORDENADAS ---
-            const lineThreshold = 20; // px
-            const lines: { y: number; text: string; words: any[] }[] = [];
+            // --- RECONSTRUÇÃO TABULAR POR GRID (X, Y) ---
+            const yThreshold = 18; // px
+            const xThreshold = 45; // px
+
+            const rawLines: { y: number; words: any[] }[] = [];
 
             words.forEach((w: any) => {
                 const centerY = (w.bbox.y0 + w.bbox.y1) / 2;
-                let line = lines.find(l => Math.abs(l.y - centerY) < lineThreshold);
+                let line = rawLines.find(l => Math.abs(l.y - centerY) < yThreshold);
                 if (!line) {
-                    line = { y: centerY, text: "", words: [] };
-                    lines.push(line);
+                    line = { y: centerY, words: [] };
+                    rawLines.push(line);
                 }
                 line.words.push(w);
             });
 
-            // Ordena linhas de cima para baixo
-            lines.sort((a, b) => a.y - b.y);
+            rawLines.sort((a, b) => a.y - b.y);
 
-            // Ordena palavras em cada linha da esquerda para a direita e gera o texto
-            lines.forEach(l => {
-                l.words.sort((a, b) => a.bbox.x0 - b.bbox.x0);
-                l.text = l.words.map(w => w.text).join(" ");
+            // Identifica colunas globais (bins de X)
+            const xCenters = words.map((w: any) => (w.bbox.x0 + w.bbox.x1) / 2);
+            const xBins: number[] = [];
+            xCenters.forEach((cx: number) => {
+                if (!xBins.some(bx => Math.abs(bx - cx) < xThreshold)) {
+                    xBins.push(cx);
+                }
             });
+            xBins.sort((a, b) => a - b);
 
             const blocks: OCRBlock[] = [];
             const allBoxes: OCRBox[] = words.map((w: any) => ({
@@ -243,15 +247,16 @@ export default function Operacao() {
             let currentBlock: OCRBlock | null = null;
             const dateRegex = /(\d{1,2})[\/\.](\d{1,2})[\/\.](\d{4})/;
 
-            lines.forEach(lineObj => {
-                const line = lineObj.text;
-                const upperLine = line.toUpperCase();
-                const dateMatch = line.match(dateRegex);
+            rawLines.forEach(lineObj => {
+                lineObj.words.sort((a, b) => a.bbox.x0 - b.bbox.x0);
+                const lineText = lineObj.words.map(w => w.text).join(" ");
+                const upperLineText = lineText.toUpperCase();
 
+                // 1. Detecção de Data (Início de Bloco)
+                const dateMatch = lineText.match(dateRegex);
                 if (dateMatch) {
                     const newDate = `${dateMatch[3]}-${dateMatch[2].padStart(2, '0')}-${dateMatch[1].padStart(2, '0')}`;
                     let existingBlock = blocks.find(b => b.data === newDate);
-
                     if (!existingBlock) {
                         existingBlock = {
                             id: Math.random().toString(36).substr(2, 9),
@@ -263,85 +268,101 @@ export default function Operacao() {
                     currentBlock = existingBlock;
                 }
 
-                const hasTurno = upperLine.includes('TURNO') || upperLine.includes('TURMO') || upperLine.includes('TUR');
+                // 2. Detecção de Turno/Linha de Dados
+                const isTurno = upperLineText.includes('TURNO') || upperLineText.includes('TURMO') || upperLineText.includes('TUR') || upperLineText.includes('T1') || upperLineText.includes('T2');
+                const isTotalRow = upperLineText.includes('TOTAL') || upperLineText.includes('GERAL') || upperLineText.includes('SOMA');
 
-                if (currentBlock && hasTurno) {
-                    const turnoNameMatch = line.match(/(TURNO|TURMO|TUR)\s*(\d+)?/i);
-                    const turnoNum = turnoNameMatch ? (turnoNameMatch[2] || '1') : '1';
-                    const turnoName = `TURNO ${turnoNum}`;
+                if (currentBlock && (isTurno || isTotalRow)) {
+                    const labelMatch = lineText.match(/(TURNO|TURMO|TUR|TOTAL|SOMA|T1|T2)\s*(\d+)?/i);
+                    const label = labelMatch ? labelMatch[0].toUpperCase() : (isTotalRow ? "TOTAL" : "TURNO");
 
-                    const cleanLine = fixOCRCharacters(line);
-                    const tokens = cleanLine.split(/[\s-]+/);
-                    const rowValues: { val: string; bbox?: OCRBox }[] = [];
+                    const rowValues: { val: string; bbox?: OCRBox; x: number }[] = [];
 
-                    tokens.forEach(t => {
-                        // Limpeza BR: remove pontos de milhar, trata vírgula como decimal se houver
-                        let cleanT = t.replace(/\./g, '');
-                        if (cleanT.includes(',')) cleanT = cleanT.replace(',', '.');
-
-                        const numOnly = cleanT.replace(/[^\d.]/g, '');
+                    lineObj.words.forEach(w => {
+                        // Limpeza BR agressiva: "1.006" -> 1006
+                        const cleanToken = fixOCRCharacters(w.text).replace(/\./g, '');
+                        const numOnly = cleanToken.replace(/[^\d]/g, '');
                         if (numOnly.length === 0) return;
 
-                        const val = parseFloat(numOnly);
+                        const val = parseInt(numOnly);
                         if (!isNaN(val)) {
-                            // Ignora o número do próprio turno se for o primeiro token
-                            if (val === parseInt(turnoNum) && rowValues.length === 0) return;
+                            // Pula se for o próprio número do rótulo (ex: "TURNO 1" -> pula o "1")
+                            const isLabelNum = labelMatch && labelMatch[2] === String(val) && rowValues.length === 0;
+                            if (isLabelNum) return;
 
-                            const wordBox = lineObj.words.find((w: any) => w.text.includes(t) || t.includes(w.text));
-                            const bbox: OCRBox | undefined = wordBox ? {
-                                text: wordBox.text,
-                                x0: wordBox.bbox.x0,
-                                y0: wordBox.bbox.y0,
-                                x1: wordBox.bbox.x1,
-                                y1: wordBox.bbox.y1,
-                                confidence: wordBox.confidence
-                            } : undefined;
-
-                            if (val >= 0) rowValues.push({ val: String(val), bbox });
+                            rowValues.push({
+                                val: String(val),
+                                x: (w.bbox.x0 + w.bbox.x1) / 2,
+                                bbox: {
+                                    text: w.text,
+                                    x0: w.bbox.x0,
+                                    y0: w.bbox.y0,
+                                    x1: w.bbox.x1,
+                                    y1: w.bbox.y1,
+                                    confidence: w.confidence
+                                }
+                            });
                         }
                     });
 
-                    if (rowValues.length > 0) {
-                        // A última coluna suspeita de ser o Total
+                    if (rowValues.length > 1) {
                         const lastItem = rowValues[rowValues.length - 1];
-                        const prevItems = rowValues.slice(0, -1);
-                        const sumPrev = prevItems.reduce((acc, curr) => acc + (parseFloat(curr.val) || 0), 0);
-                        const lastVal = parseFloat(lastItem.val);
+                        const prevItems = rowValues.slice(0, -1).map(r => ({ val: r.val, bbox: r.bbox }));
+                        const sumPrev = prevItems.reduce((acc, curr) => acc + (parseInt(curr.val) || 0), 0);
+                        const lastVal = parseInt(lastItem.val);
 
-                        // Validação Matemática de Linha
-                        if (prevItems.length > 0 && Math.abs(sumPrev - lastVal) < 5) {
-                            // É o Total!
+                        // --- MATH HEALING ---
+                        // Se a soma não bate por pouco, tenta "videntes" (ex: trocar '6' por '5' se fechar a conta)
+                        let fixedValues = [...prevItems];
+                        let finalSum = sumPrev;
+                        const diff = sumPrev - lastVal;
+
+                        if (Math.abs(diff) > 0 && Math.abs(diff) < 10) {
+                            // Tenta curar um dos valores
+                            for (let i = 0; i < fixedValues.length; i++) {
+                                const currentVal = parseInt(fixedValues[i].val);
+                                const candidateVal = currentVal - diff;
+                                if (candidateVal >= 0) {
+                                    // Se a confiança for baixa, a chance de erro é maior
+                                    if ((fixedValues[i].bbox?.confidence || 100) < 95) {
+                                        fixedValues[i].val = String(candidateVal);
+                                        finalSum = lastVal;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+
+                        if (Math.abs(finalSum - lastVal) < 2) {
                             currentBlock.turnos.push({
-                                nome: turnoName,
-                                valores: prevItems,
+                                nome: label,
+                                valores: fixedValues,
                                 totalOriginal: lastVal,
                                 totalBbox: lastItem.bbox
                             });
                         } else {
-                            currentBlock.turnos.push({ nome: turnoName, valores: rowValues });
+                            currentBlock.turnos.push({
+                                nome: label,
+                                valores: rowValues.map(r => ({ val: r.val, bbox: r.bbox }))
+                            });
                         }
                     }
                 }
             });
 
-            if (blocks.length === 0 && lines.length > 0) {
+            if (blocks.length === 0 && rawLines.length > 0) {
                 const fallbackBlock: OCRBlock = {
                     id: "fallback",
                     data: new Date().toISOString().split('T')[0],
                     turnos: []
                 };
-                lines.forEach(lineObj => {
-                    const cleanLine = fixOCRCharacters(lineObj.text);
-                    const tokens = cleanLine.split(/[\s-]+/);
+                rawLines.forEach(lObj => {
                     const rowValues: { val: string; bbox?: OCRBox }[] = [];
-                    tokens.forEach(t => {
-                        const numOnly = t.replace(/\./g, '').replace(/[^\d]/g, '');
-                        const val = parseInt(numOnly);
-                        if (!isNaN(val) && val > 10) rowValues.push({ val: String(val) });
+                    lObj.words.forEach(w => {
+                        const v = fixOCRCharacters(w.text).replace(/\./g, '').replace(/[^\d]/g, '');
+                        if (v.length > 0) rowValues.push({ val: v, bbox: { text: w.text, x0: w.bbox.x0, y0: w.bbox.y0, x1: w.bbox.x1, y1: w.bbox.y1, confidence: w.confidence } });
                     });
-                    if (rowValues.length > 0) {
-                        fallbackBlock.turnos.push({ nome: "LINHA IDENTIFICADA", valores: rowValues });
-                    }
+                    if (rowValues.length > 0) fallbackBlock.turnos.push({ nome: "LINHA", valores: rowValues });
                 });
                 if (fallbackBlock.turnos.length > 0) blocks.push(fallbackBlock);
             }
@@ -672,26 +693,28 @@ export default function Operacao() {
                                         return (
                                             <div
                                                 key={idx}
-                                                onClick={() => {
-                                                    // Tenta encontrar o input correspondente e dar foco
-                                                    const inputId = `ocr-input-${idx}`;
-                                                    document.getElementById(inputId)?.focus();
-                                                    document.getElementById(inputId)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                                }}
                                                 className={cn(
                                                     "absolute border border-emerald-500/50 hover:border-emerald-500 hover:bg-emerald-500/20 transition-all cursor-pointer group rounded-sm",
                                                     box.confidence < 80 && "border-orange-500/50",
-                                                    // Se o texto da box estiver em um turno com discrepância, destaca em vermelho
                                                     ocrData.blocks.some(b => b.turnos.some(t =>
                                                         (t.totalOriginal && Math.abs(t.valores.reduce((acc, v) => acc + (parseFloat(v.val) || 0), 0) - t.totalOriginal) > 2) &&
                                                         (t.valores.some(v => v.bbox?.text === box.text) || t.totalBbox?.text === box.text)
                                                     )) && "border-red-600 bg-red-600/10 z-30 ring-2 ring-red-600/50"
                                                 )}
                                                 style={{
-                                                    left: `${(box.x0 / 2 / ((document.getElementById('ocr-image-preview') as HTMLImageElement)?.naturalWidth || 1)) * 100}%`,
-                                                    top: `${(box.y0 / 2 / ((document.getElementById('ocr-image-preview') as HTMLImageElement)?.naturalHeight || 1)) * 100}%`,
-                                                    width: `${((box.x1 - box.x0) / 2 / ((document.getElementById('ocr-image-preview') as HTMLImageElement)?.naturalWidth || 1)) * 100}%`,
-                                                    height: `${((box.y1 - box.y0) / 2 / ((document.getElementById('ocr-image-preview') as HTMLImageElement)?.naturalHeight || 1)) * 100}%`
+                                                    "--x0": `${(box.x0 / 2 / ((document.getElementById('ocr-image-preview') as HTMLImageElement)?.naturalWidth || 1)) * 100}%`,
+                                                    "--y0": `${(box.y0 / 2 / ((document.getElementById('ocr-image-preview') as HTMLImageElement)?.naturalHeight || 1)) * 100}%`,
+                                                    "--w": `${((box.x1 - box.x0) / 2 / ((document.getElementById('ocr-image-preview') as HTMLImageElement)?.naturalWidth || 1)) * 100}%`,
+                                                    "--h": `${((box.y1 - box.y0) / 2 / ((document.getElementById('ocr-image-preview') as HTMLImageElement)?.naturalHeight || 1)) * 100}%`,
+                                                    left: "var(--x0)",
+                                                    top: "var(--y0)",
+                                                    width: "var(--w)",
+                                                    height: "var(--h)"
+                                                } as React.CSSProperties}
+                                                onClick={() => {
+                                                    const inputId = `ocr-input-${idx}`;
+                                                    document.getElementById(inputId)?.focus();
+                                                    document.getElementById(inputId)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
                                                 }}
                                             >
                                                 <div className="absolute bottom-full left-0 bg-black text-white text-[8px] px-1 rounded opacity-0 group-hover:opacity-100 whitespace-nowrap z-50 pointer-events-none">
@@ -751,10 +774,12 @@ export default function Operacao() {
                                                                         </span>
                                                                     )}
                                                                 </div>
-                                                                <span className={cn(
-                                                                    "font-mono font-bold",
-                                                                    hasDiscrepancy ? "text-red-600" : "text-emerald-600"
-                                                                )}>
+                                                                <span
+                                                                    className={cn(
+                                                                        "font-mono font-bold",
+                                                                        hasDiscrepancy ? "text-red-600" : "text-emerald-600"
+                                                                    )}
+                                                                >
                                                                     {totalTurno.toLocaleString('pt-BR')}
                                                                 </span>
                                                             </div>

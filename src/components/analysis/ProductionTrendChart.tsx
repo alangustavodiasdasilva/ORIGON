@@ -826,7 +826,7 @@ export default function ProductionTrendChart({ data }: ProductionTrendChartProps
                                     >
                                         <div
                                             className="w-2.5 h-2.5 rounded-full shrink-0 shadow-sm"
-                                            style={{ backgroundColor: s.color }}
+                                            style={{ backgroundColor: s.color } as React.CSSProperties}
                                         />
                                         <span className={cn(
                                             "text-[10px] font-bold uppercase truncate transition-colors",
