@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
-import { TrendingUp, Activity, BarChart3, Target, CalendarDays, ChevronDown, Save, Loader2 } from "lucide-react";
+import { TrendingUp, Activity, BarChart3, Target, CalendarDays, ChevronDown, Loader2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -385,7 +385,7 @@ export default function ProductionTrendChart({ data }: ProductionTrendChartProps
 
         const allValues: number[] = [];
         sortedData.series.forEach((points) => points.forEach(p => allValues.push(p.val)));
-        if (showTargetLine && targetValue > 0) allValues.push(targetValue);
+        if (showTargetLine && targetValue !== null && targetValue > 0) allValues.push(targetValue);
 
         if (allValues.length === 0) return null;
 
@@ -447,7 +447,7 @@ export default function ProductionTrendChart({ data }: ProductionTrendChartProps
             return { y: valToY(val), val };
         });
 
-        const targetY = showTargetLine && targetValue > 0 ? valToY(targetValue) : null;
+        const targetY = (showTargetLine && targetValue !== null && targetValue > 0) ? valToY(targetValue) : null;
 
         // --- CALCULAR MÉDIA MÓVEL (7 Dias / 7 Pontos de Dados) ---
         let movingAveragePath = null;
