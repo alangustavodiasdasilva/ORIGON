@@ -183,7 +183,9 @@ function DashboardTab({ onlineAnalysts }: { onlineAnalysts: Analista[] }) {
                             <span className="text-white">ANALISTA DE INFORMAÇÕES</span>
                         </p>
                         <p className="pt-2 text-neutral-500 border-t border-white/10 mt-2">
-                            Sistema de Análise HVI Avançada - Versão 3.0
+                            Sistema de Análise HVI Avançada - Versão 3.1
+                            <br />
+                            Última atualização: 12/02/2026 21:59
                             <br />
                             Todos os direitos reservados.
                         </p>
