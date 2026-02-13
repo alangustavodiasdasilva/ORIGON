@@ -127,12 +127,12 @@ export default function Operacao() {
                         return;
                     }
 
-                    // Escala 3x é o ideal para fontes pequenas de relatórios térmicos/impressos
-                    const scale = 3;
+                    // Escala 2x é o padrão mais estável para Tesseract.js
+                    const scale = 2;
                     canvas.width = img.width * scale;
                     canvas.height = img.height * scale;
 
-                    ctx.imageSmoothingEnabled = false;
+                    ctx.imageSmoothingEnabled = true; // Melhor suavização para escala 2x
                     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
                     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
@@ -144,8 +144,8 @@ export default function Operacao() {
                         const b = data[i + 2];
                         let gray = 0.2126 * r + 0.7152 * g + 0.0722 * b;
 
-                        // Threshold dinâmico: melhora nitidez de números levemente "apagados"
-                        const v = gray > 170 ? 255 : 0;
+                        // Threshold equilibrado (128) para não apagar números cinzas
+                        const v = gray > 128 ? 255 : 0;
                         data[i] = data[i + 1] = data[i + 2] = v;
                     }
 
@@ -199,7 +199,9 @@ export default function Operacao() {
             const dateRegex = /(\d{1,2})[\/\.](\d{1,2})[\/\.](\d{4})/;
 
             lines.forEach(line => {
+                const upperLine = line.toUpperCase();
                 const dateMatch = line.match(dateRegex);
+
                 if (dateMatch) {
                     const newDate = `${dateMatch[3]}-${dateMatch[2].padStart(2, '0')}-${dateMatch[1].padStart(2, '0')}`;
                     let existingBlock = blocks.find(b => b.data === newDate);
@@ -215,26 +217,43 @@ export default function Operacao() {
                     currentBlock = existingBlock;
                 }
 
-                if (currentBlock && line.toUpperCase().includes('TURNO')) {
-                    const turnoNameMatch = line.match(/TURNO\s*\d+/i);
-                    const turnoName = turnoNameMatch ? turnoNameMatch[0].toUpperCase() : "TURNO GERAL";
+                // Detecção de turno mais flexível (TURNO, TURMO, TORN, etc)
+                const hasTurno = upperLine.includes('TURNO') || upperLine.includes('TURMO') || upperLine.includes('TUR');
 
-                    // Corrigir caracteres e remover separadores de milhar (ponto/vírgula no meio do número)
-                    const cleanLine = fixOCRCharacters(line);
+                if (currentBlock && hasTurno) {
+                    const turnoNameMatch = line.match(/(TURNO|TURMO|TUR)\s*(\d+)?/i);
+                    const turnoName = turnoNameMatch ? `TURNO ${turnoNameMatch[2] || 'GERAL'}` : "TURNO GERAL";
+
+                    let cleanLine = fixOCRCharacters(line);
+
+                    // Se a linha tem um total claro no final, guardamos para validar
+                    const totalMatch = cleanLine.match(/(\d{3,})\s*$/);
+                    const identifiedTotal = totalMatch ? parseInt(totalMatch[1]) : undefined;
+
                     const tokens = cleanLine.split(/[\s-]+/);
                     const numbers: number[] = [];
 
                     tokens.forEach(t => {
-                        // Trata números como "1.000" removendo pontos apenas se for milhar
                         const cleanT = t.replace(/[.,]/g, '').replace(/\D/g, '');
                         if (cleanT.length === 0) return;
 
                         const val = parseInt(cleanT);
-                        // Filtra ruído e ignora o "1" ou "2" do "TURNO 1", "TURNO 2"
-                        if (!isNaN(val) && val !== 1 && val !== 2 && val !== 3) {
-                            if (val >= 10 || val === 0) numbers.push(val);
+                        if (!isNaN(val)) {
+                            if (turnoName.includes(String(val)) && numbers.length === 0) return;
+                            if (val >= 0) numbers.push(val);
                         }
                     });
+
+                    // LÓGICA DE AUTO-CORREÇÃO:
+                    // Se temos um total e a soma não bate, verificamos se o último número lido 
+                    // NÃO é o total. Se for, removemos ele da lista de máquinas.
+                    if (identifiedTotal && numbers.length > 0) {
+                        const lastNum = numbers[numbers.length - 1];
+                        // Se o último número é igual ou muito próximo do total identificado
+                        if (Math.abs(lastNum - identifiedTotal) < 5) {
+                            numbers.pop(); // Remove o total da lista de valores de produção
+                        }
+                    }
 
                     if (numbers.length > 0) {
                         const lastNum = numbers[numbers.length - 1];
