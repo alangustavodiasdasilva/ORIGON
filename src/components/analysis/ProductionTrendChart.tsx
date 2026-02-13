@@ -606,7 +606,6 @@ export default function ProductionTrendChart({ data }: ProductionTrendChartProps
                         value={viewMode}
                         onChange={(val: any) => {
                             setViewMode(val);
-                            setActiveSeries(null);
                         }}
                         options={[
                             { value: 'general', label: 'Visão Geral' },
@@ -754,7 +753,7 @@ export default function ProductionTrendChart({ data }: ProductionTrendChartProps
                                     ></span>
                                     <span className={cn(
                                         "text-[10px] font-bold uppercase truncate transition-colors",
-                                        activeSeries === s.name ? "text-black" : "text-neutral-600"
+                                        selectedSeries.includes(s.name) ? "text-black" : "text-neutral-600"
                                     )}>
                                         {formatName(s.name)}
                                     </span>
