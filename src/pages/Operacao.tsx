@@ -30,6 +30,7 @@ interface OCRBlock {
     turnos: {
         nome: string;
         valores: string[];
+        totalOriginal?: number; // Valor total identificado pelo OCR no fim da linha
     }[];
 }
 
@@ -112,18 +113,79 @@ export default function Operacao() {
         }
     };
 
+    // Função de pré-processamento para melhorar OCR
+    const preprocessImage = async (imageBlob: Blob): Promise<string> => {
+        return new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement("canvas");
+                    const ctx = canvas.getContext("2d");
+                    if (!ctx) {
+                        resolve(e.target?.result as string);
+                        return;
+                    }
+
+                    // Aumentar a escala pode ajudar o OCR em imagens pequenas
+                    const scale = 2;
+                    canvas.width = img.width * scale;
+                    canvas.height = img.height * scale;
+
+                    ctx.imageSmoothingEnabled = false;
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+                    // Filtro de contraste e tons de cinza
+                    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                    const data = imageData.data;
+
+                    for (let i = 0; i < data.length; i += 4) {
+                        const r = data[i];
+                        const g = data[i + 1];
+                        const b = data[i + 2];
+
+                        // Grayscale
+                        let gray = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+
+                        // Binarização agressiva para texto preto no branco
+                        // Se for mais claro que 180, vira branco total. Se não, preto total.
+                        const threshold = 180;
+                        const v = gray > threshold ? 255 : 0;
+
+                        data[i] = data[i + 1] = data[i + 2] = v;
+                    }
+
+                    ctx.putImageData(imageData, 0, 0);
+                    resolve(canvas.toDataURL("image/png", 1.0));
+                };
+                img.src = e.target?.result as string;
+            };
+            reader.readAsDataURL(imageBlob);
+        });
+    };
+
     const processImageOCR = async (imageFile: File) => {
         setIsProcessingOCR(true);
         setOcrData(null);
 
         try {
-            const result = await Tesseract.recognize(
-                imageFile,
-                'por',
-                { logger: m => console.log(m) }
-            );
+            // 1. Pré-processar imagem (Escala + Contraste)
+            const processedImageUrl = await preprocessImage(imageFile);
+
+            // 2. Usar Worker para mais controle de parâmetros
+            const worker = await Tesseract.createWorker('por');
+
+            await worker.setParameters({
+                tessedit_char_whitelist: '0123456789/.,:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz ',
+                tessedit_pageseg_mode: Tesseract.PSM.AUTO,
+            });
+
+            const result = await worker.recognize(processedImageUrl);
+            await worker.terminate();
 
             const text = result.data.text;
+            console.log("OCR RAW TEXT:", text);
+
             const lines = text.split('\n').map(l => l.trim()).filter(l => l);
 
             const blocks: OCRBlock[] = [];
@@ -150,12 +212,16 @@ export default function Operacao() {
                 if (currentBlock && line.toUpperCase().includes('TURNO')) {
                     const turnoNameMatch = line.match(/TURNO\s*\d+/i);
                     const turnoName = turnoNameMatch ? turnoNameMatch[0].toUpperCase() : "TURNO GERAL";
-                    const tokens = line.replace(/[.,]/g, '').split(/\s+/);
+                    const tokens = line.replace(/[.,]/g, '').split(/[\s-]+/); // Split por espaço ou hífen (ruído comum)
                     const numbers: number[] = [];
 
                     tokens.forEach(t => {
-                        const val = parseInt(t);
-                        // Filtra ruído (1-9 geralmente são índices ou sujeira), mas MANTÉM 0 e números reais de produção
+                        // Tenta remover qualquer caractere não numérico que sobrou
+                        const cleanT = t.replace(/\D/g, '');
+                        if (cleanT.length === 0) return;
+
+                        const val = parseInt(cleanT);
+                        // Filtra ruído (números muito pequenos geralmente são índices), mas mantém o que parece produção
                         if (!isNaN(val) && (val >= 10 || val === 0)) {
                             numbers.push(val);
                         }
@@ -183,13 +249,17 @@ export default function Operacao() {
 
                             if (isOverLimit || isSumApprox || isMagnitudeSpike) {
                                 // É identificar o TOTAL no final
-                                currentBlock.turnos.push({ nome: turnoName, valores: prevNums.map(String) });
+                                currentBlock.turnos.push({
+                                    nome: turnoName,
+                                    valores: prevNums.map(String),
+                                    totalOriginal: lastNum
+                                });
                             } else {
                                 // Caso muito atípico onde o último número parece máquina (<1300 e sem soma)
-                                // Mas o usuário disse "Sempre vai ser...".
-                                // Se tivermos muitos números, assumimos que o último é total mesmo assim se os checks falharem?
-                                // Por segurança, mantemos a lógica de só separar se tiver indício forte.
-                                currentBlock.turnos.push({ nome: turnoName, valores: numbers.map(String) });
+                                currentBlock.turnos.push({
+                                    nome: turnoName,
+                                    valores: numbers.map(String)
+                                });
                             }
                         } else {
                             currentBlock.turnos.push({ nome: turnoName, valores: numbers.map(String) });
@@ -564,15 +634,32 @@ export default function Operacao() {
                                             <div className="space-y-6">
                                                 {block.turnos.map((turno, tIdx) => {
                                                     const totalTurno = turno.valores.reduce((a, b) => a + (parseFloat(b.replace(/\./g, "").replace(",", ".")) || 0), 0);
+                                                    const hasDiscrepancy = turno.totalOriginal && Math.abs(totalTurno - turno.totalOriginal) > 2; // tolerância pequena
+
                                                     return (
-                                                        <div key={tIdx} className="bg-white p-4 rounded border border-neutral-200">
+                                                        <div key={tIdx} className={cn(
+                                                            "bg-white p-4 rounded border transition-colors",
+                                                            hasDiscrepancy ? "border-red-400 bg-red-50/30" : "border-neutral-200"
+                                                        )}>
                                                             <div className="flex justify-between items-center mb-2">
-                                                                <Input value={turno.nome} onChange={(e) => {
-                                                                    const newBlocks = [...ocrData.blocks];
-                                                                    newBlocks[bIdx].turnos[tIdx].nome = e.target.value;
-                                                                    setOcrData({ ...ocrData, blocks: newBlocks });
-                                                                }} className="font-bold text-sm uppercase w-48 h-8 border-none p-0 focus-visible:ring-0" />
-                                                                <span className="font-mono font-bold text-emerald-600">{totalTurno.toLocaleString('pt-BR')}</span>
+                                                                <div className="flex items-center gap-2">
+                                                                    <Input value={turno.nome} onChange={(e) => {
+                                                                        const newBlocks = [...ocrData.blocks];
+                                                                        newBlocks[bIdx].turnos[tIdx].nome = e.target.value;
+                                                                        setOcrData({ ...ocrData, blocks: newBlocks });
+                                                                    }} className="font-bold text-sm uppercase w-48 h-8 border-none p-0 focus-visible:ring-0 bg-transparent" />
+                                                                    {hasDiscrepancy && (
+                                                                        <span className="text-[9px] font-bold text-red-500 bg-red-100 px-2 py-0.5 rounded flex items-center gap-1 animate-pulse">
+                                                                            Soma não bate: {turno.totalOriginal} na imagem
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                                <span className={cn(
+                                                                    "font-mono font-bold",
+                                                                    hasDiscrepancy ? "text-red-600" : "text-emerald-600"
+                                                                )}>
+                                                                    {totalTurno.toLocaleString('pt-BR')}
+                                                                </span>
                                                             </div>
                                                             <div className="grid grid-cols-6 gap-2">
                                                                 {turno.valores.map((val, vIdx) => (
