@@ -40,8 +40,15 @@ export default function Quality() {
 
     const loadInitialData = async () => {
         setIsLoading(true);
+
+        // Safety timeout: If data takes too long (12s), force stop loading so user can at least try to interact
+        const safetyTimer = setTimeout(() => {
+            console.warn("Forcing load stop due to timeout");
+            setIsLoading(false);
+            addToast({ title: "Conexão lenta", description: "O carregamento demorou mais que o esperado.", type: "warning" });
+        }, 12000);
+
         try {
-            // 1. Load Labs (Critical for navigation)
             // 1. Load Labs (Critical for navigation)
             const { LabService } = await import('@/entities/Lab');
             const labsData = await LabService.list().catch(e => {
@@ -66,8 +73,8 @@ export default function Quality() {
                 // Alert the user more specifically
                 const msg = auditError.message || JSON.stringify(auditError);
                 addToast({
-                    title: "Erro ao carregar auditoria (" + (auditError.code || "?") + ")",
-                    description: msg,
+                    title: "Erro ao carregar auditoria",
+                    description: msg.substring(0, 100),
                     type: "error"
                 });
             }
@@ -76,10 +83,11 @@ export default function Quality() {
             console.error("Critical error in Quality load:", error);
             addToast({
                 title: "Erro de Carregamento",
-                description: error.message || "Falha crítica ao inicializar módulo.",
+                description: "Falha crítica ao inicializar módulo.",
                 type: "error"
             });
         } finally {
+            clearTimeout(safetyTimer);
             setIsLoading(false);
         }
     };
