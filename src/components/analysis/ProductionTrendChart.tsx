@@ -44,8 +44,8 @@ export default function ProductionTrendChart({ data }: ProductionTrendChartProps
     const [showTargetLine, setShowTargetLine] = useState(false);
     const [showMovingAverage, setShowMovingAverage] = useState(false);
 
-    // Filtro interativo pela legenda
-    const [activeSeries, setActiveSeries] = useState<string | null>(null);
+    // Filtro interativo pela legenda (Novas lógica de isolamento)
+    const [selectedSeries, setSelectedSeries] = useState<string[]>([]);
 
     // Granularidade Temporal
     const [granularity, setGranularity] = useState<'day' | 'week' | 'month'>('day');
@@ -307,6 +307,28 @@ export default function ProductionTrendChart({ data }: ProductionTrendChartProps
         return { uniqueDates: [], series: seriesMap }; // Fallback
     }, [filteredData, viewMode, selectedShift, selectedMachine, availableShifts, availableMachines, granularity]);
 
+    // Inicializar séries selecionadas
+    useEffect(() => {
+        const names = Array.from(sortedData.series.keys());
+        setSelectedSeries(names);
+    }, [sortedData.series]);
+
+    const toggleSeries = (name: string, e: React.MouseEvent) => {
+        if (e.ctrlKey || e.metaKey || e.shiftKey) {
+            setSelectedSeries(prev =>
+                prev.includes(name)
+                    ? prev.filter(n => n !== name)
+                    : [...prev, name]
+            );
+        } else {
+            if (selectedSeries.length === 1 && selectedSeries[0] === name) {
+                setSelectedSeries(Array.from(sortedData.series.keys()));
+            } else {
+                setSelectedSeries([name]);
+            }
+        }
+    };
+
     // 5. Layout Calculate
     const chartCalculations = useMemo(() => {
         const uniqueDates = sortedData.uniqueDates;
@@ -343,30 +365,32 @@ export default function ProductionTrendChart({ data }: ProductionTrendChartProps
             return padding.top + chartHeight - ((safeVal - yMin) / yRange) * chartHeight;
         };
 
-        const finalSeries = Array.from(sortedData.series.entries()).map(([name, points], idx) => {
-            const chartPoints = points.map(p => ({
-                x: dateToX(p.date),
-                y: valToY(p.val),
-                original: p,
-                date: p.date
-            }));
+        const finalSeries = Array.from(sortedData.series.entries())
+            .filter(([name]) => selectedSeries.includes(name))
+            .map(([name, points], idx) => {
+                const chartPoints = points.map(p => ({
+                    x: dateToX(p.date),
+                    y: valToY(p.val),
+                    original: p,
+                    date: p.date
+                }));
 
-            const path = chartPoints.length > 1
-                ? `M ${chartPoints[0].x},${chartPoints[0].y} ` + chartPoints.slice(1).map(p => `L ${p.x},${p.y}`).join(" ")
-                : null;
+                const path = chartPoints.length > 1
+                    ? `M ${chartPoints[0].x},${chartPoints[0].y} ` + chartPoints.slice(1).map(p => `L ${p.x},${p.y}`).join(" ")
+                    : null;
 
-            let color = "#000";
-            if (viewMode === 'general' || viewMode === 'machine_comparison') {
-                color = COLORS_MAP[name] || "#888";
-            } else {
-                // detailed OR compare_machines_total
-                color = MACHINE_COLORS[idx % MACHINE_COLORS.length];
-            }
+                let color = "#000";
+                if (viewMode === 'general' || viewMode === 'machine_comparison') {
+                    color = COLORS_MAP[name] || "#888";
+                } else {
+                    // detailed OR compare_machines_total
+                    color = MACHINE_COLORS[idx % MACHINE_COLORS.length];
+                }
 
-            const isTotal = name === 'TOTAL DIA';
+                const isTotal = name === 'TOTAL DIA';
 
-            return { name, color, points: chartPoints, path, isTotal };
-        });
+                return { name, color, points: chartPoints, path, isTotal };
+            });
 
         const gridSteps = 6;
         const gridLines = Array.from({ length: gridSteps }).map((_, i) => {
@@ -651,7 +675,7 @@ export default function ProductionTrendChart({ data }: ProductionTrendChartProps
 
                         {/* Series Paths */}
                         {finalSeries.map((s) => {
-                            const isDimmed = (hoveredPoint && hoveredPoint.type !== s.name) || (activeSeries && activeSeries !== s.name);
+                            const isDimmed = hoveredPoint && hoveredPoint.seriesName !== s.name;
                             return (
                                 <g key={s.name} className={cn("transition-opacity duration-300", isDimmed && "opacity-10")}>
                                     {s.path && (
@@ -718,11 +742,10 @@ export default function ProductionTrendChart({ data }: ProductionTrendChartProps
                             {finalSeries.map(s => (
                                 <div
                                     key={s.name}
-                                    onClick={() => setActiveSeries(activeSeries === s.name ? null : s.name)}
+                                    onClick={(e) => toggleSeries(s.name, e)}
                                     className={cn(
                                         "flex items-center gap-2 w-full group cursor-pointer p-1 rounded transition-colors",
-                                        activeSeries === s.name ? "bg-neutral-100 ring-1 ring-neutral-200" : "hover:bg-neutral-100",
-                                        activeSeries && activeSeries !== s.name && "opacity-40"
+                                        "hover:bg-neutral-100"
                                     )}
                                 >
                                     <span

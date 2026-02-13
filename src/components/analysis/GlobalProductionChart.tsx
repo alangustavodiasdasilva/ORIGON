@@ -236,19 +236,22 @@ export default function GlobalProductionChart({ data, labs }: GlobalProductionCh
                         />
                         <Tooltip content={<CustomTooltip />} cursor={{ stroke: '#e5e5e5', strokeWidth: 1 }} />
 
-                        {labs.filter(lab => selectedLabs.includes(lab.id)).map((lab, index) => (
-                            <Line
-                                key={lab.id}
-                                type="monotone"
-                                dataKey={lab.id}
-                                name={lab.nome}
-                                stroke={COLORS[index % COLORS.length]}
-                                strokeWidth={2}
-                                dot={{ r: 3, strokeWidth: 0, fill: COLORS[index % COLORS.length] }}
-                                activeDot={{ r: 6, strokeWidth: 0 }}
-                                connectNulls
-                            />
-                        ))}
+                        {labs.map((lab, idx) => {
+                            if (!selectedLabs.includes(lab.id)) return null;
+                            return (
+                                <Line
+                                    key={lab.id}
+                                    type="monotone"
+                                    dataKey={lab.id}
+                                    name={lab.nome}
+                                    stroke={COLORS[idx % COLORS.length]}
+                                    strokeWidth={2}
+                                    dot={{ r: 3, strokeWidth: 0, fill: COLORS[idx % COLORS.length] }}
+                                    activeDot={{ r: 6, strokeWidth: 0 }}
+                                    connectNulls
+                                />
+                            );
+                        })}
                     </LineChart>
                 </ResponsiveContainer>
             </div>
