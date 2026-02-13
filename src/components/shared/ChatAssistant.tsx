@@ -164,12 +164,14 @@ export default function ChatAssistant() {
                         <button
                             onClick={() => setIsMinimized(!isMinimized)}
                             className="p-2 hover:bg-white/10 rounded-xl transition-colors cursor-pointer"
+                            title={isMinimized ? "Maximizar" : "Minimizar"}
                         >
                             {isMinimized ? <Maximize2 className="h-4 w-4" /> : <Minus className="h-4 w-4" />}
                         </button>
                         <button
                             onClick={() => setIsOpen(false)}
                             className="p-2 hover:bg-rose-500/20 text-white/50 hover:text-rose-400 rounded-xl transition-all cursor-pointer"
+                            title="Fechar Chat"
                         >
                             <X className="h-4 w-4" />
                         </button>
@@ -199,7 +201,7 @@ export default function ChatAssistant() {
                                             "flex flex-col gap-1.5 animate-slide-up",
                                             isMe ? "items-end" : "items-start"
                                         )}
-                                        style={{ animationDelay: `${idx * 0.05}s` }}
+                                        ref={(el) => { if (el) el.style.animationDelay = `${idx * 0.05}s`; }}
                                     >
                                         <div className="flex items-center gap-2 mb-1 px-1">
                                             {!isMe && <span className="text-[8px] font-black uppercase tracking-widest text-blue-600 italic">{msg.sender_name}</span>}

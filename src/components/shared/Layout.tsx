@@ -13,6 +13,7 @@ import {
     Package,
     Download,
     Upload,
+    Zap,
     Menu,
     X
 } from "lucide-react";
@@ -86,6 +87,7 @@ export default function Layout() {
         { href: "/lotes", label: t('nav.batches'), icon: Package, public: true },
         { href: "/icac", label: t('nav.icac'), icon: Microscope, public: true },
         { href: "/interlaboratorial", label: t('nav.interlab'), icon: Network, public: true },
+        { href: "/operacao", label: "Operação", icon: Zap, allowedRoles: ['admin_global', 'admin_lab', 'quality_admin'] },
         { href: "/quality", label: t('nav.quality'), icon: Award, allowedRoles: ['admin_global', 'admin_lab', 'quality_admin'] },
         { href: "/admin", label: t('nav.config'), icon: ShieldCheck, allowedRoles: ['admin_global', 'admin_lab'] },
     ];
@@ -116,7 +118,7 @@ export default function Layout() {
                                 </svg>
                                 <h1 className="text-xl font-serif tracking-[0.1em] text-black">ORIGO</h1>
                             </div>
-                            <button onClick={() => setIsMobileMenuOpen(false)} className="p-2 hover:bg-neutral-100 rounded-full">
+                            <button onClick={() => setIsMobileMenuOpen(false)} className="p-2 hover:bg-neutral-100 rounded-full" title="Fechar Menu">
                                 <X className="h-5 w-5 text-neutral-500" />
                             </button>
                         </div>
@@ -281,6 +283,7 @@ export default function Layout() {
                         <button
                             onClick={() => setIsMobileMenuOpen(true)}
                             className="lg:hidden p-2 -ml-2 hover:bg-neutral-100 rounded-md"
+                            title="Abrir Menu"
                         >
                             <Menu className="h-5 w-5 text-black" />
                         </button>

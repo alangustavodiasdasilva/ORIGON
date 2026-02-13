@@ -203,9 +203,12 @@ export default function AnalysisTable({ samples, onUpdateSample, onColorChange, 
                                                     sample.locked ? "cursor-not-allowed opacity-50" : "hover:scale-110",
                                                     sample.cor === c.value
                                                         ? "scale-110 ring-2 ring-slate-900 ring-offset-1 opacity-100"
-                                                        : "opacity-30 hover:opacity-100 hover:ring-2 hover:ring-slate-300 hover:ring-offset-1"
+                                                        : "opacity-30 hover:opacity-100 hover:ring-2 hover:ring-slate-300 hover:ring-offset-1",
+                                                    c.value === "#ef4444" && "bg-red-500",
+                                                    c.value === "#3b82f6" && "bg-blue-500",
+                                                    c.value === "#10b981" && "bg-emerald-500",
+                                                    c.value === "#f59e0b" && "bg-amber-500"
                                                 )}
-                                                style={{ backgroundColor: c.value }}
                                                 title={sample.locked ? "Amostra bloqueada" : (sample.cor === c.value ? `Remover cor ${c.label}` : `Aplicar ${c.label}`)}
                                             />
                                         ))}
@@ -223,6 +226,7 @@ export default function AnalysisTable({ samples, onUpdateSample, onColorChange, 
                                                     <AlertTriangle className="h-3 w-3 text-amber-500 absolute -left-2 animate-pulse" />
                                                 )}
                                                 <input
+                                                    aria-label={`Valor de ${field}`}
                                                     className={cn(
                                                         "w-full text-right bg-transparent border-none focus:ring-0 p-0 font-mono font-black transition-all",
                                                         "text-lg tracking-tight",

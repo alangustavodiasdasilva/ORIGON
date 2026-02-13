@@ -14,6 +14,7 @@ import Analysis from "@/pages/Analysis";
 import Icac from "@/pages/Icac";
 import Interlaboratorial from "@/pages/Interlaboratorial";
 import Export from "@/pages/Export";
+import Operacao from "@/pages/Operacao";
 import Admin from "@/pages/Admin";
 import Login from "@/pages/Login";
 import Quality from "@/pages/Quality";
@@ -45,6 +46,7 @@ function AppRoutes() {
         <Route path="interlaboratorial" element={<Interlaboratorial />} />
         <Route path="export" element={<Export />} />
         <Route path="quality" element={<Quality />} />
+        <Route path="operacao" element={<Operacao />} />
         <Route path="admin" element={<Admin />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>

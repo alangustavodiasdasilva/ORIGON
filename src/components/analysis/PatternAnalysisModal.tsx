@@ -101,7 +101,7 @@ export default function PatternAnalysisModal({ isOpen, onClose, samples, onApply
                         </p>
                     </div>
                     <div className="flex items-center gap-2">
-                        <button onClick={onClose} className="p-2 hover:bg-neutral-100 rounded-full">
+                        <button onClick={onClose} className="p-2 hover:bg-neutral-100 rounded-full" title="Fechar" aria-label="Fechar">
                             <X className="h-5 w-5" />
                         </button>
                     </div>
@@ -173,13 +173,18 @@ export default function PatternAnalysisModal({ isOpen, onClose, samples, onApply
                                         return (
                                             <div key={group.id}
                                                 className="bg-white border-l-4 p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-6 shadow-sm hover:shadow-md transition-all"
-                                                style={{ borderLeftColor: group.color || '#000' }}
+                                                ref={(el) => {
+                                                    if (el) {
+                                                        const c = group.color || '#000';
+                                                        el.style.borderLeftColor = c;
+                                                        el.style.setProperty('--group-color', c);
+                                                    }
+                                                }}
                                             >
                                                 {/* Estatísticas do Grupo */}
                                                 <div className="flex items-center gap-6 flex-1">
                                                     <div
-                                                        className="h-14 w-14 flex-shrink-0 text-white flex flex-col items-center justify-center font-mono font-bold leading-none rounded-lg shadow-sm"
-                                                        style={{ backgroundColor: group.color || '#000' }}
+                                                        className="h-14 w-14 flex-shrink-0 text-white flex flex-col items-center justify-center font-mono font-bold leading-none rounded-lg shadow-sm bg-[var(--group-color)]"
                                                     >
                                                         <span className="text-xl">{group.count}</span>
                                                         <span className="text-[8px] opacity-80 uppercase">Obs.</span>
@@ -234,7 +239,10 @@ export default function PatternAnalysisModal({ isOpen, onClose, samples, onApply
                                                 {/* Badge de Identificação */}
                                                 <div className="hidden md:flex flex-col items-end gap-1">
                                                     <span className="text-[9px] uppercase font-bold text-neutral-400 tracking-widest">Padrão</span>
-                                                    <div className="px-3 py-1 rounded bg-neutral-100 text-xs font-bold uppercase tracking-wider text-right shadow-sm border border-neutral-200" style={{ color: group.color || '#000' }}>
+                                                    <div
+                                                        className="px-3 py-1 rounded bg-neutral-100 text-xs font-bold uppercase tracking-wider text-right shadow-sm border border-neutral-200"
+                                                        ref={(el) => { if (el) el.style.color = group.color || '#000'; }}
+                                                    >
                                                         {group.id}
                                                     </div>
                                                 </div>
