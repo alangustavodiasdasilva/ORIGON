@@ -185,7 +185,7 @@ function DashboardTab({ onlineAnalysts }: { onlineAnalysts: Analista[] }) {
                         <p className="pt-2 text-neutral-500 border-t border-white/10 mt-2">
                             Sistema de Análise HVI Avançada - Versão 3.1
                             <br />
-                            Última atualização: 13/02/2026 16:42
+                            Última atualização: 13/02/2026 16:50
                             <br />
                             Todos os direitos reservados.
                         </p>
