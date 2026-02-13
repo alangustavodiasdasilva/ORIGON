@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/contexts/ToastContext";
 import { AuditService, type AuditDocument, type AuditCategory } from "@/entities/Audit";
+import { LabService } from "@/entities/Lab";
 import { cn } from "@/lib/utils";
 
 export default function Quality() {
@@ -50,7 +51,6 @@ export default function Quality() {
 
         try {
             // 1. Load Labs (Critical for navigation)
-            const { LabService } = await import('@/entities/Lab');
             const labsData = await LabService.list().catch(e => {
                 console.error("Failed to load labs:", e);
                 addToast({ title: "Aviso: Falha ao carregar laboratórios", description: "Tente recarregar a página.", type: "warning" });
