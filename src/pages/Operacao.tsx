@@ -24,18 +24,32 @@ interface ProductionData {
     metadata?: any;
 }
 
+interface OCRBox {
+    text: string;
+    x0: number;
+    y0: number;
+    x1: number;
+    y1: number;
+    confidence: number;
+}
+
 interface OCRBlock {
-    id: string; // unique ID temp
-    data: string; // YYYY-MM-DD
+    id: string;
+    data: string;
     turnos: {
         nome: string;
-        valores: string[];
-        totalOriginal?: number; // Valor total identificado pelo OCR no fim da linha
+        valores: {
+            val: string;
+            bbox?: OCRBox;
+        }[];
+        totalOriginal?: number;
+        totalBbox?: OCRBox;
     }[];
 }
 
 interface OCRResult {
     blocks: OCRBlock[];
+    allBoxes: OCRBox[]; // Para visualização geral
 }
 
 export default function Operacao() {
@@ -43,6 +57,7 @@ export default function Operacao() {
     const { addToast } = useToast();
     const [isUploading, setIsUploading] = useState(false);
     const [isProcessingOCR, setIsProcessingOCR] = useState(false);
+    const [isLoading, setIsLoading] = useState(false);
 
     const [pastedImage, setPastedImage] = useState<string | null>(null);
     const [isImageZoomed, setIsImageZoomed] = useState(false);
@@ -190,11 +205,19 @@ export default function Operacao() {
             await worker.terminate();
 
             const text = result.data.text;
-            console.log("OCR RAW TEXT:", text);
-
+            const words = (result.data as any).words;
             const lines = text.split('\n').map(l => l.trim()).filter(l => l);
 
             const blocks: OCRBlock[] = [];
+            const allBoxes: OCRBox[] = words.map((w: any) => ({
+                text: w.text,
+                x0: w.bbox.x0,
+                y0: w.bbox.y0,
+                x1: w.bbox.x1,
+                y1: w.bbox.y1,
+                confidence: w.confidence
+            }));
+
             let currentBlock: OCRBlock | null = null;
             const dateRegex = /(\d{1,2})[\/\.](\d{1,2})[\/\.](\d{4})/;
 
@@ -217,21 +240,19 @@ export default function Operacao() {
                     currentBlock = existingBlock;
                 }
 
-                // Detecção de turno mais flexível (TURNO, TURMO, TORN, etc)
                 const hasTurno = upperLine.includes('TURNO') || upperLine.includes('TURMO') || upperLine.includes('TUR');
 
                 if (currentBlock && hasTurno) {
                     const turnoNameMatch = line.match(/(TURNO|TURMO|TUR)\s*(\d+)?/i);
                     const turnoName = turnoNameMatch ? `TURNO ${turnoNameMatch[2] || 'GERAL'}` : "TURNO GERAL";
 
-                    let cleanLine = fixOCRCharacters(line);
-
-                    // Se a linha tem um total claro no final, guardamos para validar
+                    const cleanLine = fixOCRCharacters(line);
                     const totalMatch = cleanLine.match(/(\d{3,})\s*$/);
                     const identifiedTotal = totalMatch ? parseInt(totalMatch[1]) : undefined;
+                    const lineWords = words.filter((w: any) => line.includes(w.text));
 
                     const tokens = cleanLine.split(/[\s-]+/);
-                    const numbers: number[] = [];
+                    const rowValues: { val: string; bbox?: OCRBox }[] = [];
 
                     tokens.forEach(t => {
                         const cleanT = t.replace(/[.,]/g, '').replace(/\D/g, '');
@@ -239,59 +260,37 @@ export default function Operacao() {
 
                         const val = parseInt(cleanT);
                         if (!isNaN(val)) {
-                            if (turnoName.includes(String(val)) && numbers.length === 0) return;
-                            if (val >= 0) numbers.push(val);
+                            if (turnoName.includes(String(val)) && rowValues.length === 0) return;
+
+                            const wordBox = lineWords.find((w: any) => w.text.includes(t) || t.includes(w.text));
+                            const bbox: OCRBox | undefined = wordBox ? {
+                                text: wordBox.text,
+                                x0: wordBox.bbox.x0,
+                                y0: wordBox.bbox.y0,
+                                x1: wordBox.bbox.x1,
+                                y1: wordBox.bbox.y1,
+                                confidence: wordBox.confidence
+                            } : undefined;
+
+                            if (val >= 0) rowValues.push({ val: String(val), bbox });
                         }
                     });
 
-                    // LÓGICA DE AUTO-CORREÇÃO:
-                    // Se temos um total e a soma não bate, verificamos se o último número lido 
-                    // NÃO é o total. Se for, removemos ele da lista de máquinas.
-                    if (identifiedTotal && numbers.length > 0) {
-                        const lastNum = numbers[numbers.length - 1];
-                        // Se o último número é igual ou muito próximo do total identificado
-                        if (Math.abs(lastNum - identifiedTotal) < 5) {
-                            numbers.pop(); // Remove o total da lista de valores de produção
-                        }
-                    }
-
-                    if (numbers.length > 0) {
-                        const lastNum = numbers[numbers.length - 1];
-                        const prevNums = numbers.slice(0, numbers.length - 1);
-
-                        if (prevNums.length >= 1) {
-                            const sumPrev = prevNums.reduce((a, b) => a + b, 0);
-                            const maxPrev = Math.max(...prevNums);
-
-                            // REGRAS DO USUÁRIO:
-                            // 1. O Máximo de uma máquina é 1300 -> Se for maior, é TOTAL.
-                            const isOverLimit = lastNum > 1300;
-
-                            // 2. A última coluna SEMPRE é o total (se bater a soma ou magnitude)
-                            // Soma (com tolerância de 10%)
-                            const difference = Math.abs(lastNum - sumPrev);
-                            const isSumApprox = difference <= (sumPrev * 0.10);
-
-                            // Magnitude (se for > 2x o maior anterior, assumimos Total para segurança)
-                            const isMagnitudeSpike = lastNum > (maxPrev * 2);
-
-                            if (isOverLimit || isSumApprox || isMagnitudeSpike) {
-                                // É identificar o TOTAL no final
-                                currentBlock.turnos.push({
-                                    nome: turnoName,
-                                    valores: prevNums.map(String),
-                                    totalOriginal: lastNum
-                                });
-                            } else {
-                                // Caso muito atípico onde o último número parece máquina (<1300 e sem soma)
-                                currentBlock.turnos.push({
-                                    nome: turnoName,
-                                    valores: numbers.map(String)
-                                });
-                            }
+                    if (identifiedTotal && rowValues.length > 0) {
+                        const lastItem = rowValues[rowValues.length - 1];
+                        if (Math.abs(parseInt(lastItem.val) - identifiedTotal) < 5) {
+                            const totalItem = rowValues.pop();
+                            currentBlock.turnos.push({
+                                nome: turnoName,
+                                valores: rowValues,
+                                totalOriginal: identifiedTotal,
+                                totalBbox: totalItem?.bbox
+                            });
                         } else {
-                            currentBlock.turnos.push({ nome: turnoName, valores: numbers.map(String) });
+                            currentBlock.turnos.push({ nome: turnoName, valores: rowValues });
                         }
+                    } else if (rowValues.length > 0) {
+                        currentBlock.turnos.push({ nome: turnoName, valores: rowValues });
                     }
                 }
             });
@@ -299,22 +298,26 @@ export default function Operacao() {
             if (blocks.length === 0 && lines.length > 0) {
                 const fallbackBlock: OCRBlock = {
                     id: "fallback",
-                    data: "",
+                    data: new Date().toISOString().split('T')[0],
                     turnos: []
                 };
                 lines.forEach(line => {
-                    if (line.toUpperCase().includes('TURNO')) {
-                        const numbers = line.replace(/[.,]/g, '').split(/\s+/).map(t => parseInt(t)).filter(v => !isNaN(v) && (v > 10 || v === 0));
-                        if (numbers.length > 0) {
-                            fallbackBlock.turnos.push({ nome: "TURNO DETECTADO", valores: numbers.map(String) });
-                        }
+                    const cleanLine = fixOCRCharacters(line);
+                    const tokens = cleanLine.split(/[\s-]+/);
+                    const rowValues: { val: string; bbox?: OCRBox }[] = [];
+                    tokens.forEach(t => {
+                        const cleanT = t.replace(/[.,]/g, '').replace(/\D/g, '');
+                        const val = parseInt(cleanT);
+                        if (!isNaN(val) && val > 10) rowValues.push({ val: String(val) });
+                    });
+                    if (rowValues.length > 0) {
+                        fallbackBlock.turnos.push({ nome: "TURNO DETECTADO", valores: rowValues });
                     }
                 });
                 if (fallbackBlock.turnos.length > 0) blocks.push(fallbackBlock);
             }
 
-            setOcrData({ blocks });
-
+            setOcrData({ blocks, allBoxes });
         } catch (error) {
             console.error(error);
             addToast({ title: "Erro no OCR", description: "Não foi possível ler a imagem.", type: "error" });
@@ -339,7 +342,7 @@ export default function Operacao() {
 
             return {
                 nome: turnoKey,
-                valores: turnoItems.map(i => i.peso.toLocaleString('pt-BR'))
+                valores: turnoItems.map(i => ({ val: i.peso.toLocaleString('pt-BR') }))
             };
         });
 
@@ -348,7 +351,8 @@ export default function Operacao() {
                 id: "edit_mode",
                 data: date,
                 turnos: turnosList
-            }]
+            }],
+            allBoxes: []
         });
 
         setPastedImage("EDIT_MODE");
@@ -372,8 +376,8 @@ export default function Operacao() {
             }
 
             block.turnos.forEach(turno => {
-                turno.valores.forEach((valStr, index) => {
-                    const cleanStr = valStr.replace(/\./g, '').replace(',', '.');
+                turno.valores.forEach((item, index) => {
+                    const cleanStr = item.val.replace(/\./g, '').replace(',', '.');
                     const val = parseFloat(cleanStr);
 
                     if (!isNaN(val)) {
@@ -393,34 +397,29 @@ export default function Operacao() {
         });
 
         if (hasError) {
-            addToast({ title: "Datas Faltando", description: "Todos os dias precisam de uma data.", type: "error" });
+            addToast({ title: "Erro de Validação", description: "Certifique-se que todas as datas foram identificadas.", type: "warning" });
             return;
         }
 
-        if (recordsToInsert.length === 0) {
-            addToast({ title: "Sem Dados", description: "Nada reconhecido.", type: "error" });
-            return;
-        }
-
+        setIsLoading(true);
         try {
             const { error } = await supabase
                 .from('operacao_producao')
-                .upsert(recordsToInsert, {
-                    onConflict: 'lab_id, identificador_unico'
-                });
+                .upsert(recordsToInsert, { onConflict: 'identificador_unico' });
 
             if (error) throw error;
 
-            addToast({ title: "Sucesso!", description: `${recordsToInsert.length} registros salvos.`, type: "success" });
-            setPastedImage(null);
+            addToast({ title: "Sucesso!", description: "Dados de produção carregados.", type: "success" });
             setOcrData(null);
+            setPastedImage(null);
             loadStats();
-
-        } catch (error: any) {
-            addToast({ title: "Erro ao Salvar", description: error.message, type: "error" });
+        } catch (error) {
+            console.error(error);
+            addToast({ title: "Erro no Banco", description: "Não foi possível salvar os registros.", type: "error" });
+        } finally {
+            setIsLoading(false);
         }
     };
-
     const handleDeleteDate = async (date: string) => {
         if (!confirm(`Excluir tudo de ${date.split('-').reverse().join('/')}?`)) return;
         const { error } = await supabase.from('operacao_producao').delete().eq('lab_id', currentLab?.id).eq('data_producao', date);
@@ -619,8 +618,9 @@ export default function Operacao() {
                         </div>
 
                         <div className="flex items-center gap-4">
-                            <Button onClick={confirmOCRUpload} disabled={!ocrData || ocrData.blocks.length === 0} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold uppercase tracking-widest gap-2 shadow-lg h-10 px-6">
-                                <Save className="h-4 w-4" /> Confirmar Tudo
+                            <Button onClick={confirmOCRUpload} disabled={!ocrData || ocrData.blocks.length === 0 || isLoading} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold uppercase tracking-widest gap-2 shadow-lg h-10 px-6 min-w-[180px]">
+                                {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                                {isLoading ? "Salvando..." : "Confirmar Tudo"}
                             </Button>
                             <Button variant="outline" size="icon" onClick={() => { setPastedImage(null); setOcrData(null); }}>
                                 <X className="h-5 w-5" />
@@ -631,7 +631,47 @@ export default function Operacao() {
                     <div className="flex-1 flex overflow-hidden">
                         {pastedImage !== "EDIT_MODE" && (
                             <div className="w-2/5 bg-neutral-800 p-8 overflow-auto flex items-center justify-center relative border-r border-neutral-300">
-                                <img src={pastedImage!} alt="Original" className="w-full object-contain shadow-2xl rounded-sm" />
+                                <div className="relative inline-block w-full">
+                                    <img src={pastedImage!} alt="Original" className="w-full object-contain shadow-2xl rounded-sm block" id="ocr-image-preview" />
+
+                                    {/* Overlay de Bounding Boxes */}
+                                    {ocrData?.allBoxes && ocrData.allBoxes.map((box, idx) => {
+                                        // Precisamos calcular a posição relativa à imagem no preview (que tem escala 2x no OCR mas pode ter tamanho variável no CSS)
+                                        // Como o OCR rodou em escala 2x, as coordenadas estão em 2x.
+                                        // O preview no CSS é w-full.
+
+                                        return (
+                                            <div
+                                                key={idx}
+                                                onClick={() => {
+                                                    // Tenta encontrar o input correspondente e dar foco
+                                                    const inputId = `ocr-input-${idx}`;
+                                                    document.getElementById(inputId)?.focus();
+                                                    document.getElementById(inputId)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                                }}
+                                                className={cn(
+                                                    "absolute border border-emerald-500/50 hover:border-emerald-500 hover:bg-emerald-500/20 transition-all cursor-pointer group rounded-sm",
+                                                    box.confidence < 80 && "border-orange-500/50",
+                                                    // Se o texto da box estiver em um turno com discrepância, destaca em vermelho
+                                                    ocrData.blocks.some(b => b.turnos.some(t =>
+                                                        (t.totalOriginal && Math.abs(t.valores.reduce((acc, v) => acc + (parseFloat(v.val) || 0), 0) - t.totalOriginal) > 2) &&
+                                                        (t.valores.some(v => v.bbox?.text === box.text) || t.totalBbox?.text === box.text)
+                                                    )) && "border-red-600 bg-red-600/10 z-30 ring-2 ring-red-600/50"
+                                                )}
+                                                style={{
+                                                    left: `${(box.x0 / 2 / ((document.getElementById('ocr-image-preview') as HTMLImageElement)?.naturalWidth || 1)) * 100}%`,
+                                                    top: `${(box.y0 / 2 / ((document.getElementById('ocr-image-preview') as HTMLImageElement)?.naturalHeight || 1)) * 100}%`,
+                                                    width: `${((box.x1 - box.x0) / 2 / ((document.getElementById('ocr-image-preview') as HTMLImageElement)?.naturalWidth || 1)) * 100}%`,
+                                                    height: `${((box.y1 - box.y0) / 2 / ((document.getElementById('ocr-image-preview') as HTMLImageElement)?.naturalHeight || 1)) * 100}%`
+                                                }}
+                                            >
+                                                <div className="absolute bottom-full left-0 bg-black text-white text-[8px] px-1 rounded opacity-0 group-hover:opacity-100 whitespace-nowrap z-50 pointer-events-none">
+                                                    {box.text} ({Math.round(box.confidence)}%)
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
                             </div>
                         )}
 
@@ -661,8 +701,8 @@ export default function Operacao() {
                                             </div>
                                             <div className="space-y-6">
                                                 {block.turnos.map((turno, tIdx) => {
-                                                    const totalTurno = turno.valores.reduce((a, b) => a + (parseFloat(b.replace(/\./g, "").replace(",", ".")) || 0), 0);
-                                                    const hasDiscrepancy = turno.totalOriginal && Math.abs(totalTurno - turno.totalOriginal) > 2; // tolerância pequena
+                                                    const totalTurno = turno.valores.reduce((a, b) => a + (parseFloat(b.val.replace(/\./g, "").replace(",", ".")) || 0), 0);
+                                                    const hasDiscrepancy = turno.totalOriginal && Math.abs(totalTurno - turno.totalOriginal) > 2;
 
                                                     return (
                                                         <div key={tIdx} className={cn(
@@ -690,16 +730,25 @@ export default function Operacao() {
                                                                 </span>
                                                             </div>
                                                             <div className="grid grid-cols-6 gap-2">
-                                                                {turno.valores.map((val, vIdx) => (
-                                                                    <Input key={vIdx} value={val} onChange={(e) => {
-                                                                        const newBlocks = [...ocrData.blocks];
-                                                                        newBlocks[bIdx].turnos[tIdx].valores[vIdx] = e.target.value;
-                                                                        setOcrData({ ...ocrData, blocks: newBlocks });
-                                                                    }} className="text-center font-mono text-sm h-8" />
+                                                                {turno.valores.map((item, vIdx) => (
+                                                                    <Input
+                                                                        key={vIdx}
+                                                                        id={`ocr-input-${ocrData.allBoxes.findIndex(b => b.text === item.bbox?.text && b.x0 === item.bbox?.x0)}`}
+                                                                        value={item.val}
+                                                                        onChange={(e) => {
+                                                                            const newBlocks = [...ocrData.blocks];
+                                                                            newBlocks[bIdx].turnos[tIdx].valores[vIdx].val = e.target.value;
+                                                                            setOcrData({ ...ocrData, blocks: newBlocks });
+                                                                        }}
+                                                                        className={cn(
+                                                                            "text-center font-mono text-sm h-8 transition-all hover:ring-2 hover:ring-emerald-500",
+                                                                            hasDiscrepancy && "border-red-200 focus:border-red-500 focus:ring-red-500"
+                                                                        )}
+                                                                    />
                                                                 ))}
                                                                 <button onClick={() => {
                                                                     const newBlocks = [...ocrData.blocks];
-                                                                    newBlocks[bIdx].turnos[tIdx].valores.push("0");
+                                                                    newBlocks[bIdx].turnos[tIdx].valores.push({ val: "0" });
                                                                     setOcrData({ ...ocrData, blocks: newBlocks });
                                                                 }} className="border border-dashed rounded text-neutral-400 hover:text-emerald-500">+</button>
                                                             </div>
@@ -708,7 +757,7 @@ export default function Operacao() {
                                                 })}
                                                 <Button variant="outline" size="sm" className="w-full border-dashed text-xs uppercase" onClick={() => {
                                                     const newBlocks = [...ocrData.blocks];
-                                                    newBlocks[bIdx].turnos.push({ nome: "NOVO TURNO", valores: ["0", "0", "0"] });
+                                                    newBlocks[bIdx].turnos.push({ nome: "NOVO TURNO", valores: [{ val: "0" }, { val: "0" }, { val: "0" }] });
                                                     setOcrData({ ...ocrData, blocks: newBlocks });
                                                 }}>+ Turno</Button>
                                             </div>
