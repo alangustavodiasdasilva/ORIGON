@@ -127,15 +127,14 @@ export default function Operacao() {
                         return;
                     }
 
-                    // Aumentar a escala pode ajudar o OCR em imagens pequenas
-                    const scale = 2;
+                    // Escala 3x é o ideal para fontes pequenas de relatórios térmicos/impressos
+                    const scale = 3;
                     canvas.width = img.width * scale;
                     canvas.height = img.height * scale;
 
                     ctx.imageSmoothingEnabled = false;
                     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
-                    // Filtro de contraste e tons de cinza
                     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
                     const data = imageData.data;
 
@@ -143,15 +142,10 @@ export default function Operacao() {
                         const r = data[i];
                         const g = data[i + 1];
                         const b = data[i + 2];
-
-                        // Grayscale
                         let gray = 0.2126 * r + 0.7152 * g + 0.0722 * b;
 
-                        // Binarização agressiva para texto preto no branco
-                        // Se for mais claro que 180, vira branco total. Se não, preto total.
-                        const threshold = 180;
-                        const v = gray > threshold ? 255 : 0;
-
+                        // Threshold dinâmico: melhora nitidez de números levemente "apagados"
+                        const v = gray > 170 ? 255 : 0;
                         data[i] = data[i + 1] = data[i + 2] = v;
                     }
 
@@ -162,6 +156,18 @@ export default function Operacao() {
             };
             reader.readAsDataURL(imageBlob);
         });
+    };
+
+    // Função para corrigir erros comuns de OCR (Letras que parecem números)
+    const fixOCRCharacters = (text: string): string => {
+        return text
+            .replace(/O/g, '0')
+            .replace(/I/g, '1')
+            .replace(/l/g, '1')
+            .replace(/B/g, '8')
+            .replace(/S/g, '5')
+            .replace(/Z/g, '7')
+            .replace(/G/g, '6');
     };
 
     const processImageOCR = async (imageFile: File) => {
@@ -212,18 +218,21 @@ export default function Operacao() {
                 if (currentBlock && line.toUpperCase().includes('TURNO')) {
                     const turnoNameMatch = line.match(/TURNO\s*\d+/i);
                     const turnoName = turnoNameMatch ? turnoNameMatch[0].toUpperCase() : "TURNO GERAL";
-                    const tokens = line.replace(/[.,]/g, '').split(/[\s-]+/); // Split por espaço ou hífen (ruído comum)
+
+                    // Corrigir caracteres e remover separadores de milhar (ponto/vírgula no meio do número)
+                    const cleanLine = fixOCRCharacters(line);
+                    const tokens = cleanLine.split(/[\s-]+/);
                     const numbers: number[] = [];
 
                     tokens.forEach(t => {
-                        // Tenta remover qualquer caractere não numérico que sobrou
-                        const cleanT = t.replace(/\D/g, '');
+                        // Trata números como "1.000" removendo pontos apenas se for milhar
+                        const cleanT = t.replace(/[.,]/g, '').replace(/\D/g, '');
                         if (cleanT.length === 0) return;
 
                         const val = parseInt(cleanT);
-                        // Filtra ruído (números muito pequenos geralmente são índices), mas mantém o que parece produção
-                        if (!isNaN(val) && (val >= 10 || val === 0)) {
-                            numbers.push(val);
+                        // Filtra ruído e ignora o "1" ou "2" do "TURNO 1", "TURNO 2"
+                        if (!isNaN(val) && val !== 1 && val !== 2 && val !== 3) {
+                            if (val >= 10 || val === 0) numbers.push(val);
                         }
                     });
 
