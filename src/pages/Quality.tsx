@@ -42,10 +42,12 @@ export default function Quality() {
         setIsLoading(true);
         try {
             // 1. Load Labs (Critical for navigation)
+            // 1. Load Labs (Critical for navigation)
             const { LabService } = await import('@/entities/Lab');
             const labsData = await LabService.list().catch(e => {
                 console.error("Failed to load labs:", e);
-                throw new Error("Falha ao listar laboratórios.");
+                addToast({ title: "Aviso: Falha ao carregar laboratórios", description: "Tente recarregar a página.", type: "warning" });
+                return [];
             });
             setLabs(labsData);
 

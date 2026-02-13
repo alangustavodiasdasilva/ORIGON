@@ -1,4 +1,4 @@
-import { Outlet, Link, useLocation, useNavigate } from "react-router-dom";
+import { Outlet, Link, useLocation } from "react-router-dom";
 import { useState, useEffect } from "react";
 import {
     LayoutDashboard,
@@ -30,8 +30,7 @@ import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 
 export default function Layout() {
     const location = useLocation();
-    const { user, logout, currentLab, deselectLab } = useAuth();
-    const navigate = useNavigate();
+    const { user, logout } = useAuth();
     const { toasts } = useToast();
     const { t, language, setLanguage } = useLanguage();
     const [onlineUsers, setOnlineUsers] = useState<Analista[]>([]);
@@ -300,18 +299,6 @@ export default function Layout() {
 
                         {/* Notification Center */}
                         <NotificationCenter />
-
-                        {/* Lab Switcher */}
-                        {isAdmin && currentLab && (
-                            <button
-                                onClick={() => { deselectLab(); navigate('/quality'); }}
-                                className="hidden md:flex items-center gap-2 px-3 py-2 mr-4 text-xs font-bold uppercase tracking-widest text-neutral-400 hover:text-red-600 hover:bg-neutral-100 rounded-lg transition-colors border border-transparent hover:border-red-100"
-                                title="Trocar Laboratório"
-                            >
-                                <Network className="h-4 w-4" />
-                                <span>Trocar Lab</span>
-                            </button>
-                        )}
 
                         {/* Admin Tools */}
                         {isAdmin && (
