@@ -32,9 +32,14 @@ const saveStoredLabs = (labs: Lab[]) => {
 export const LabService = {
     async list(): Promise<Lab[]> {
         if (isSupabaseEnabled()) {
-            const { data, error } = await supabase.from('laboratorios').select('*');
-            if (error) throw error;
-            return data;
+            try {
+                const { data, error } = await supabase.from('laboratorios').select('*');
+                if (error) throw error;
+                return data;
+            } catch (error) {
+                console.warn("Supabase (Laboratorios) unavailable, falling back to local storage:", error);
+                return getStoredLabs();
+            }
         }
         return getStoredLabs();
     },

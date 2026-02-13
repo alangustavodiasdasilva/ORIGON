@@ -27,13 +27,7 @@ const CATS_KEY = 'fibertech_audit_categories';
 const isSupabaseEnabled = () => !!import.meta.env.VITE_SUPABASE_URL && !!import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 let detectedDbColumns: string[] = [];
-// Helper to find best matching column
-const findCol = (details: string[], cols: string[]) => {
-    for (const d of details) {
-        if (cols.includes(d)) return d;
-    }
-    return details[0]; // fallback
-};
+// Helper removed as it was unused
 
 const DEFAULT_CATEGORIES: AuditCategory[] = [
     { id: "calib", name: "Certificados de Calibração", description: "Certificados HVI, balanças e equipamentos auxiliares." },
@@ -47,18 +41,21 @@ export const AuditService = {
     // --- CATEGORIES ---
     async listCategories(): Promise<AuditCategory[]> {
         if (isSupabaseEnabled()) {
-            const { data, error } = await supabase
-                .from('auditoria_categorias')
-                .select('*');
+            try {
+                const { data, error } = await supabase
+                    .from('auditoria_categorias')
+                    .select('*');
 
-            if (error) {
-                console.error("Error fetching categories:", error);
-                throw error;
+                if (error) throw error;
+
+                return (data || []).map((d: any) => ({
+                    ...d,
+                    labId: d.lab_id
+                }));
+            } catch (error) {
+                console.warn("Supabase (Categorias) unavailable, falling back to local storage:", error);
+                // Fallback to local storage
             }
-            return (data || []).map((d: any) => ({
-                ...d,
-                labId: d.lab_id
-            }));
         }
         const data = localStorage.getItem(CATS_KEY);
         if (!data) {
@@ -119,74 +116,75 @@ export const AuditService = {
     // --- DOCUMENTS ---
     async list(): Promise<AuditDocument[]> {
         if (isSupabaseEnabled()) {
-            console.log("DEBUG: Fetching audit_docs...");
-            const { data, error } = await supabase
-                .from('auditoria_documentos')
-                .select('*');
+            try {
+                console.log("DEBUG: Fetching audit_docs...");
+                const { data, error } = await supabase
+                    .from('auditoria_documentos')
+                    .select('*');
 
-            if (error) {
-                console.error("DEBUG: Fetch error audit_docs:", error);
-                throw error;
-            }
+                if (error) throw error;
 
-            if (data && data.length > 0) {
-                detectedDbColumns = Object.keys(data[0]);
-                console.log("DEBUG: Columns found:", detectedDbColumns);
-            }
-
-            const docs = (data || []).map((d: any) => {
-                try {
-                    return {
-                        id: d.id,
-                        name: d.name || 'Sem Nome',
-                        fileName: d.fileName || d.filename || d.file_name || d.name || 'unknown',
-                        fileSize: d.fileSize || d.filesize || d.file_size || 0,
-                        fileType: d.fileType || d.filetype || d.file_type || 'application/octet-stream',
-                        uploadDate: d.uploadDate || d.uploaddate || d.upload_date || d.created_at || new Date().toISOString(),
-                        category: d.category || 'Geral',
-                        analystName: d.analystName || d.analystname || d.analyst_name || 'Desconhecido',
-                        status: d.status || 'verified',
-                        labId: d.labId || d.labid || d.lab_id,
-                        data: d.data
-                    };
-                } catch (err) {
-                    console.error("Mapping error for doc:", d, err);
-                    return null;
+                if (data && data.length > 0) {
+                    detectedDbColumns = Object.keys(data[0]);
+                    console.log("DEBUG: Columns found:", detectedDbColumns);
                 }
-            }).filter((d: any) => d !== null) as AuditDocument[];
 
-            // Post-process: Generate Signed URLs for Storage Paths
-            // Identify paths: Not empty, not base64 (starts with data:), not http (already public/external)
-            const pathsToSign: string[] = [];
-            const docIndices: number[] = [];
+                const docs = (data || []).map((d: any) => {
+                    try {
+                        return {
+                            id: d.id,
+                            name: d.name || 'Sem Nome',
+                            fileName: d.fileName || d.filename || d.file_name || d.name || 'unknown',
+                            fileSize: d.fileSize || d.filesize || d.file_size || 0,
+                            fileType: d.fileType || d.filetype || d.file_type || 'application/octet-stream',
+                            uploadDate: d.uploadDate || d.uploaddate || d.upload_date || d.created_at || new Date().toISOString(),
+                            category: d.category || 'Geral',
+                            analystName: d.analystName || d.analystname || d.analyst_name || 'Desconhecido',
+                            status: d.status || 'verified',
+                            labId: d.labId || d.labid || d.lab_id,
+                            data: d.data
+                        };
+                    } catch (err) {
+                        console.error("Mapping error for doc:", d, err);
+                        return null;
+                    }
+                }).filter((d: any) => d !== null) as AuditDocument[];
 
-            docs.forEach((doc, index) => {
-                if (doc.data && !doc.data.startsWith('data:') && !doc.data.startsWith('http')) {
-                    pathsToSign.push(doc.data);
-                    docIndices.push(index);
-                }
-            });
+                // Post-process: Generate Signed URLs for Storage Paths
+                const pathsToSign: string[] = [];
+                const docIndices: number[] = [];
 
-            if (pathsToSign.length > 0) {
-                console.log("DEBUG: Signing URLs for", pathsToSign.length, "docs");
-                const { data: signedData, error: signError } = await supabase.storage
-                    .from('audit-docs')
-                    .createSignedUrls(pathsToSign, 3600); // Valid for 1 hour
+                docs.forEach((doc, index) => {
+                    if (doc.data && !doc.data.startsWith('data:') && !doc.data.startsWith('http')) {
+                        pathsToSign.push(doc.data);
+                        docIndices.push(index);
+                    }
+                });
 
-                if (signedData) {
-                    signedData.forEach((item, i) => {
-                        if (item.signedUrl) {
-                            docs[docIndices[i]].data = item.signedUrl;
-                        } else {
-                            console.warn("Failed to sign url for path:", pathsToSign[i], item.error);
+                if (pathsToSign.length > 0) {
+                    try {
+                        const { data: signedData, error: _signError } = await supabase.storage
+                            .from('audit-docs')
+                            .createSignedUrls(pathsToSign, 3600); // Valid for 1 hour
+
+                        if (signedData) {
+                            signedData.forEach((item, i) => {
+                                if (item.signedUrl) {
+                                    docs[docIndices[i]].data = item.signedUrl;
+                                }
+                            });
                         }
-                    });
-                } else if (signError) {
-                    console.error("Error batch signing URLs:", signError);
+                    } catch (signErr) {
+                        console.warn("Failed to sign URLs, proceeding with raw paths:", signErr);
+                    }
                 }
-            }
 
-            return docs.sort((a, b) => new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime());
+                return docs.sort((a, b) => new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime());
+
+            } catch (authError) {
+                console.warn("Supabase (Audit Docs) unavailable, falling back to local storage:", authError);
+                // Fallback proceed to local storage code below
+            }
         }
         const data = localStorage.getItem(DOCS_KEY);
         if (!data) return [];
@@ -239,11 +237,10 @@ export const AuditService = {
             if (file) {
                 try {
                     console.log("DEBUG: Starting Storage Upload...", file.name);
-                    const fileExt = file.name.split('.').pop() || 'file';
                     const cleanName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
                     const uniquePath = `${Date.now()}_${cleanName}`;
 
-                    const { data: uploadData, error: uploadError } = await supabase.storage
+                    const { error: uploadError } = await supabase.storage
                         .from('audit-docs')
                         .upload(uniquePath, file, {
                             cacheControl: '3600',

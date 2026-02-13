@@ -269,10 +269,32 @@ export default function Quality() {
                         <div className="h-48 w-64 bg-neutral-200 rounded-2xl"></div>
                     </div>
                 ) : labs.length === 0 ? (
-                    <div className="text-center p-8 border-2 border-dashed border-neutral-300 rounded-2xl">
-                        <p className="text-neutral-500 font-mono">Nenhum laboratório encontrado.</p>
-                        <div className="mt-4 p-2 bg-yellow-50 text-yellow-800 text-xs rounded border border-yellow-200">
-                            Verifique se existem laboratórios cadastrados no módulo Admin.
+                    <div className="text-center p-8 border-2 border-dashed border-neutral-300 rounded-2xl flex flex-col items-center">
+                        <ShieldCheck className="h-12 w-12 text-neutral-300 mb-4" />
+                        <p className="text-neutral-500 font-mono mb-6">Nenhum laboratório encontrado.</p>
+
+                        <div className="flex gap-4">
+                            <Button
+                                onClick={() => loadInitialData()}
+                                variant="outline"
+                                className="border-black hover:bg-neutral-50"
+                            >
+                                <ArrowRight className="mr-2 h-4 w-4" />
+                                Tentar Novamente
+                            </Button>
+
+                            <Button
+                                onClick={() => window.location.href = '#/admin'}
+                                variant="destructive"
+                                className="bg-black hover:bg-neutral-800 text-white"
+                            >
+                                <Settings className="mr-2 h-4 w-4" />
+                                Gerenciar Labs
+                            </Button>
+                        </div>
+
+                        <div className="mt-8 p-4 bg-yellow-50 text-yellow-800 text-xs rounded border border-yellow-200 max-w-md">
+                            Verifique se existem laboratórios cadastrados no módulo Admin e se sua conexão com o banco de dados está ativa.
                         </div>
                     </div>
                 ) : (
@@ -349,11 +371,11 @@ export default function Quality() {
                         {user?.acesso === 'admin_global' && currentLab && (
                             <Button
                                 onClick={() => deselectLab()}
-                                variant="destructive"
-                                className="h-12 px-6 font-bold text-[10px] uppercase tracking-widest rounded-none bg-red-600 hover:bg-red-700 text-white border-none"
+                                variant="outline"
+                                className="h-12 px-6 font-bold text-[10px] uppercase tracking-widest rounded-none border-black hover:bg-black hover:text-white transition-colors"
                             >
                                 <ArrowLeft className="mr-2 h-4 w-4" />
-                                Sair do Lab
+                                Trocar Laboratório
                             </Button>
                         )}
 

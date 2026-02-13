@@ -2,7 +2,7 @@ import { useState } from "react";
 import type { Sample } from "@/entities/Sample";
 import { cn } from "@/lib/utils";
 import { calculateStatistics } from "@/lib/stats";
-import { AlertTriangle, Palette, Box, Tag, Cpu, ArrowUpDown, ArrowUp, ArrowDown, Trash2, Calendar, Hash, FileDown } from "lucide-react";
+import { AlertTriangle, Palette, Box, Tag, Cpu, ArrowUpDown, ArrowUp, ArrowDown, Trash2, Calendar, Hash, FileDown, Lock } from "lucide-react";
 import { formatDecimalBR } from "@/services/ocrExtraction";
 import { HVIFileGeneratorService, type HVIPreviewData } from "@/services/HVIFileGeneratorService";
 import HVIPreviewModal from "@/components/HVIPreviewModal";
@@ -189,6 +189,7 @@ export default function AnalysisTable({ samples, onUpdateSample, onColorChange, 
                                         {COLORS.map((c) => (
                                             <button
                                                 key={c.value}
+                                                disabled={sample.locked}
                                                 onClick={() => {
                                                     // Se clicar na cor já selecionada, REMOVE a cor
                                                     if (sample.cor === c.value) {
@@ -198,13 +199,14 @@ export default function AnalysisTable({ samples, onUpdateSample, onColorChange, 
                                                     }
                                                 }}
                                                 className={cn(
-                                                    "w-5 h-5 rounded-full border-2 border-white shadow-md transition-all hover:scale-110 focus:outline-none",
+                                                    "w-5 h-5 rounded-full border-2 border-white shadow-md transition-all focus:outline-none",
+                                                    sample.locked ? "cursor-not-allowed opacity-50" : "hover:scale-110",
                                                     sample.cor === c.value
                                                         ? "scale-110 ring-2 ring-slate-900 ring-offset-1 opacity-100"
                                                         : "opacity-30 hover:opacity-100 hover:ring-2 hover:ring-slate-300 hover:ring-offset-1"
                                                 )}
                                                 style={{ backgroundColor: c.value }}
-                                                title={sample.cor === c.value ? `Remover cor ${c.label}` : `Aplicar ${c.label}`}
+                                                title={sample.locked ? "Amostra bloqueada" : (sample.cor === c.value ? `Remover cor ${c.label}` : `Aplicar ${c.label}`)}
                                             />
                                         ))}
                                     </div>
@@ -225,10 +227,14 @@ export default function AnalysisTable({ samples, onUpdateSample, onColorChange, 
                                                         "w-full text-right bg-transparent border-none focus:ring-0 p-0 font-mono font-black transition-all",
                                                         "text-lg tracking-tight",
                                                         isOutlier ? "text-amber-600" : (isHighlighted ? "text-white" : "text-slate-900"),
-                                                        isProcessing && "opacity-50"
+                                                        (isProcessing || sample.locked) && "opacity-50 cursor-not-allowed"
                                                     )}
                                                     defaultValue={formatDecimalBR(value ?? 0, decimals)}
                                                     onBlur={(e) => {
+                                                        if (sample.locked) {
+                                                            e.target.value = formatDecimalBR(value ?? 0, decimals);
+                                                            return;
+                                                        }
                                                         const inputValue = e.target.value.replace(',', '.');
                                                         const val = parseFloat(inputValue);
                                                         if (!isNaN(val) && val !== value) {
@@ -236,7 +242,7 @@ export default function AnalysisTable({ samples, onUpdateSample, onColorChange, 
                                                         }
                                                         e.target.value = formatDecimalBR(isNaN(val) ? (value ?? 0) : val, decimals);
                                                     }}
-                                                    disabled={isProcessing}
+                                                    disabled={isProcessing || sample.locked}
                                                 />
                                             </div>
                                         </td>
@@ -244,27 +250,44 @@ export default function AnalysisTable({ samples, onUpdateSample, onColorChange, 
                                 })}
                                 <td className="px-1 py-3 text-center">
                                     <div className="flex items-center justify-center gap-0.5">
-                                        <button
-                                            onClick={async () => {
-                                                const result = await HVIFileGeneratorService.generatePreviewForSample(sample, samples);
-                                                if (!result.success) {
-                                                    alert(result.message);
-                                                } else if (result.data) {
-                                                    setPreviewModal({ isOpen: true, data: result.data, sample });
-                                                }
-                                            }}
-                                            className="p-1 text-slate-300 hover:text-blue-600 hover:bg-blue-50 rounded transition-all"
-                                            title="Gerar arquivo HVI"
-                                        >
-                                            <FileDown className="h-3.5 w-3.5" />
-                                        </button>
-                                        <button
-                                            onClick={() => onDeleteSample(sample.id)}
-                                            className="p-1 text-slate-300 hover:text-rose-600 hover:bg-rose-50 rounded transition-all"
-                                            title={t('analysis.delete_sample')}
-                                        >
-                                            <Trash2 className="h-3.5 w-3.5" />
-                                        </button>
+                                        {sample.locked ? (
+                                            <button
+                                                onClick={() => {
+                                                    if (confirm("Deseja desbloquear esta amostra para edição?")) {
+                                                        onUpdateSample(sample.id, 'locked', false);
+                                                    }
+                                                }}
+                                                className="p-1 text-amber-500 hover:text-amber-600 hover:bg-amber-50 rounded transition-all"
+                                                title="Amostra Bloqueada (Clique para Desbloquear)"
+                                            >
+                                                <Lock className="h-3.5 w-3.5" />
+                                            </button>
+                                        ) : (
+                                            <button
+                                                onClick={async () => {
+                                                    const result = await HVIFileGeneratorService.generatePreviewForSample(sample, samples);
+                                                    if (!result.success) {
+                                                        alert(result.message);
+                                                    } else if (result.data) {
+                                                        setPreviewModal({ isOpen: true, data: result.data, sample });
+                                                    }
+                                                }}
+                                                className="p-1 text-slate-300 hover:text-blue-600 hover:bg-blue-50 rounded transition-all"
+                                                title="Gerar arquivo HVI"
+                                            >
+                                                <FileDown className="h-3.5 w-3.5" />
+                                            </button>
+                                        )}
+
+                                        {!sample.locked && (
+                                            <button
+                                                onClick={() => onDeleteSample(sample.id)}
+                                                className="p-1 text-slate-300 hover:text-rose-600 hover:bg-rose-50 rounded transition-all"
+                                                title={t('analysis.delete_sample')}
+                                            >
+                                                <Trash2 className="h-3.5 w-3.5" />
+                                            </button>
+                                        )}
                                     </div>
                                 </td>
                             </tr>
@@ -286,6 +309,9 @@ export default function AnalysisTable({ samples, onUpdateSample, onColorChange, 
                     onConfirm={() => {
                         if (previewModal.data) {
                             HVIFileGeneratorService.downloadHVIFile(previewModal.data.content, previewModal.data.filename);
+                            if (previewModal.sample) {
+                                onUpdateSample(previewModal.sample.id, 'locked', true);
+                            }
                             setPreviewModal({ isOpen: false, data: null, sample: null });
                         }
                     }}

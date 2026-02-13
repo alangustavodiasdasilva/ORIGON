@@ -17,6 +17,7 @@ export interface Sample {
     data_analise?: string;
     hora_analise?: string;
     cor?: string; // Hex color code
+    locked?: boolean;
     historico_modificacoes: Array<{
         timestamp: string;
         usuario: string;
