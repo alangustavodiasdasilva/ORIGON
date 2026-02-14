@@ -193,11 +193,11 @@ export default function Operacao() {
             // 1. Pré-processar imagem (Escala + Contraste)
             const processedImageUrl = await preprocessImage(imageFile);
 
-            // 2. Usar Worker para mais controle de parâmetros
+            // 2. Usar Worker
             const worker = await Tesseract.createWorker('por');
 
             await worker.setParameters({
-                tessedit_char_whitelist: '0123456789/.,:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz ',
+                tessedit_char_whitelist: '0123456789/.,:-ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz ',
                 tessedit_pageseg_mode: Tesseract.PSM.AUTO,
             });
 
@@ -208,7 +208,7 @@ export default function Operacao() {
 
             // --- RECONSTRUÇÃO TABULAR POR GRID (X, Y) ---
             const yThreshold = 18; // px
-            const xThreshold = 45; // px
+            // const xThreshold = 45; // px (unused in logic but useful concept)
 
             const rawLines: { y: number; words: any[] }[] = [];
 
@@ -224,17 +224,9 @@ export default function Operacao() {
 
             rawLines.sort((a, b) => a.y - b.y);
 
-            // Identifica colunas globais (bins de X)
-            const xCenters = words.map((w: any) => (w.bbox.x0 + w.bbox.x1) / 2);
-            const xBins: number[] = [];
-            xCenters.forEach((cx: number) => {
-                if (!xBins.some(bx => Math.abs(bx - cx) < xThreshold)) {
-                    xBins.push(cx);
-                }
-            });
-            xBins.sort((a, b) => a - b);
-
             const blocks: OCRBlock[] = [];
+
+            // Generate visual boxes
             const allBoxes: OCRBox[] = words.map((w: any) => ({
                 text: w.text,
                 x0: w.bbox.x0,
@@ -245,7 +237,8 @@ export default function Operacao() {
             }));
 
             let currentBlock: OCRBlock | null = null;
-            const dateRegex = /(\d{1,2})[\/\.](\d{1,2})[\/\.](\d{4})/;
+            // Robust Date Regex: matches DD/MM/YYYY or DD-MM-YYYY or DD.MM.YYYY, 2 or 4 digit years
+            const dateRegex = /(\d{1,2})[\/\.\-\s](\d{1,2})[\/\.\-\s](\d{2,4})/;
 
             rawLines.forEach(lineObj => {
                 lineObj.words.sort((a, b) => a.bbox.x0 - b.bbox.x0);
@@ -255,7 +248,10 @@ export default function Operacao() {
                 // 1. Detecção de Data (Início de Bloco)
                 const dateMatch = lineText.match(dateRegex);
                 if (dateMatch) {
-                    const newDate = `${dateMatch[3]}-${dateMatch[2].padStart(2, '0')}-${dateMatch[1].padStart(2, '0')}`;
+                    let year = dateMatch[3];
+                    if (year.length === 2) year = `20${year}`;
+                    const newDate = `${year}-${dateMatch[2].padStart(2, '0')}-${dateMatch[1].padStart(2, '0')}`;
+
                     let existingBlock = blocks.find(b => b.data === newDate);
                     if (!existingBlock) {
                         existingBlock = {
@@ -269,10 +265,21 @@ export default function Operacao() {
                 }
 
                 // 2. Detecção de Turno/Linha de Dados
-                const isTurno = upperLineText.includes('TURNO') || upperLineText.includes('TURMO') || upperLineText.includes('TUR') || upperLineText.includes('T1') || upperLineText.includes('T2');
-                const isTotalRow = upperLineText.includes('TOTAL') || upperLineText.includes('GERAL') || upperLineText.includes('SOMA');
+                // Keywords expanding common OCR errors for TURNO (T1, T2, TURMO, etc)
+                const isTurno = upperLineText.match(/TUR|TUN|TRN|T1|T2|MANHA|TARDE|NOITE/i);
+                const isTotalRow = upperLineText.match(/TOTAL|GERAL|SOMA|TOTA/i);
 
-                if (currentBlock && (isTurno || isTotalRow)) {
+                if (isTurno || isTotalRow) {
+                    // Fallback: If no date found yet, create a "Pending Date" block
+                    if (!currentBlock) {
+                        currentBlock = {
+                            id: "pending_date_" + Math.random().toString(36).substr(2, 5),
+                            data: new Date().toISOString().split('T')[0], // Default to today
+                            turnos: []
+                        };
+                        blocks.push(currentBlock);
+                    }
+
                     const labelMatch = lineText.match(/(TURNO|TURMO|TUR|TOTAL|SOMA|T1|T2)\s*(\d+)?/i);
                     const label = labelMatch ? labelMatch[0].toUpperCase() : (isTotalRow ? "TOTAL" : "TURNO");
 
@@ -281,96 +288,73 @@ export default function Operacao() {
                     lineObj.words.forEach(w => {
                         // Limpeza BR agressiva: "1.006" -> 1006
                         const cleanToken = fixOCRCharacters(w.text).replace(/\./g, '');
+                        // Check if token looks like a number
                         const numOnly = cleanToken.replace(/[^\d]/g, '');
-                        if (numOnly.length === 0) return;
 
-                        const val = parseInt(numOnly);
-                        if (!isNaN(val)) {
-                            // Pula se for o próprio número do rótulo (ex: "TURNO 1" -> pula o "1")
-                            const isLabelNum = labelMatch && labelMatch[2] === String(val) && rowValues.length === 0;
-                            if (isLabelNum) return;
-
-                            rowValues.push({
-                                val: String(val),
-                                x: (w.bbox.x0 + w.bbox.x1) / 2,
-                                bbox: {
-                                    text: w.text,
-                                    x0: w.bbox.x0,
-                                    y0: w.bbox.y0,
-                                    x1: w.bbox.x1,
-                                    y1: w.bbox.y1,
-                                    confidence: w.confidence
-                                }
-                            });
-                        }
-                    });
-
-                    if (rowValues.length > 1) {
-                        const lastItem = rowValues[rowValues.length - 1];
-                        const prevItems = rowValues.slice(0, -1).map(r => ({ val: r.val, bbox: r.bbox }));
-                        const sumPrev = prevItems.reduce((acc, curr) => acc + (parseInt(curr.val) || 0), 0);
-                        const lastVal = parseInt(lastItem.val);
-
-                        // --- MATH HEALING ---
-                        // Se a soma não bate por pouco, tenta "videntes" (ex: trocar '6' por '5' se fechar a conta)
-                        let fixedValues = [...prevItems];
-                        let finalSum = sumPrev;
-                        const diff = sumPrev - lastVal;
-
-                        if (Math.abs(diff) > 0 && Math.abs(diff) < 10) {
-                            // Tenta curar um dos valores
-                            for (let i = 0; i < fixedValues.length; i++) {
-                                const currentVal = parseInt(fixedValues[i].val);
-                                const candidateVal = currentVal - diff;
-                                if (candidateVal >= 0) {
-                                    // Se a confiança for baixa, a chance de erro é maior
-                                    if ((fixedValues[i].bbox?.confidence || 100) < 95) {
-                                        fixedValues[i].val = String(candidateVal);
-                                        finalSum = lastVal;
-                                        break;
-                                    }
+                        if (numOnly.length > 0) {
+                            const val = parseInt(numOnly);
+                            if (!isNaN(val)) {
+                                // Ignore label number if it appears as data (e.g. from "TURNO 1")
+                                const isLabelNum = labelMatch && labelMatch[2] === String(val) && rowValues.length === 0;
+                                if (!isLabelNum) {
+                                    rowValues.push({
+                                        val: String(val),
+                                        x: (w.bbox.x0 + w.bbox.x1) / 2,
+                                        bbox: {
+                                            text: w.text,
+                                            x0: w.bbox.x0,
+                                            y0: w.bbox.y0,
+                                            x1: w.bbox.x1,
+                                            y1: w.bbox.y1,
+                                            confidence: w.confidence
+                                        }
+                                    });
                                 }
                             }
                         }
+                    });
 
-                        if (Math.abs(finalSum - lastVal) < 2) {
-                            currentBlock.turnos.push({
-                                nome: label,
-                                valores: fixedValues,
-                                totalOriginal: lastVal,
-                                totalBbox: lastItem.bbox
-                            });
-                        } else {
-                            currentBlock.turnos.push({
-                                nome: label,
-                                valores: rowValues.map(r => ({ val: r.val, bbox: r.bbox }))
-                            });
-                        }
+                    // Only add if we found reasonable data (at least 2 columns usually, but accept 1)
+                    if (rowValues.length > 0) {
+                        currentBlock.turnos.push({
+                            nome: label,
+                            valores: rowValues.map(r => ({ val: r.val, bbox: r.bbox }))
+                        });
                     }
                 }
             });
 
+            // Fallback strategy: If no structured blocks found but we have lines, try to capture raw numbers
             if (blocks.length === 0 && rawLines.length > 0) {
                 const fallbackBlock: OCRBlock = {
                     id: "fallback",
                     data: new Date().toISOString().split('T')[0],
                     turnos: []
                 };
+
                 rawLines.forEach(lObj => {
                     const rowValues: { val: string; bbox?: OCRBox }[] = [];
                     lObj.words.forEach(w => {
                         const v = fixOCRCharacters(w.text).replace(/\./g, '').replace(/[^\d]/g, '');
                         if (v.length > 0) rowValues.push({ val: v, bbox: { text: w.text, x0: w.bbox.x0, y0: w.bbox.y0, x1: w.bbox.x1, y1: w.bbox.y1, confidence: w.confidence } });
                     });
-                    if (rowValues.length > 0) fallbackBlock.turnos.push({ nome: "LINHA", valores: rowValues });
+
+                    // Heuristic: If line has > 3 numbers, it's likely a data row
+                    if (rowValues.length > 3) {
+                        fallbackBlock.turnos.push({ nome: "LINHA DETECTADA", valores: rowValues });
+                    }
                 });
-                if (fallbackBlock.turnos.length > 0) blocks.push(fallbackBlock);
+
+                if (fallbackBlock.turnos.length > 0) {
+                    blocks.push(fallbackBlock);
+                    addToast({ title: "Modo Fallback", description: "Estrutura não reconhecida, exibindo números brutos.", type: "warning" });
+                }
             }
 
             setOcrData({ blocks, allBoxes });
         } catch (error) {
             console.error(error);
-            addToast({ title: "Erro no OCR", description: "Não foi possível ler a imagem.", type: "error" });
+            addToast({ title: "Erro no OCR", description: "Não foi possível ler a imagem. Tente melhorar o contraste.", type: "error" });
         } finally {
             setIsProcessingOCR(false);
         }
