@@ -58,7 +58,15 @@ export const SampleService = {
         if (isSupabaseEnabled()) {
             const { data, error } = await supabase.from('amostras').select('*');
             if (error) throw error;
-            return data || [];
+            if (data && data.length > 0) return data;
+
+            // CRITICAL SAFETY NET
+            const local = getStoredSamples();
+            if (local.length > 0) {
+                console.warn("Supabase (Samples) empty. Using Local Storage Fallback.");
+                return local;
+            }
+            return [];
         }
         return getStoredSamples();
     },

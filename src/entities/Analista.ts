@@ -41,7 +41,16 @@ export const AnalistaService = {
         if (isSupabaseEnabled()) {
             const { data, error } = await supabase.from('analistas').select('*');
             if (error) throw error;
-            return data || [];
+            // CRITICAL SAFETY NET: If Supabase empty, try local first
+            if (data && data.length > 0) return data;
+
+            const localData = getStoredAnalistas();
+            if (localData.length > 0) {
+                console.warn("Supabase (Analistas) empty. Fall back to local.");
+                return localData;
+            }
+
+            return [];
         }
         return getStoredAnalistas();
     },

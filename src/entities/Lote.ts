@@ -43,7 +43,15 @@ export const LoteService = {
         if (isSupabaseEnabled()) {
             const { data, error } = await supabase.from('lotes').select('*').order('created_at', { ascending: false });
             if (error) throw error;
-            return data || [];
+            if (data && data.length > 0) return data;
+
+            // CRITICAL SAFETY NET
+            const local = getStoredLotes();
+            if (local.length > 0) {
+                console.warn("Supabase (Lotes) empty. Using Local Storage Fallback.");
+                return local;
+            }
+            return [];
         }
         return getStoredLotes();
     },

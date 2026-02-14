@@ -35,6 +35,16 @@ export const LabService = {
             try {
                 const { data, error } = await supabase.from('laboratorios').select('*');
                 if (error) throw error;
+
+                // CRITICAL SAFETY NET: If Supabase is empty but we have local data, use local data
+                if ((!data || data.length === 0)) {
+                    const localData = getStoredLabs();
+                    if (localData.length > 0) {
+                        console.warn("Supabase is empty. Falling back to LOCAL STORAGE to prevent data loss.");
+                        return localData;
+                    }
+                }
+
                 return data;
             } catch (error) {
                 console.warn("Supabase (Laboratorios) unavailable, falling back to local storage:", error);
