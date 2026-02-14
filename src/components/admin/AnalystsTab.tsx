@@ -37,9 +37,11 @@ export default function AnalystsTab() {
         const promises: Promise<any>[] = [LabService.list()];
 
         // Check scope
+        const isGlobalAdmin = currentUser?.acesso === 'admin_global';
         const targetLabId = currentLab?.id || (currentUser?.acesso === 'admin_lab' ? currentUser.lab_id : null);
 
-        if (targetLabId) {
+        // Global admin sees EVERYTHING, lab admin sees only their lab
+        if (targetLabId && !isGlobalAdmin) {
             promises.push(AnalistaService.listByLab(targetLabId));
         } else {
             promises.push(AnalistaService.list());
@@ -51,7 +53,8 @@ export default function AnalystsTab() {
     };
 
     const handleOpenDialog = (a?: Analista) => {
-        const targetLabId = currentLab?.id || (currentUser?.acesso === 'admin_lab' ? currentUser.lab_id : "");
+        // Default labId for new analyst
+        const defaultLabId = currentLab?.id || (currentUser?.acesso === 'admin_lab' ? (currentUser.lab_id || "") : "") || "";
 
         if (a) {
             setEditingAnalista(a);
@@ -61,7 +64,7 @@ export default function AnalystsTab() {
             setCargo(a.cargo);
             setAcesso(a.acesso);
             setLabId(a.lab_id || "");
-            setFoto(a.foto);
+            setFoto(a.foto || undefined);
         } else {
             setEditingAnalista(null);
             setNome("");
@@ -69,7 +72,7 @@ export default function AnalystsTab() {
             setSenha("");
             setCargo("");
             setAcesso("user");
-            setLabId(targetLabId || "");
+            setLabId(defaultLabId);
             setFoto(undefined);
         }
         setIsDialogOpen(true);
@@ -311,7 +314,8 @@ export default function AnalystsTab() {
                                         className="w-full h-10 rounded-none border border-neutral-300 px-3 text-xs font-mono uppercase focus:ring-0 focus:border-black focus:outline-none transition-all disabled:opacity-50 disabled:bg-neutral-100"
                                         value={labId}
                                         onChange={(e) => setLabId(e.target.value)}
-                                        disabled={!!targetLabId}
+                                        disabled={!!targetLabId && currentUser?.acesso !== 'admin_global'}
+                                        title="Selecione a unidade do laboratório"
                                     >
                                         <option value="">SELECIONE A UNIDADE...</option>
                                         {labs.map(l => (

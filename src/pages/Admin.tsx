@@ -225,8 +225,11 @@ function SystemConfigTab() {
     const [formMachineId, setFormMachineId] = useState("");
     const [formSerialNumber, setFormSerialNumber] = useState("");
     const [formModel, setFormModel] = useState<'USTER' | 'PREMIER'>("USTER");
+    const [formLabId, setFormLabId] = useState("");
 
     useEffect(() => {
+        const targetLabId = (currentLab?.id || (user?.acesso === 'admin_lab' ? user.lab_id : "")) || "";
+        setFormLabId(targetLabId);
         loadData();
         // Subscribe to real-time changes
         const unsubscribe = MachineService.subscribe(() => {
@@ -246,14 +249,15 @@ function SystemConfigTab() {
 
         // Load Machines
         try {
+            const isGlobalAdmin = user?.acesso === 'admin_global';
             const targetLabId = currentLab?.id || (user?.acesso === 'admin_lab' ? user.lab_id : null);
             let data: Machine[] = [];
 
-            if (targetLabId) {
+            if (targetLabId && !isGlobalAdmin) {
                 // Fetch only for the specific lab
                 data = await MachineService.listByLab(targetLabId);
-            } else if (user?.acesso === 'admin_global') {
-                // Fetch all if global admin
+            } else {
+                // Fetch all if global admin or no specific lab context
                 data = await MachineService.list();
             }
 
@@ -274,35 +278,24 @@ function SystemConfigTab() {
             return;
         }
 
-        const targetLabId = currentLab?.id || (user?.acesso === 'admin_lab' ? user.lab_id : null);
-        if (!targetLabId) {
+        if (!formLabId) {
             addToast({ title: "Erro: Nenhum laboratório selecionado", type: "error" });
             return;
         }
 
         try {
+            const payload = {
+                machineId: formMachineId.toUpperCase(),
+                serialNumber: formSerialNumber.toUpperCase(),
+                model: formModel,
+                labId: formLabId
+            };
+
             if (editingId) {
-                // Update
-                // Note: Security check handles by RLS on backend ideally, but we can double check logic if needed.
-                // For now, assuming UI context is correct.
-
-                await MachineService.update(editingId, {
-                    machineId: formMachineId.toUpperCase(),
-                    serialNumber: formSerialNumber.toUpperCase(),
-                    model: formModel,
-                    labId: targetLabId
-                });
-
+                await MachineService.update(editingId, payload);
                 addToast({ title: "Máquina Atualizada", type: "success" });
             } else {
-                // Create
-                await MachineService.create({
-                    machineId: formMachineId.toUpperCase(),
-                    serialNumber: formSerialNumber.toUpperCase(),
-                    model: formModel,
-                    labId: targetLabId
-                });
-
+                await MachineService.create(payload as any);
                 addToast({ title: "Máquina Adicionada", type: "success" });
             }
 
@@ -321,6 +314,7 @@ function SystemConfigTab() {
         setFormMachineId(machine.machineId);
         setFormSerialNumber(machine.serialNumber);
         setFormModel(machine.model);
+        setFormLabId(machine.labId);
     };
 
     const handleRemoveMachine = async (id: string) => {
@@ -465,10 +459,21 @@ function SystemConfigTab() {
                                 onChange={e => setFormSerialNumber(e.target.value)}
                                 className="w-full h-12 px-4 border border-neutral-200 text-xs font-mono uppercase bg-white focus:outline-none focus:border-black transition-colors"
                             />
+                        </div>                        {/* Campo Lab (Only for Global Admin) */}
+                        <div className="md:col-span-3 space-y-1">
+                            <label className="text-[9px] font-bold uppercase text-neutral-400">Laboratório</label>
+                            <select
+                                value={formLabId}
+                                onChange={e => setFormLabId(e.target.value)}
+                                disabled={user?.acesso !== 'admin_global' && !!(currentLab?.id || user?.lab_id)}
+                                className="w-full h-12 px-4 border border-neutral-200 text-xs font-mono uppercase bg-white focus:outline-none focus:border-black transition-colors disabled:opacity-50"
+                            >
+                                <option value="">SELECIONE O LAB</option>
+                                {labs.map(l => (
+                                    <option key={l.id} value={l.id}>{l.nome} ({l.codigo})</option>
+                                ))}
+                            </select>
                         </div>
-
-
-
                         {/* Campo Modelo */}
                         <div className="md:col-span-2 space-y-1">
                             <label className="text-[9px] font-bold uppercase text-neutral-400">Modelo HVI</label>
