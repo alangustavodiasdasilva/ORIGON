@@ -467,6 +467,8 @@ function SystemConfigTab() {
                                 onChange={e => setFormLabId(e.target.value)}
                                 disabled={user?.acesso !== 'admin_global' && !!(currentLab?.id || user?.lab_id)}
                                 className="w-full h-12 px-4 border border-neutral-200 text-xs font-mono uppercase bg-white focus:outline-none focus:border-black transition-colors disabled:opacity-50"
+                                title="Selecione o laboratório"
+                                aria-label="Selecione o laboratório"
                             >
                                 <option value="">SELECIONE O LAB</option>
                                 {labs.map(l => (

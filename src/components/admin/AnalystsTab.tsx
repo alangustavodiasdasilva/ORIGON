@@ -229,6 +229,8 @@ export default function AnalystsTab() {
                         <button
                             onClick={() => setIsDialogOpen(false)}
                             className="p-2 hover:bg-black hover:text-white transition-colors"
+                            title="Fechar janela"
+                            aria-label="Fechar janela"
                         >
                             <X className="h-4 w-4" />
                         </button>
@@ -256,6 +258,8 @@ export default function AnalystsTab() {
                                 className="hidden"
                                 accept="image/*"
                                 onChange={handleFileChange}
+                                title="Upload de foto de perfil"
+                                aria-label="Upload de foto de perfil"
                             />
                             <p className="text-[9px] font-bold uppercase text-neutral-400 tracking-widest">AVATAR DO USUÁRIO</p>
                         </div>
@@ -288,6 +292,8 @@ export default function AnalystsTab() {
                                     className="w-full h-10 rounded-none border border-neutral-300 px-3 text-xs font-mono uppercase focus:ring-0 focus:border-black focus:outline-none transition-all"
                                     value={acesso}
                                     onChange={(e) => setAcesso(e.target.value as AccessLevel)}
+                                    title="Selecione o nível de acesso"
+                                    aria-label="Selecione o nível de acesso"
                                 >
                                     <option value="user">ANALISTA</option>
                                     <option value="quality_admin">QUALIDADE (ADM)</option>
@@ -316,6 +322,7 @@ export default function AnalystsTab() {
                                         onChange={(e) => setLabId(e.target.value)}
                                         disabled={!!targetLabId && currentUser?.acesso !== 'admin_global'}
                                         title="Selecione a unidade do laboratório"
+                                        aria-label="Selecione a unidade do laboratório"
                                     >
                                         <option value="">SELECIONE A UNIDADE...</option>
                                         {labs.map(l => (
