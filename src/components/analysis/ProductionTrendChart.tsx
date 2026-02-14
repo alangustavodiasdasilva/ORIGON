@@ -18,18 +18,27 @@ interface ProductionTrendChartProps {
 
 // Cores por Turno
 // Cores por Turno mais escuras para melhor contraste
-const COLORS_MAP: Record<string, string> = {
-    "TURNO 1": "#1d4ed8", // Azul Escuro (blue-700)
-    "TURNO 2": "#047857", // Verde Escuro (emerald-700)
-    "TURNO 3": "#b45309", // Amarelo Escuro (amber-700)
-    "GERAL": "#4b5563",   // Cinza (gray-600)
-    "TOTAL DIA": "#000000" // Preto Forte
+// Cores por Turno
+const SHIFT_COLORS_CONFIG: Record<string, { hex: string, bg: string, text: string }> = {
+    "TURNO 1": { hex: "#1d4ed8", bg: "bg-blue-700", text: "text-blue-700" },
+    "TURNO 2": { hex: "#047857", bg: "bg-emerald-700", text: "text-emerald-700" },
+    "TURNO 3": { hex: "#b45309", bg: "bg-amber-700", text: "text-amber-700" },
+    "GERAL": { hex: "#4b5563", bg: "bg-gray-600", text: "text-gray-600" },
+    "TOTAL DIA": { hex: "#000000", bg: "bg-black", text: "text-black" }
 };
 
 // Paleta para Máquinas (Cores mais vibrantes e escuras)
-const MACHINE_COLORS = [
-    "#dc2626", "#ea580c", "#ca8a04", "#65a30d", "#0d9488",
-    "#0891b2", "#4f46e5", "#c026d3", "#e11d48", "#7c3aed"
+const MACHINE_COLORS_CONFIG = [
+    { hex: "#dc2626", bg: "bg-red-600", text: "text-red-600" },
+    { hex: "#ea580c", bg: "bg-orange-600", text: "text-orange-600" },
+    { hex: "#ca8a04", bg: "bg-yellow-600", text: "text-yellow-600" },
+    { hex: "#65a30d", bg: "bg-lime-600", text: "text-lime-600" },
+    { hex: "#0d9488", bg: "bg-teal-600", text: "text-teal-600" },
+    { hex: "#0891b2", bg: "bg-cyan-600", text: "text-cyan-600" },
+    { hex: "#4f46e5", bg: "bg-indigo-600", text: "text-indigo-600" },
+    { hex: "#c026d3", bg: "bg-fuchsia-600", text: "text-fuchsia-600" },
+    { hex: "#e11d48", bg: "bg-rose-600", text: "text-rose-600" },
+    { hex: "#7c3aed", bg: "bg-violet-600", text: "text-violet-600" }
 ];
 
 export default function ProductionTrendChart({ data }: ProductionTrendChartProps) {
@@ -428,17 +437,18 @@ export default function ProductionTrendChart({ data }: ProductionTrendChartProps
                     ? `M ${chartPoints[0].x},${chartPoints[0].y} ` + chartPoints.slice(1).map(p => `L ${p.x},${p.y}`).join(" ")
                     : null;
 
-                let color = "#000";
+                let config = { hex: "#000", bg: "bg-black", text: "text-black" };
                 if (viewMode === 'general' || viewMode === 'machine_comparison') {
-                    color = COLORS_MAP[name] || "#888";
+                    config = SHIFT_COLORS_CONFIG[name] || { hex: "#888", bg: "bg-neutral-400", text: "text-neutral-400" };
                 } else {
                     // detailed OR compare_machines_total
-                    color = MACHINE_COLORS[idx % MACHINE_COLORS.length];
+                    config = MACHINE_COLORS_CONFIG[idx % MACHINE_COLORS_CONFIG.length];
                 }
+                const color = config.hex;
 
                 const isTotal = name === 'TOTAL DIA';
 
-                return { name, color, points: chartPoints, path, isTotal };
+                return { name, color, config, points: chartPoints, path, isTotal };
             });
 
         const gridSteps = 6;
@@ -485,13 +495,13 @@ export default function ProductionTrendChart({ data }: ProductionTrendChartProps
 
         // Gerar as séries visuais para a legenda (Todas as disponíveis na visão atual)
         const legendSeries = Array.from(sortedData.series.keys()).map((name, idx) => {
-            let color = "#000";
+            let config = { hex: "#000", bg: "bg-black", text: "text-black" };
             if (viewMode === 'general' || viewMode === 'machine_comparison') {
-                color = COLORS_MAP[name] || "#888";
+                config = SHIFT_COLORS_CONFIG[name] || { hex: "#888", bg: "bg-neutral-400", text: "text-neutral-400" };
             } else {
-                color = MACHINE_COLORS[idx % MACHINE_COLORS.length];
+                config = MACHINE_COLORS_CONFIG[idx % MACHINE_COLORS_CONFIG.length];
             }
-            return { name, color };
+            return { name, config };
         });
 
         return {
@@ -825,8 +835,7 @@ export default function ProductionTrendChart({ data }: ProductionTrendChartProps
                                         title="Clique para isolar, Ctrl+Clique para múltiplo"
                                     >
                                         <div
-                                            className="w-2.5 h-2.5 rounded-full shrink-0 shadow-sm"
-                                            style={{ backgroundColor: s.color } as React.CSSProperties}
+                                            className={cn("w-2.5 h-2.5 rounded-full shrink-0 shadow-sm", s.config.bg)}
                                         />
                                         <span className={cn(
                                             "text-[10px] font-bold uppercase truncate transition-colors",

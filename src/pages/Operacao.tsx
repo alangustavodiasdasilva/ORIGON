@@ -708,6 +708,7 @@ export default function Operacao() {
                                                         (t.valores.some(v => v.bbox?.text === box.text) || t.totalBbox?.text === box.text)
                                                     )) && "border-red-600 bg-red-600/10 z-30 ring-2 ring-red-600/50"
                                                 )}
+                                                // eslint-disable-next-line
                                                 style={boxStyle}
                                                 onClick={() => {
                                                     const inputId = `ocr-input-${idx}`;

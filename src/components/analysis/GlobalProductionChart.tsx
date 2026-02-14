@@ -9,15 +9,15 @@ interface GlobalProductionChartProps {
     labs: any[]; // Array of { id: string, nome: string, ... }
 }
 
-const COLORS = [
-    "#000000", // Lab 1 - Preto
-    "#ef4444", // Lab 2 - Vermelho
-    "#22c55e", // Lab 3 - Verde
-    "#3b82f6", // Lab 4 - Azul
-    "#f59e0b", // Lab 5 - Amarelo
-    "#8b5cf6", // Lab 6 - Roxo
-    "#ec4899", // Lab 7 - Rosa
-    "#64748b", // Lab 8 - Cinza
+const CHART_CONFIG = [
+    { hex: "#000000", bg: "bg-black", text: "text-black" }, // Lab 1
+    { hex: "#ef4444", bg: "bg-red-500", text: "text-red-500" }, // Lab 2
+    { hex: "#22c55e", bg: "bg-green-500", text: "text-green-500" }, // Lab 3
+    { hex: "#3b82f6", bg: "bg-blue-500", text: "text-blue-500" }, // Lab 4
+    { hex: "#f59e0b", bg: "bg-amber-500", text: "text-amber-500" }, // Lab 5
+    { hex: "#8b5cf6", bg: "bg-violet-500", text: "text-violet-500" }, // Lab 6
+    { hex: "#ec4899", bg: "bg-pink-500", text: "text-pink-500" }, // Lab 7
+    { hex: "#64748b", bg: "bg-slate-500", text: "text-slate-500" }, // Lab 8
 ];
 
 const CustomTooltip = ({ active, payload, label }: any) => {
@@ -29,25 +29,26 @@ const CustomTooltip = ({ active, payload, label }: any) => {
                     {new Date(label).toLocaleDateString('pt-BR')}
                 </p>
                 <div className="space-y-1">
-                    {payload.map((entry: any, index: number) => (
-                        <div key={index} className="flex items-center gap-2 justify-between min-w-[150px]">
-                            <div className="flex items-center gap-2">
-                                <div
-                                    className="w-2 h-2 rounded-full"
-                                    style={{ backgroundColor: entry.color } as React.CSSProperties}
-                                />
-                                <span className="text-xs text-neutral-500 uppercase tracking-widest truncate max-w-[100px]">
-                                    {entry.name}
+                    {payload.map((entry: any, index: number) => {
+                        const config = CHART_CONFIG.find(c => c.hex === entry.color) || CHART_CONFIG[0];
+                        return (
+                            <div key={index} className="flex items-center gap-2 justify-between min-w-[150px]">
+                                <div className="flex items-center gap-2">
+                                    <div
+                                        className={cn("w-2 h-2 rounded-full", config.bg)}
+                                    />
+                                    <span className="text-xs text-neutral-500 uppercase tracking-widest truncate max-w-[100px]">
+                                        {entry.name}
+                                    </span>
+                                </div>
+                                <span
+                                    className={cn("font-mono font-bold", config.text)}
+                                >
+                                    {entry.value.toLocaleString('pt-BR')}
                                 </span>
                             </div>
-                            <span
-                                className="font-mono font-bold"
-                                style={{ color: entry.color } as React.CSSProperties}
-                            >
-                                {entry.value.toLocaleString('pt-BR')}
-                            </span>
-                        </div>
-                    ))}
+                        );
+                    })}
                 </div>
             </div>
         );
@@ -175,7 +176,7 @@ export default function GlobalProductionChart({ data, labs }: GlobalProductionCh
             {/* Custom Legend / Filter */}
             <div className="flex flex-wrap gap-3 mb-8 justify-center">
                 {labs.map((lab, index) => {
-                    const color = COLORS[index % COLORS.length];
+                    const config = CHART_CONFIG[index % CHART_CONFIG.length];
                     const isSelected = selectedLabs.includes(lab.id);
 
                     return (
@@ -193,9 +194,9 @@ export default function GlobalProductionChart({ data, labs }: GlobalProductionCh
                             <div
                                 className={cn(
                                     "w-3 h-3 rounded-full shadow-sm transition-all duration-300",
-                                    isSelected ? "scale-110" : "scale-90"
+                                    isSelected ? "scale-110" : "scale-90",
+                                    config.bg
                                 )}
-                                style={{ backgroundColor: color } as React.CSSProperties}
                             />
                             <span className={cn(
                                 "text-[10px] font-bold uppercase tracking-widest transition-colors",
@@ -244,9 +245,9 @@ export default function GlobalProductionChart({ data, labs }: GlobalProductionCh
                                     type="monotone"
                                     dataKey={lab.id}
                                     name={lab.nome}
-                                    stroke={COLORS[idx % COLORS.length]}
+                                    stroke={CHART_CONFIG[idx % CHART_CONFIG.length].hex}
                                     strokeWidth={2}
-                                    dot={{ r: 3, strokeWidth: 0, fill: COLORS[idx % COLORS.length] }}
+                                    dot={{ r: 3, strokeWidth: 0, fill: CHART_CONFIG[idx % CHART_CONFIG.length].hex }}
                                     activeDot={{ r: 6, strokeWidth: 0 }}
                                     connectNulls
                                 />
