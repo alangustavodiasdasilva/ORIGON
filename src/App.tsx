@@ -18,6 +18,7 @@ import Operacao from "@/pages/Operacao";
 import Admin from "@/pages/Admin";
 import Login from "@/pages/Login";
 import Quality from "@/pages/Quality";
+import MonitoramentoOS from "@/pages/MonitoramentoOS";
 
 function AppRoutes() {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
@@ -47,6 +48,7 @@ function AppRoutes() {
         <Route path="export" element={<Export />} />
         <Route path="quality" element={<Quality />} />
         <Route path="operacao" element={<Operacao />} />
+        <Route path="monitoramento-os" element={<MonitoramentoOS />} />
         <Route path="admin" element={<Admin />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>

@@ -110,7 +110,16 @@ export default function ProductionTrendChart({ data }: ProductionTrendChartProps
 
     // 1. Listas Únicas
     const availableShifts = useMemo(() => Array.from(new Set(data.map(d => d.turno))).sort(), [data]);
-    const availableMachines = useMemo(() => Array.from(new Set(data.map(d => d.produto || "Desconhecido"))).sort(), [data]);
+    const availableMachines = useMemo(() => {
+        const productSums: Record<string, number> = {};
+        data.forEach(d => {
+            const name = d.produto || "Desconhecido";
+            productSums[name] = (productSums[name] || 0) + (d.peso || 0);
+        });
+        return Array.from(new Set(data.map(d => d.produto || "Desconhecido")))
+            .filter(m => productSums[m] > 0)
+            .sort();
+    }, [data]);
 
     // Selecionar primeira máquina se não houver seleção
     // Selecionar primeira máquina se não houver seleção
@@ -123,20 +132,9 @@ export default function ProductionTrendChart({ data }: ProductionTrendChartProps
     // 2. Filtrar Dados por Data
     // 2. Filtrar Dados por Data (Relativo ao último dado disponível)
     // 2. Determinar Range Inicial (Últimos 30 dias dos dados disponíveis) e Filtrar
-    useEffect(() => {
-        if (data.length > 0 && !dateStart && !dateEnd) {
-            const sortedAll = [...data].sort((a, b) => new Date(b.data_producao).getTime() - new Date(a.data_producao).getTime());
-            const latest = sortedAll[0].data_producao;
-
-            // Calcular 30 dias atrás a partir da última data
-            const d = new Date(latest);
-            d.setDate(d.getDate() - 30);
-            const start = d.toISOString().split('T')[0];
-
-            setDateEnd(latest);
-            setDateStart(start);
-        }
-    }, [data]);
+    // 2. Filtrar Dados por Data
+    // Default: Mostrar tudo (datas vazias)
+    // Se o usuário quiser filtrar, ele usa os inputs.
 
     const filteredData = useMemo(() => {
         if (data.length === 0) return [];

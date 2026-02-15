@@ -7,12 +7,13 @@ import { Upload, FileSpreadsheet, BarChart3, Copy, Loader2, X, Save, Trash2, Edi
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import * as XLSX from 'xlsx';
 import Tesseract from 'tesseract.js';
 
 import { LabService } from "@/entities/Lab";
 import ProductionTrendChart from "@/components/analysis/ProductionTrendChart";
 import GlobalProductionChart from "@/components/analysis/GlobalProductionChart";
+import { producaoService } from "@/services/producao.service";
+import { parseProducaoFileInChunks } from "@/lib/producaoParser";
 
 interface ProductionData {
     id: string;
@@ -57,6 +58,7 @@ export default function Operacao() {
     const { addToast } = useToast();
     const [isUploading, setIsUploading] = useState(false);
     const [isProcessingOCR, setIsProcessingOCR] = useState(false);
+    const [ocrDebugText, setOcrDebugText] = useState<string>("");
     const [isLoading, setIsLoading] = useState(false);
 
     const [pastedImage, setPastedImage] = useState<string | null>(null);
@@ -128,7 +130,7 @@ export default function Operacao() {
         }
     };
 
-    // Função de pré-processamento para melhorar OCR
+    // Função de pré-processamento com grayscale para OCR
     const preprocessImage = async (imageBlob: Blob): Promise<string> => {
         return new Promise((resolve) => {
             const reader = new FileReader();
@@ -142,35 +144,410 @@ export default function Operacao() {
                         return;
                     }
 
-                    // Escala 2x é o padrão mais estável para Tesseract.js
+                    // Escala 2x para clareza
                     const scale = 2;
                     canvas.width = img.width * scale;
                     canvas.height = img.height * scale;
 
-                    ctx.imageSmoothingEnabled = true; // Melhor suavização para escala 2x
+                    ctx.imageSmoothingEnabled = false;
                     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
+                    // Apenas Grayscale (sem binarização que distorce letras e confunde layout)
                     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
                     const data = imageData.data;
-
                     for (let i = 0; i < data.length; i += 4) {
-                        const r = data[i];
-                        const g = data[i + 1];
-                        const b = data[i + 2];
-                        let gray = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-
-                        // Threshold equilibrado (128) para não apagar números cinzas
-                        const v = gray > 128 ? 255 : 0;
-                        data[i] = data[i + 1] = data[i + 2] = v;
+                        const gray = data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114;
+                        data[i] = gray;
+                        data[i + 1] = gray;
+                        data[i + 2] = gray;
                     }
-
                     ctx.putImageData(imageData, 0, 0);
+
                     resolve(canvas.toDataURL("image/png", 1.0));
                 };
                 img.src = e.target?.result as string;
             };
             reader.readAsDataURL(imageBlob);
         });
+    };
+
+    const processImageOCR = async (imageFile: File) => {
+        setIsProcessingOCR(true);
+        setOcrData(null);
+        setOcrDebugText("Iniciando processamento...");
+
+        try {
+            const processedImageUrl = await preprocessImage(imageFile);
+
+            setOcrDebugText("Executando Tesseract (ENG)...");
+            const worker = await Tesseract.createWorker('eng');
+            await worker.setParameters({
+                tessedit_pageseg_mode: Tesseract.PSM.SINGLE_BLOCK,
+            });
+
+            const result = (await worker.recognize(processedImageUrl)) as any;
+            await worker.terminate();
+
+            const rawText = result.data.text || "";
+            let debugLog = `--- LEITURA BRUTA ---\n${rawText}\n-------------------\n\n`;
+
+            // VOLTANDO PARA O PADRÃO ROBUSTO DE LINHAS DO TESSERACT
+            // A reconstrução manual falhou (retornou 0), então vamos confiar na segmentação padrão
+            // que o log provou estar correta (o texto bruto tem as quebras certas).
+            let lines = result.data.lines || [];
+
+            debugLog += `Linhas detectadas nativamente: ${lines.length}\n`;
+
+            // FALLBACK: Se não vier linhas estruturadas mas tiver texto, criamos linhas artificiais
+            if (lines.length === 0 && rawText.trim().length > 0) {
+                debugLog += "AVISO: Linhas estruturadas vazias. Usando fallback de texto bruto.\n";
+                lines = rawText.split('\n').map((txt: string) => ({
+                    text: txt,
+                    words: txt.split(/\s+/).filter(Boolean).map(w => ({ text: w, bbox: { x0: 0, x1: 0, y0: 0, y1: 0 }, confidence: 100 }))
+                }));
+            }
+
+            // --- PROCESSAMENTO LINEAR ---
+            const blocks: OCRBlock[] = [];
+            let currentBlock: OCRBlock | null = null;
+            let lastDate = '';
+
+            const globalDateRegex = /(\d{1,2})\/(\d{1,2})\/(\d{2,4})/;
+
+            const ensureBlock = (date: string) => {
+                // Se o bloco atual existe e não tem data, atualiza a data
+                if (currentBlock && !currentBlock.data && date) {
+                    currentBlock.data = date;
+                    return;
+                }
+                // Se o bloco atual já tem a mesma data, reutiliza
+                if (currentBlock && currentBlock.data === date && date !== '') {
+                    return;
+                }
+                // Se o bloco atual está vazio (sem turnos), reutiliza
+                if (currentBlock && currentBlock.turnos.length === 0) {
+                    currentBlock.data = date;
+                    return;
+                }
+                // Cria novo bloco
+                currentBlock = {
+                    id: Math.random().toString(36).substr(2, 9),
+                    data: date,
+                    turnos: []
+                };
+                blocks.push(currentBlock);
+            };
+
+            ensureBlock(lastDate);
+
+            // Contagem de linhas numéricas para inferência de turno
+            let sequentialNumericLineCount = 0;
+
+            lines.forEach((line: any, index: number) => {
+                const text = line.text.trim();
+                const upper = text.toUpperCase();
+
+                if (text.length < 3) return; // Ignora lixo muito curto
+
+                // 1. DATA — Só detecta em linhas que NÃO são claramente de dados
+                const isDataRow = upper.includes("TURNO") || upper.includes("TOTAL");
+                if (!isDataRow) {
+                    const dateMatch = text.match(globalDateRegex);
+                    if (dateMatch) {
+                        let day = dateMatch[1];
+                        let month = dateMatch[2];
+                        let year = dateMatch[3];
+
+                        if (year.length === 2) year = `20${year}`;
+
+                        // Validação básica de data
+                        if (parseInt(month) <= 12 && parseInt(day) <= 31 && parseInt(year) >= 2020) {
+                            const newDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+
+                            // Se a data mudou, resetar contagem sequencial
+                            if (newDate !== lastDate && lastDate !== '') {
+                                sequentialNumericLineCount = 0;
+                            }
+
+                            lastDate = newDate;
+                            ensureBlock(newDate);
+                            debugLog += `[L${index}] DATA ENCONTRADA: ${newDate}\n`;
+                        }
+                    }
+                }
+
+                // 2. DADOS
+                debugLog += `  [Words] ${(line.words || []).map((w: any) => w.text).join(' | ')}\n`;
+                const nums = extractNumbersFromLine(line.words || []);
+                debugLog += `  [Nums] ${nums.map((n: any) => n.val).join(', ')} (${nums.length} valores)\n`;
+
+                // Detecção fuzzy de TURNO (OCR pode ler como TLIRNG, TURNG, [LURNG, etc.)
+                const isFuzzyTurno = /[T\[].{2,5}\s+[123]\b/.test(text) || upper.includes("TURNO");
+                const isFuzzyTotal = upper.includes("TOTAL") || /TOT.{0,2}L/i.test(text) || upper.includes("AL GERAL");
+                const hasLabel = isFuzzyTurno || isFuzzyTotal || upper.includes("T1") || upper.includes("T2");
+                const visualNumbersCount = (text.replace(/[^0-9]/g, "").length);
+
+                // Aceita linha se tiver label OU muitos numeros (para pegar a linha de totais que as vezes n tem label)
+                const isDataLine = hasLabel || nums.length >= 2 || (visualNumbersCount > 8 && nums.length >= 1);
+
+                // --- LIMPEZA DE ARTEFATOS DO LABEL ---
+                // Remove valores muito pequenos (0, 1, 2, 3) no início que provavelmente vieram do label
+                // Ex: "TURNO 1" gera O→0 e 1→1 como artefatos
+                if (hasLabel && nums.length > 1) {
+                    while (nums.length > 0 && parseInt(nums[0].val) <= 3) {
+                        debugLog += `  [Fix] Removido artefato de label: '${nums[0].val}'\n`;
+                        nums.shift();
+                    }
+                }
+
+                if (isDataLine) {
+                    let label = "TURNO INDEFINIDO";
+
+                    // Detecção de turno com fuzzy matching
+                    const turno1Match = upper.includes("TURNO 1") || upper.includes("T1") || /[T\[].{2,5}\s*1\b/.test(text);
+                    const turno2Match = upper.includes("TURNO 2") || upper.includes("T2") || /[T\[].{2,5}\s*2\b/.test(text);
+                    const turno3Match = upper.includes("TURNO 3") || upper.includes("T3") || /[T\[].{2,5}\s*3\b/.test(text);
+
+                    if (turno1Match) {
+                        // Se o bloco atual já tem TURNO 1, é um novo dia
+                        if (currentBlock && currentBlock.turnos.some(t => t.nome === "TURNO 1")) {
+                            ensureBlock('');
+                            sequentialNumericLineCount = 0;
+                        }
+                        label = "TURNO 1";
+                        sequentialNumericLineCount = 1;
+                    }
+                    else if (turno2Match) {
+                        label = "TURNO 2";
+                        sequentialNumericLineCount = 2;
+                    }
+                    else if (turno3Match) {
+                        label = "TURNO 3";
+                        sequentialNumericLineCount = 3;
+                    }
+                    else if (isFuzzyTotal) {
+                        label = "TOTAL GERAL";
+                    }
+                    else {
+                        // Inferência Inteligente: Verifica se é uma linha de SOMA (Total Geral)
+                        let isSumRow = false;
+                        if (currentBlock && currentBlock.turnos.length > 0 && nums.length > 2) {
+                            // Filtra apenas turnos reais (não totais anteriores) para a soma
+                            const realTurnos = currentBlock.turnos.filter(t => !t.nome.includes('TOTAL') && !t.nome.includes('GERAL'));
+
+                            if (realTurnos.length >= 1) {
+                                // Para cada turno real, pegamos os valores SEM o último (que é o total do turno)
+                                const turnoMachineValues = realTurnos.map(t => {
+                                    const vals = [...t.valores];
+                                    if (vals.length > 3) vals.pop(); // Remove total do turno (última coluna)
+                                    return vals;
+                                });
+
+                                // Número de colunas a comparar
+                                const maxCols = Math.min(
+                                    nums.length > 3 ? nums.length - 1 : nums.length,
+                                    ...turnoMachineValues.map(v => v.length),
+                                    5
+                                );
+                                const comparisons = Math.max(maxCols, Math.min(nums.length, 3));
+
+                                let matches = 0;
+                                for (let c = 0; c < comparisons; c++) {
+                                    let colSum = 0;
+                                    turnoMachineValues.forEach(vals => {
+                                        if (vals[c]) {
+                                            const v = parseFloat(vals[c].val.replace(/\./g, "").replace(",", "."));
+                                            if (!isNaN(v)) colSum += v;
+                                        }
+                                    });
+
+                                    const currentVal = parseFloat(nums[c].val.replace(/\./g, "").replace(",", "."));
+                                    const tolerance = Math.max(colSum * 0.20, 10);
+                                    if (!isNaN(currentVal) && colSum > 0 && Math.abs(colSum - currentVal) <= tolerance) {
+                                        matches++;
+                                    }
+                                }
+
+                                debugLog += `  [SumCheck] Comparações: ${comparisons}, Matches: ${matches}\n`;
+
+                                if (matches >= Math.max(1, Math.ceil(comparisons / 3))) {
+                                    isSumRow = true;
+                                    debugLog += `  [Info] Identificado como TOTAL GERAL por soma (Matches: ${matches}/${comparisons})\n`;
+                                }
+
+                                // Fallback: se já existe 1+ turno real e essa linha NÃO tem label de turno,
+                                // é muito provavelmente a linha de TOTAL GERAL
+                                if (!isSumRow && realTurnos.length >= 1) {
+                                    isSumRow = true;
+                                    debugLog += `  [Info] Identificado como TOTAL GERAL por fallback (${realTurnos.length} turnos, linha sem label)\n`;
+                                }
+                            }
+                        }
+
+                        if (isSumRow) {
+                            label = "TOTAL GERAL";
+                        } else {
+                            // Inferência Sequencial padrão (somente quando NÃO há turnos anteriores no bloco)
+                            if (nums.length >= 3) {
+                                sequentialNumericLineCount++;
+                                if (sequentialNumericLineCount === 1) label = "TURNO 1";
+                                if (sequentialNumericLineCount === 2) label = "TURNO 2";
+                                if (sequentialNumericLineCount >= 3) label = "TOTAL GERAL";
+                            } else {
+                                debugLog += `[L${index}] Ignorado (sem label e poucos numeros): ${text}\n`;
+                                return;
+                            }
+                        }
+                    }
+
+                    // Limpa prefixo numérico se for índice
+                    if (nums.length > 5) {
+                        const firstVal = parseInt(nums[0].val);
+                        if (firstVal === sequentialNumericLineCount && firstVal <= 3) {
+                            nums.shift();
+                            debugLog += `  [Fix] Removido indexador '${firstVal}'\n`;
+                        }
+                    }
+
+                    // --- TRATAMENTO DE COLUNA DE TOTAIS ---
+                    let totalOriginal = 0;
+                    if (nums.length > 4) {
+                        const lastItem = nums.pop(); // Remove o último
+                        if (lastItem) {
+                            totalOriginal = parseInt(lastItem.val.replace(/\./g, ''));
+                            debugLog += `  [Info] Total extraído da linha: ${totalOriginal}\n`;
+                        }
+                    }
+
+                    if (nums.length > 0) {
+                        if (currentBlock) {
+                            // Evitar duplicatas
+                            const isDuplicate = currentBlock.turnos.some(t =>
+                                t.nome === label &&
+                                JSON.stringify(t.valores.map(v => v.val)) === JSON.stringify(nums.map(n => n.val))
+                            );
+
+                            if (!isDuplicate) {
+                                // Para TOTAL GERAL, calcular os valores a partir dos turnos reais
+                                // ao invés de confiar no OCR (que frequentemente erra nessa linha)
+                                if (label === "TOTAL GERAL" && currentBlock) {
+                                    const realTurnos = currentBlock.turnos.filter(t => !t.nome.includes('TOTAL') && !t.nome.includes('GERAL'));
+                                    if (realTurnos.length > 0) {
+                                        const maxCols = Math.max(...realTurnos.map(t => t.valores.length));
+                                        const computedVals: typeof nums = [];
+                                        for (let c = 0; c < maxCols; c++) {
+                                            let colSum = 0;
+                                            realTurnos.forEach(t => {
+                                                if (t.valores[c]) {
+                                                    const v = parseFloat(t.valores[c].val.replace(/\./g, "").replace(",", "."));
+                                                    if (!isNaN(v)) colSum += v;
+                                                }
+                                            });
+                                            computedVals.push({ val: String(colSum), bbox: nums[c]?.bbox || { text: '', x0: 0, y0: 0, x1: 0, y1: 0, confidence: 100 } });
+                                        }
+                                        currentBlock.turnos.push({
+                                            nome: label,
+                                            valores: computedVals,
+                                            totalOriginal: totalOriginal
+                                        });
+                                        debugLog += `[L${index}] PROCESSADO: ${label} [CALCULADO: ${computedVals.map(n => n.val).join(', ')}]\n`;
+                                    } else {
+                                        currentBlock.turnos.push({
+                                            nome: label,
+                                            valores: nums,
+                                            totalOriginal: totalOriginal
+                                        });
+                                        debugLog += `[L${index}] PROCESSADO: ${label} [${nums.map(n => n.val).join(', ')}] (Total: ${totalOriginal})\n`;
+                                    }
+                                } else {
+                                    currentBlock.turnos.push({
+                                        nome: label,
+                                        valores: nums,
+                                        totalOriginal: totalOriginal
+                                    });
+                                    debugLog += `[L${index}] PROCESSADO: ${label} [${nums.map(n => n.val).join(', ')}] (Total: ${totalOriginal})\n`;
+                                }
+                            } else {
+                                debugLog += `[L${index}] IGNORADO (DUPLICATA): ${label}\n`;
+                            }
+                        }
+                    }
+                } else {
+                    debugLog += `[L${index}] IGNORADO: ${text} (${nums.length} nums calc)\n`;
+                }
+            });
+
+            // Finalização
+            const validBlocks = blocks.filter(b => b.turnos.length > 0);
+            debugLog += `\nBlocos Válidos Finais: ${validBlocks.length}`;
+
+            setOcrDebugText(debugLog);
+
+            if (validBlocks.length === 0) {
+                // Fallback de erro visível
+                setOcrData({
+                    blocks: [{
+                        id: 'error_fallback',
+                        data: lastDate,
+                        turnos: [{ nome: "NENHUM DADO IDENTIFICADO", valores: [] }]
+                    }],
+                    allBoxes: []
+                });
+                addToast({ title: "Atenção", description: "O texto foi lido mas não conseguimos identificar as colunas.", type: "warning" });
+            } else {
+                setOcrData({
+                    blocks: validBlocks,
+                    allBoxes: result.data.words?.map((w: any) => ({
+                        text: w.text, x0: w.bbox.x0, y0: w.bbox.y0, x1: w.bbox.x1, y1: w.bbox.y1, confidence: w.confidence
+                    })) || []
+                });
+                addToast({ title: "Sucesso", description: `${validBlocks.length} dias identificados.`, type: "success" });
+            }
+
+        } catch (error: any) {
+            console.error(error);
+            setOcrDebugText(`ERRO FATAL: ${error.message}\n${error.stack}`);
+            addToast({ title: "Erro", description: "Falha ao processar imagem.", type: "error" });
+        } finally {
+            setIsProcessingOCR(false);
+        }
+    };
+
+
+
+    const extractNumbersFromLine = (words: any[]) => {
+        const values: { val: string; bbox: OCRBox }[] = [];
+        words.forEach(w => {
+            const rawText = w.text.trim();
+            if (!rawText) return;
+
+            // --- PROTEÇÃO CONTRA LABELS ---
+            // Se a palavra original tem mais letras do que dígitos, é provavelmente
+            // texto (como "TURNO", "TOTAL") e NÃO deve passar por fixOCRCharacters.
+            // Sem isso, o "O" de "TURNO" vira "0" e é capturado como valor.
+            const letterCount = (rawText.match(/[a-zA-Z]/g) || []).length;
+            const digitCount = (rawText.match(/[0-9]/g) || []).length;
+            if (letterCount >= 2 || (letterCount > 0 && digitCount === 0)) {
+                return; // Skip: "TURNO", "TOTAL", "GERAL", etc.
+            }
+
+            const clean = fixOCRCharacters(rawText).replace(/\./g, ''); // Remove milhar
+            const numStr = clean.replace(/[^\d]/g, ''); // Mantém apenas dígitos
+
+            if (numStr.length > 0) {
+                const val = parseInt(numStr);
+                // Filtros de Bom Senso
+                if (!isNaN(val) && val < 1000000) {
+                    values.push({
+                        val: String(val),
+                        bbox: {
+                            text: w.text, x0: w.bbox.x0, y0: w.bbox.y0, x1: w.bbox.x1, y1: w.bbox.y1, confidence: w.confidence
+                        }
+                    });
+                }
+            }
+        });
+        return values;
     };
 
     // Função para corrigir erros comuns de OCR (Letras que parecem números)
@@ -185,181 +562,6 @@ export default function Operacao() {
             .replace(/G/g, '6');
     };
 
-    const processImageOCR = async (imageFile: File) => {
-        setIsProcessingOCR(true);
-        setOcrData(null);
-
-        try {
-            // 1. Pré-processar imagem (Escala + Contraste)
-            const processedImageUrl = await preprocessImage(imageFile);
-
-            // 2. Usar Worker
-            const worker = await Tesseract.createWorker('por');
-
-            await worker.setParameters({
-                tessedit_char_whitelist: '0123456789/.,:-ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz ',
-                tessedit_pageseg_mode: Tesseract.PSM.AUTO,
-            });
-
-            const result = (await worker.recognize(processedImageUrl)) as any;
-            await worker.terminate();
-
-            const words = result.data.words;
-
-            // --- RECONSTRUÇÃO TABULAR POR GRID (X, Y) ---
-            const yThreshold = 18; // px
-            // const xThreshold = 45; // px (unused in logic but useful concept)
-
-            const rawLines: { y: number; words: any[] }[] = [];
-
-            words.forEach((w: any) => {
-                const centerY = (w.bbox.y0 + w.bbox.y1) / 2;
-                let line = rawLines.find(l => Math.abs(l.y - centerY) < yThreshold);
-                if (!line) {
-                    line = { y: centerY, words: [] };
-                    rawLines.push(line);
-                }
-                line.words.push(w);
-            });
-
-            rawLines.sort((a, b) => a.y - b.y);
-
-            const blocks: OCRBlock[] = [];
-
-            // Generate visual boxes
-            const allBoxes: OCRBox[] = words.map((w: any) => ({
-                text: w.text,
-                x0: w.bbox.x0,
-                y0: w.bbox.y0,
-                x1: w.bbox.x1,
-                y1: w.bbox.y1,
-                confidence: w.confidence
-            }));
-
-            let currentBlock: OCRBlock | null = null;
-            // Robust Date Regex: matches DD/MM/YYYY or DD-MM-YYYY or DD.MM.YYYY, 2 or 4 digit years
-            const dateRegex = /(\d{1,2})[\/\.\-\s](\d{1,2})[\/\.\-\s](\d{2,4})/;
-
-            rawLines.forEach(lineObj => {
-                lineObj.words.sort((a, b) => a.bbox.x0 - b.bbox.x0);
-                const lineText = lineObj.words.map(w => w.text).join(" ");
-                const upperLineText = lineText.toUpperCase();
-
-                // 1. Detecção de Data (Início de Bloco)
-                const dateMatch = lineText.match(dateRegex);
-                if (dateMatch) {
-                    let year = dateMatch[3];
-                    if (year.length === 2) year = `20${year}`;
-                    const newDate = `${year}-${dateMatch[2].padStart(2, '0')}-${dateMatch[1].padStart(2, '0')}`;
-
-                    let existingBlock = blocks.find(b => b.data === newDate);
-                    if (!existingBlock) {
-                        existingBlock = {
-                            id: Math.random().toString(36).substr(2, 9),
-                            data: newDate,
-                            turnos: []
-                        };
-                        blocks.push(existingBlock);
-                    }
-                    currentBlock = existingBlock;
-                }
-
-                // 2. Detecção de Turno/Linha de Dados
-                // Keywords expanding common OCR errors for TURNO (T1, T2, TURMO, etc)
-                const isTurno = upperLineText.match(/TUR|TUN|TRN|T1|T2|MANHA|TARDE|NOITE/i);
-                const isTotalRow = upperLineText.match(/TOTAL|GERAL|SOMA|TOTA/i);
-
-                if (isTurno || isTotalRow) {
-                    // Fallback: If no date found yet, create a "Pending Date" block
-                    if (!currentBlock) {
-                        currentBlock = {
-                            id: "pending_date_" + Math.random().toString(36).substr(2, 5),
-                            data: new Date().toISOString().split('T')[0], // Default to today
-                            turnos: []
-                        };
-                        blocks.push(currentBlock);
-                    }
-
-                    const labelMatch = lineText.match(/(TURNO|TURMO|TUR|TOTAL|SOMA|T1|T2)\s*(\d+)?/i);
-                    const label = labelMatch ? labelMatch[0].toUpperCase() : (isTotalRow ? "TOTAL" : "TURNO");
-
-                    const rowValues: { val: string; bbox?: OCRBox; x: number }[] = [];
-
-                    lineObj.words.forEach(w => {
-                        // Limpeza BR agressiva: "1.006" -> 1006
-                        const cleanToken = fixOCRCharacters(w.text).replace(/\./g, '');
-                        // Check if token looks like a number
-                        const numOnly = cleanToken.replace(/[^\d]/g, '');
-
-                        if (numOnly.length > 0) {
-                            const val = parseInt(numOnly);
-                            if (!isNaN(val)) {
-                                // Ignore label number if it appears as data (e.g. from "TURNO 1")
-                                const isLabelNum = labelMatch && labelMatch[2] === String(val) && rowValues.length === 0;
-                                if (!isLabelNum) {
-                                    rowValues.push({
-                                        val: String(val),
-                                        x: (w.bbox.x0 + w.bbox.x1) / 2,
-                                        bbox: {
-                                            text: w.text,
-                                            x0: w.bbox.x0,
-                                            y0: w.bbox.y0,
-                                            x1: w.bbox.x1,
-                                            y1: w.bbox.y1,
-                                            confidence: w.confidence
-                                        }
-                                    });
-                                }
-                            }
-                        }
-                    });
-
-                    // Only add if we found reasonable data (at least 2 columns usually, but accept 1)
-                    if (rowValues.length > 0) {
-                        currentBlock.turnos.push({
-                            nome: label,
-                            valores: rowValues.map(r => ({ val: r.val, bbox: r.bbox }))
-                        });
-                    }
-                }
-            });
-
-            // Fallback strategy: If no structured blocks found but we have lines, try to capture raw numbers
-            if (blocks.length === 0 && rawLines.length > 0) {
-                const fallbackBlock: OCRBlock = {
-                    id: "fallback",
-                    data: new Date().toISOString().split('T')[0],
-                    turnos: []
-                };
-
-                rawLines.forEach(lObj => {
-                    const rowValues: { val: string; bbox?: OCRBox }[] = [];
-                    lObj.words.forEach(w => {
-                        const v = fixOCRCharacters(w.text).replace(/\./g, '').replace(/[^\d]/g, '');
-                        if (v.length > 0) rowValues.push({ val: v, bbox: { text: w.text, x0: w.bbox.x0, y0: w.bbox.y0, x1: w.bbox.x1, y1: w.bbox.y1, confidence: w.confidence } });
-                    });
-
-                    // Heuristic: If line has > 3 numbers, it's likely a data row
-                    if (rowValues.length > 3) {
-                        fallbackBlock.turnos.push({ nome: "LINHA DETECTADA", valores: rowValues });
-                    }
-                });
-
-                if (fallbackBlock.turnos.length > 0) {
-                    blocks.push(fallbackBlock);
-                    addToast({ title: "Modo Fallback", description: "Estrutura não reconhecida, exibindo números brutos.", type: "warning" });
-                }
-            }
-
-            setOcrData({ blocks, allBoxes });
-        } catch (error) {
-            console.error(error);
-            addToast({ title: "Erro no OCR", description: "Não foi possível ler a imagem. Tente melhorar o contraste.", type: "error" });
-        } finally {
-            setIsProcessingOCR(false);
-        }
-    };
-
     const handleEditDate = (date: string) => {
         const items = chartData.filter(d => d.data_producao === date);
         if (items.length === 0) return;
@@ -372,7 +574,7 @@ export default function Operacao() {
 
         const turnosList = Object.keys(turnosMap).sort().map(turnoKey => {
             const turnoItems = turnosMap[turnoKey];
-            turnoItems.sort((a, b) => (a.produto || "").localeCompare(b.produto || ""));
+            turnoItems.sort((a, b) => (a.produto || "").localeCompare(b.produto || "", undefined, { numeric: true }));
 
             return {
                 nome: turnoKey,
@@ -401,20 +603,23 @@ export default function Operacao() {
         if (!ocrData || ocrData.blocks.length === 0) return;
 
         const recordsToInsert: any[] = [];
-        let hasError = false;
+        const blocksWithoutDate: number[] = [];
 
-        ocrData.blocks.forEach(block => {
+        ocrData.blocks.forEach((block, bIdx) => {
             if (!block.data) {
-                hasError = true;
+                blocksWithoutDate.push(bIdx + 1);
                 return;
             }
 
             block.turnos.forEach(turno => {
+                // TOTAL GERAL é apenas referência — não salvar para não duplicar
+                if (turno.nome.includes("TOTAL") || turno.nome.includes("GERAL")) return;
+
                 turno.valores.forEach((item, index) => {
                     const cleanStr = item.val.replace(/\./g, '').replace(',', '.');
                     const val = parseFloat(cleanStr);
 
-                    if (!isNaN(val)) {
+                    if (!isNaN(val) && val > 0) {
                         const uniqueID = `${block.data}-${turno.nome.replace(" ", "")}-COL${index + 1}`;
                         recordsToInsert.push({
                             lab_id: currentLab.id,
@@ -430,20 +635,34 @@ export default function Operacao() {
             });
         });
 
-        if (hasError) {
-            addToast({ title: "Erro de Validação", description: "Certifique-se que todas as datas foram identificadas.", type: "warning" });
+        if (blocksWithoutDate.length > 0) {
+            addToast({
+                title: "Data Obrigatória",
+                description: `Preencha a data do(s) Dia(s): ${blocksWithoutDate.join(', ')}. Use o campo de data no topo de cada bloco.`,
+                type: "warning"
+            });
+            return;
+        }
+
+        if (recordsToInsert.length === 0) {
+            addToast({ title: "Nenhum Dado", description: "Não há valores válidos para salvar. Verifique os turnos.", type: "warning" });
             return;
         }
 
         setIsLoading(true);
         try {
-            const { error } = await supabase
+            console.log('=== SALVANDO OCR ===');
+            console.log('Registros:', recordsToInsert.length);
+            console.log('lab_id:', currentLab.id);
+            console.log('Amostra:', JSON.stringify(recordsToInsert[0], null, 2));
+            const { data, error } = await supabase
                 .from('operacao_producao')
-                .upsert(recordsToInsert, { onConflict: 'identificador_unico' });
+                .upsert(recordsToInsert, { onConflict: 'lab_id,identificador_unico' });
 
+            console.log('Resposta Supabase:', { data, error });
             if (error) throw error;
 
-            addToast({ title: "Sucesso!", description: "Dados de produção carregados.", type: "success" });
+            addToast({ title: "Sucesso!", description: `${recordsToInsert.length} registros salvos com sucesso.`, type: "success" });
             setOcrData(null);
             setPastedImage(null);
             loadStats();
@@ -465,75 +684,42 @@ export default function Operacao() {
 
     const handleClearAllData = async () => {
         if (!confirm("LIMPAR TODO O HISTÓRICO?")) return;
-        const { error } = await supabase.from('operacao_producao').delete().eq('lab_id', currentLab?.id);
-        if (!error) loadStats();
+        if (!currentLab?.id) return;
+
+        try {
+            await producaoService.deleteAll(currentLab.id);
+            loadStats();
+        } catch (error) {
+            console.error("Error clearing data:", error);
+            alert("Erro ao limpar dados.");
+        }
     };
 
     const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
-        if (!file) return;
+        if (!file || !currentLab?.id) return;
         setIsUploading(true);
         try {
-            const buffer = await file.arrayBuffer();
-            const workbook = XLSX.read(buffer, { type: 'array' });
-            const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-            const rows: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: "" });
-            const recordsToInsert: any[] = [];
-            let currentBlockDate: string | null = null;
-            const parseDate = (cell: any): string | null => {
-                if (!cell) return null;
-                if (typeof cell === 'number' && cell > 40000) {
-                    const date = XLSX.SSF.parse_date_code(cell);
-                    return `${date.y}-${String(date.m).padStart(2, '0')}-${String(date.d).padStart(2, '0')}`;
+            let totalRecords = 0;
+            await parseProducaoFileInChunks(file, currentLab.id, async (batch) => {
+                if (batch.length > 0) {
+                    await producaoService.uploadData(batch);
+                    totalRecords += batch.length;
                 }
-                if (typeof cell === 'string') {
-                    const match = cell.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
-                    if (match) return `${match[3]}-${match[2].padStart(2, '0')}-${match[1].padStart(2, '0')}`;
-                }
-                return null;
-            };
-            for (let i = 0; i < rows.length; i++) {
-                const row = rows[i];
-                if (!row || row.length === 0) continue;
-                let potentialDate = parseDate(row[0]) || parseDate(row[1]);
-                if (potentialDate) { currentBlockDate = potentialDate; continue; }
-                const firstCell = String(row[0] || "").toUpperCase().trim();
-                const secondCell = String(row[1] || "").toUpperCase().trim();
-                let turnoLabel = "";
-                if (firstCell.includes("TURNO")) turnoLabel = firstCell;
-                else if (secondCell.includes("TURNO")) turnoLabel = secondCell;
-                if (currentBlockDate && turnoLabel) {
-                    let machineIndex = 1;
-                    for (let c = 1; c < row.length; c++) {
-                        const cell = row[c];
-                        if (String(cell).toUpperCase().includes("TURNO")) continue;
-                        let val = 0;
-                        if (typeof cell === 'number') val = cell;
-                        else if (typeof cell === 'string') val = parseFloat(cell.replace(/\./g, "").replace(",", "."));
-                        if (!isNaN(val) && val >= 0) {
-                            recordsToInsert.push({
-                                lab_id: currentLab?.id,
-                                identificador_unico: `${currentBlockDate}-${turnoLabel.replace(/[^A-Z0-9]/g, "")}-COL${c}`,
-                                data_producao: currentBlockDate,
-                                turno: turnoLabel.replace(":", "").trim(),
-                                produto: `Linha/Mq ${machineIndex++}`,
-                                peso: val,
-                                metadata: { source: 'excel_upload' }
-                            });
-                        }
-                    }
-                }
+            }, 2000);
+
+            if (totalRecords === 0) {
+                alert("Atenção: Nenhum dado válido foi detectado no arquivo. Verifique se o formato está correto.");
+            } else {
+                alert(`Sucesso! ${totalRecords} registros de produção processados/atualizados.`);
             }
-            if (recordsToInsert.length > 0) {
-                await supabase.from('operacao_producao').upsert(recordsToInsert, { onConflict: 'lab_id, identificador_unico', ignoreDuplicates: true });
-                addToast({ title: "Importação Concluída", description: `${recordsToInsert.length} registros.`, type: "success" });
-                loadStats();
-            }
+            loadStats();
         } catch (error: any) {
-            addToast({ title: "Erro na Leitura", description: error.message, type: "error" });
+            console.error("Erro no upload:", error);
+            alert("Erro ao processar o arquivo: " + (error.message || "Verifique o formato do Excel."));
         } finally {
             setIsUploading(false);
-            event.target.value = '';
+            if (event.target) event.target.value = "";
         }
     };
 
@@ -652,7 +838,20 @@ export default function Operacao() {
                         </div>
 
                         <div className="flex items-center gap-4">
-                            <Button onClick={confirmOCRUpload} disabled={!ocrData || ocrData.blocks.length === 0 || isLoading} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold uppercase tracking-widest gap-2 shadow-lg h-10 px-6 min-w-[180px]">
+                            {/* Indicador de blocos sem data */}
+                            {ocrData && ocrData.blocks.some(b => !b.data) && (
+                                <span className="text-[10px] font-bold text-red-500 animate-pulse uppercase">⚠ Preencha a(s) data(s)</span>
+                            )}
+                            <Button
+                                onClick={confirmOCRUpload}
+                                disabled={!ocrData || ocrData.blocks.length === 0 || isLoading}
+                                className={cn(
+                                    "text-white font-bold uppercase tracking-widest gap-2 shadow-lg h-10 px-6 min-w-[180px] transition-all",
+                                    ocrData && ocrData.blocks.some(b => !b.data)
+                                        ? "bg-orange-500 hover:bg-orange-600"
+                                        : "bg-emerald-600 hover:bg-emerald-700"
+                                )}
+                            >
                                 {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                                 {isLoading ? "Salvando..." : "Confirmar Tudo"}
                             </Button>
@@ -681,6 +880,7 @@ export default function Operacao() {
                                             height: "var(--h)"
                                         } as React.CSSProperties;
 
+                                        {/* eslint-disable-next-line react-dom/no-unsafe-inline-style, tailwindcss/no-custom-classname, react/inline-styles */ }
                                         return (
                                             <div
                                                 key={idx}
@@ -692,7 +892,7 @@ export default function Operacao() {
                                                         (t.valores.some(v => v.bbox?.text === box.text) || t.totalBbox?.text === box.text)
                                                     )) && "border-red-600 bg-red-600/10 z-30 ring-2 ring-red-600/50"
                                                 )}
-                                                // eslint-disable-next-line
+                                                // eslint-disable-next-line react-dom/no-unsafe-inline-style
                                                 style={boxStyle}
                                                 onClick={() => {
                                                     const inputId = `ocr-input-${idx}`;
@@ -711,105 +911,176 @@ export default function Operacao() {
                             </div>
                         )}
 
-                        <div className={cn("bg-white flex flex-col transition-all overflow-y-auto", pastedImage === "EDIT_MODE" ? "w-full" : "w-3/5")}>
+                        <div className={cn("bg-white flex flex-col transition-all overflow-y-auto relative", pastedImage === "EDIT_MODE" ? "w-full" : "w-3/5")}>
                             {isProcessingOCR ? (
                                 <div className="flex flex-col items-center justify-center h-full space-y-6 text-neutral-400 animate-pulse">
                                     <Loader2 className="h-16 w-16 animate-spin text-emerald-600" />
                                     <span className="text-lg font-bold uppercase tracking-widest text-emerald-800">Processando...</span>
                                 </div>
-                            ) : ocrData ? (
-                                <div className="p-8 space-y-12 pb-32">
-                                    {ocrData.blocks.map((block, bIdx) => (
-                                        <div key={block.id} className="border border-neutral-200 rounded-xl p-6 bg-neutral-50 shadow-sm relative group hover:border-emerald-300 transition-all">
-                                            <div className="flex items-center gap-4 mb-6 border-b border-black/10 pb-4">
-                                                <div className="bg-black text-white px-3 py-1 text-xs font-bold rounded uppercase">DIA {bIdx + 1}</div>
-                                                <div className="flex-1">
-                                                    <Input type="date" value={block.data} onChange={(e) => {
-                                                        const newBlocks = [...ocrData.blocks];
-                                                        newBlocks[bIdx].data = e.target.value;
-                                                        setOcrData({ ...ocrData, blocks: newBlocks });
-                                                    }} className="font-mono font-bold text-xl h-10 w-48 border-emerald-200 focus:ring-emerald-500 bg-white" />
-                                                </div>
-                                                <Button variant="ghost" size="icon" className="text-neutral-400 hover:text-red-500" onClick={() => {
-                                                    const newBlocks = ocrData.blocks.filter((_, i) => i !== bIdx);
-                                                    setOcrData({ ...ocrData, blocks: newBlocks });
-                                                }}><Trash2 className="h-4 w-4" /></Button>
-                                            </div>
-                                            <div className="space-y-6">
-                                                {block.turnos.map((turno, tIdx) => {
-                                                    const totalTurno = turno.valores.reduce((a, b) => a + (parseFloat(b.val.replace(/\./g, "").replace(",", ".")) || 0), 0);
-                                                    const hasDiscrepancy = turno.totalOriginal && Math.abs(totalTurno - turno.totalOriginal) > 2;
-
-                                                    return (
-                                                        <div key={tIdx} className={cn(
-                                                            "bg-white p-4 rounded border transition-colors",
-                                                            hasDiscrepancy ? "border-red-400 bg-red-50/30" : "border-neutral-200"
-                                                        )}>
-                                                            <div className="flex justify-between items-center mb-2">
-                                                                <div className="flex items-center gap-2">
-                                                                    <Input value={turno.nome} onChange={(e) => {
-                                                                        const newBlocks = [...ocrData.blocks];
-                                                                        newBlocks[bIdx].turnos[tIdx].nome = e.target.value;
-                                                                        setOcrData({ ...ocrData, blocks: newBlocks });
-                                                                    }} className="font-bold text-sm uppercase w-48 h-8 border-none p-0 focus-visible:ring-0 bg-transparent" />
-                                                                    {hasDiscrepancy && (
-                                                                        <span className="text-[9px] font-bold text-red-500 bg-red-100 px-2 py-0.5 rounded flex items-center gap-1 animate-pulse">
-                                                                            Soma não bate: {turno.totalOriginal} na imagem
-                                                                        </span>
-                                                                    )}
-                                                                </div>
-                                                                <span
-                                                                    className={cn(
-                                                                        "font-mono font-bold",
-                                                                        hasDiscrepancy ? "text-red-600" : "text-emerald-600"
-                                                                    )}
-                                                                >
-                                                                    {totalTurno.toLocaleString('pt-BR')}
-                                                                </span>
-                                                            </div>
-                                                            <div className="grid grid-cols-6 gap-2">
-                                                                {turno.valores.map((item, vIdx) => (
-                                                                    <Input
-                                                                        key={vIdx}
-                                                                        id={`ocr-input-${ocrData.allBoxes.findIndex(b => b.text === item.bbox?.text && b.x0 === item.bbox?.x0)}`}
-                                                                        value={item.val}
-                                                                        onChange={(e) => {
-                                                                            const newBlocks = [...ocrData.blocks];
-                                                                            newBlocks[bIdx].turnos[tIdx].valores[vIdx].val = e.target.value;
-                                                                            setOcrData({ ...ocrData, blocks: newBlocks });
-                                                                        }}
-                                                                        className={cn(
-                                                                            "text-center font-mono text-sm h-8 transition-all hover:ring-2 hover:ring-emerald-500",
-                                                                            hasDiscrepancy && "border-red-200 focus:border-red-500 focus:ring-red-500"
-                                                                        )}
-                                                                    />
-                                                                ))}
-                                                                <button onClick={() => {
-                                                                    const newBlocks = [...ocrData.blocks];
-                                                                    newBlocks[bIdx].turnos[tIdx].valores.push({ val: "0" });
-                                                                    setOcrData({ ...ocrData, blocks: newBlocks });
-                                                                }} className="border border-dashed rounded text-neutral-400 hover:text-emerald-500">+</button>
-                                                            </div>
-                                                        </div>
-                                                    )
-                                                })}
-                                                <Button variant="outline" size="sm" className="w-full border-dashed text-xs uppercase" onClick={() => {
-                                                    const newBlocks = [...ocrData.blocks];
-                                                    newBlocks[bIdx].turnos.push({ nome: "NOVO TURNO", valores: [{ val: "0" }, { val: "0" }, { val: "0" }] });
-                                                    setOcrData({ ...ocrData, blocks: newBlocks });
-                                                }}>+ Turno</Button>
-                                            </div>
-                                        </div>
-                                    ))}
-                                    <Button variant="ghost" className="w-full py-8 border-2 border-dashed border-neutral-300 text-neutral-400 hover:bg-neutral-50 uppercase font-bold" onClick={() => {
-                                        setOcrData({ ...ocrData, blocks: [...ocrData.blocks, { id: Math.random().toString(), data: "", turnos: [] }] });
-                                    }}>+ Bloco Manual</Button>
-                                </div>
                             ) : (
-                                <div className="flex flex-col items-center justify-center h-full text-neutral-400">
-                                    <Copy className="h-10 w-10 mb-4" />
-                                    <p>Cole uma imagem (CTRL+V)</p>
-                                </div>
+                                <>
+                                    <div className="flex-1">
+                                        {ocrData ? (
+                                            <div className="p-8 space-y-12 pb-8">
+                                                {ocrData.blocks.map((block, bIdx) => (
+                                                    <div key={block.id} className="border border-neutral-200 rounded-xl p-6 bg-neutral-50 shadow-sm relative group hover:border-emerald-300 transition-all">
+                                                        <div className="flex items-center gap-4 mb-6 border-b border-black/10 pb-4">
+                                                            <div className="bg-black text-white px-3 py-1 text-xs font-bold rounded uppercase">DIA {bIdx + 1}</div>
+                                                            <div className="flex-1">
+                                                                <Input type="date" value={block.data} onChange={(e) => {
+                                                                    const newBlocks = [...ocrData.blocks];
+                                                                    newBlocks[bIdx].data = e.target.value;
+                                                                    setOcrData({ ...ocrData, blocks: newBlocks });
+                                                                }} className={cn(
+                                                                    "font-mono font-bold text-xl h-10 w-48 bg-white",
+                                                                    !block.data
+                                                                        ? "border-red-400 ring-2 ring-red-300 animate-pulse focus:ring-red-500"
+                                                                        : "border-emerald-200 focus:ring-emerald-500"
+                                                                )} />
+                                                            </div>
+                                                            <Button variant="ghost" size="icon" className="text-neutral-400 hover:text-red-500" onClick={() => {
+                                                                const newBlocks = ocrData.blocks.filter((_, i) => i !== bIdx);
+                                                                setOcrData({ ...ocrData, blocks: newBlocks });
+                                                            }}><Trash2 className="h-4 w-4" /></Button>
+                                                        </div>
+                                                        <div className="space-y-6">
+                                                            {block.turnos.map((turno, tIdx) => {
+                                                                const isTotalRow = turno.nome.includes("TOTAL") || turno.nome.includes("GERAL");
+                                                                const totalTurno = turno.valores.reduce((a, b) => a + (parseFloat(b.val.replace(/\./g, "").replace(",", ".")) || 0), 0);
+                                                                const hasDiscrepancy = !isTotalRow && turno.totalOriginal && Math.abs(totalTurno - turno.totalOriginal) > 2;
+
+                                                                if (isTotalRow) {
+                                                                    return (
+                                                                        <div key={tIdx} className="bg-neutral-900 text-white p-4 rounded-lg border-2 border-neutral-700 relative overflow-hidden">
+                                                                            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-yellow-400 via-amber-500 to-yellow-400" />
+                                                                            <div className="flex justify-between items-center mb-3">
+                                                                                <div className="flex items-center gap-2">
+                                                                                    <Input value={turno.nome} onChange={(e) => {
+                                                                                        const newBlocks = [...ocrData.blocks];
+                                                                                        newBlocks[bIdx].turnos[tIdx].nome = e.target.value;
+                                                                                        setOcrData({ ...ocrData, blocks: newBlocks });
+                                                                                    }} className="font-black text-sm uppercase w-48 h-8 border-none p-0 focus-visible:ring-0 bg-transparent text-yellow-400" />
+                                                                                </div>
+                                                                                <span className="font-mono font-black text-xl text-yellow-400">
+                                                                                    {totalTurno.toLocaleString('pt-BR')}
+                                                                                </span>
+                                                                            </div>
+                                                                            <div className="grid grid-cols-6 gap-2">
+                                                                                {turno.valores.map((item, vIdx) => (
+                                                                                    <Input
+                                                                                        key={vIdx}
+                                                                                        title={`Valor ${vIdx + 1}`}
+                                                                                        placeholder="0"
+                                                                                        value={item.val}
+                                                                                        onChange={(e) => {
+                                                                                            const newBlocks = [...ocrData.blocks];
+                                                                                            newBlocks[bIdx].turnos[tIdx].valores[vIdx].val = e.target.value;
+                                                                                            setOcrData({ ...ocrData, blocks: newBlocks });
+                                                                                        }}
+                                                                                        className="text-center font-mono text-sm h-8 bg-neutral-800 border-neutral-700 text-neutral-100 hover:ring-2 hover:ring-yellow-500"
+                                                                                    />
+                                                                                ))}
+                                                                                <button onClick={() => {
+                                                                                    const newBlocks = [...ocrData.blocks];
+                                                                                    newBlocks[bIdx].turnos[tIdx].valores.push({ val: "0" });
+                                                                                    setOcrData({ ...ocrData, blocks: newBlocks });
+                                                                                }} className="border border-dashed border-neutral-600 rounded text-neutral-500 hover:text-yellow-400">+</button>
+                                                                            </div>
+                                                                        </div>
+                                                                    );
+                                                                }
+
+                                                                return (
+                                                                    <div key={tIdx} className={cn(
+                                                                        "bg-white p-4 rounded border transition-colors",
+                                                                        hasDiscrepancy ? "border-red-400 bg-red-50/30" : "border-neutral-200"
+                                                                    )}>
+                                                                        <div className="flex justify-between items-center mb-2">
+                                                                            <div className="flex items-center gap-2">
+                                                                                <Input value={turno.nome} onChange={(e) => {
+                                                                                    const newBlocks = [...ocrData.blocks];
+                                                                                    newBlocks[bIdx].turnos[tIdx].nome = e.target.value;
+                                                                                    setOcrData({ ...ocrData, blocks: newBlocks });
+                                                                                }} className="font-bold text-sm uppercase w-48 h-8 border-none p-0 focus-visible:ring-0 bg-transparent" />
+                                                                                {hasDiscrepancy && (
+                                                                                    <span className="text-[9px] font-bold text-red-500 bg-red-100 px-2 py-0.5 rounded flex items-center gap-1 animate-pulse">
+                                                                                        Soma não bate: {turno.totalOriginal} na imagem
+                                                                                    </span>
+                                                                                )}
+                                                                            </div>
+                                                                            <span
+                                                                                className={cn(
+                                                                                    "font-mono font-bold",
+                                                                                    hasDiscrepancy ? "text-red-600" : "text-emerald-600"
+                                                                                )}
+                                                                            >
+                                                                                {totalTurno.toLocaleString('pt-BR')}
+                                                                            </span>
+                                                                        </div>
+                                                                        <div className="grid grid-cols-6 gap-2">
+                                                                            {turno.valores.map((item, vIdx) => (
+                                                                                <Input
+                                                                                    key={vIdx}
+                                                                                    title={`Valor ${vIdx + 1}`}
+                                                                                    placeholder="0"
+                                                                                    id={`ocr-input-${ocrData.allBoxes.findIndex(b => b.text === item.bbox?.text && b.x0 === item.bbox?.x0)}`}
+                                                                                    value={item.val}
+                                                                                    onChange={(e) => {
+                                                                                        const newBlocks = [...ocrData.blocks];
+                                                                                        newBlocks[bIdx].turnos[tIdx].valores[vIdx].val = e.target.value;
+                                                                                        setOcrData({ ...ocrData, blocks: newBlocks });
+                                                                                    }}
+                                                                                    className={cn(
+                                                                                        "text-center font-mono text-sm h-8 transition-all hover:ring-2 hover:ring-emerald-500",
+                                                                                        hasDiscrepancy && "border-red-200 focus:border-red-500 focus:ring-red-500"
+                                                                                    )}
+                                                                                />
+                                                                            ))}
+                                                                            <button onClick={() => {
+                                                                                const newBlocks = [...ocrData.blocks];
+                                                                                newBlocks[bIdx].turnos[tIdx].valores.push({ val: "0" });
+                                                                                setOcrData({ ...ocrData, blocks: newBlocks });
+                                                                            }} className="border border-dashed rounded text-neutral-400 hover:text-emerald-500">+</button>
+                                                                        </div>
+                                                                    </div>
+                                                                )
+                                                            })}
+                                                            <Button variant="outline" size="sm" className="w-full border-dashed text-xs uppercase" onClick={() => {
+                                                                const newBlocks = [...ocrData.blocks];
+                                                                newBlocks[bIdx].turnos.push({ nome: "NOVO TURNO", valores: [{ val: "0" }, { val: "0" }, { val: "0" }] });
+                                                                setOcrData({ ...ocrData, blocks: newBlocks });
+                                                            }}>+ Turno</Button>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                                <Button variant="ghost" className="w-full py-8 border-2 border-dashed border-neutral-300 text-neutral-400 hover:bg-neutral-50 uppercase font-bold" onClick={() => {
+                                                    setOcrData({ ...ocrData, blocks: [...ocrData.blocks, { id: Math.random().toString(), data: "", turnos: [] }] });
+                                                }}>+ Bloco Manual</Button>
+                                            </div>
+                                        ) : (
+                                            <div className="flex flex-col gap-2 w-full max-w-md mx-auto mt-20">
+                                                <div className="flex flex-col items-center justify-center p-8 text-neutral-400 border-2 border-dashed border-neutral-200 rounded-xl">
+                                                    <Copy className="h-10 w-10 mb-4" />
+                                                    <p>Cole uma imagem (CTRL+V)</p>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* DEBUG PANEL - ALWAYS VISIBLE */}
+                                    {ocrDebugText && (
+                                        <div className="p-4 bg-neutral-100 border-t border-neutral-200">
+                                            <p className="text-[10px] font-bold text-neutral-500 mb-2 uppercase tracking-wider">Log de Leitura OCR (Debug)</p>
+                                            <textarea
+                                                title="Log de Leitura OCR"
+                                                placeholder="Nenhum log disponível"
+                                                className="w-full h-48 text-[10px] font-mono p-3 border border-neutral-300 bg-white text-neutral-700 rounded-lg shadow-inner resize-y focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
+                                                value={ocrDebugText}
+                                                readOnly
+                                            />
+                                        </div>
+                                    )}
+                                </>
                             )}
                         </div>
                     </div>
@@ -845,8 +1116,7 @@ export default function Operacao() {
                 )}
             </div>
 
-            <div className="space-y-8">
-                {/* Top Section */}
+            <div className="space-y-8">                {/* Top Section */}
                 {/* Top Section */}
                 <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-stretch">
                     {/* Upload Card - Modernizado */}
@@ -1011,7 +1281,9 @@ export default function Operacao() {
                                     const dayItems = dateGroups[date];
 
                                     // Identificar Máquinas e Turnos dinamicamente
-                                    const machines = Array.from(new Set(dayItems.map(i => i.produto || "Desconhecido"))).sort();
+                                    const machines = Array.from(new Set(dayItems.map(i => i.produto || "Desconhecido")))
+                                        .filter(m => dayItems.some(i => i.produto === m && i.peso > 0))
+                                        .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
                                     const shifts = Array.from(new Set(dayItems.map(i => i.turno))).sort();
 
                                     // Calcular Totais

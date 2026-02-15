@@ -15,7 +15,8 @@ import {
     Upload,
     Zap,
     Menu,
-    X
+    X,
+    FileSpreadsheet
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
@@ -88,6 +89,7 @@ export default function Layout() {
         { href: "/icac", label: t('nav.icac'), icon: Microscope, public: true },
         { href: "/interlaboratorial", label: t('nav.interlab'), icon: Network, public: true },
         { href: "/operacao", label: "Operação", icon: Zap, allowedRoles: ['admin_global', 'admin_lab', 'quality_admin'] },
+        { href: "/monitoramento-os", label: "Monitoramento O.S.", icon: FileSpreadsheet, allowedRoles: ['admin_global', 'admin_lab', 'quality_admin'] },
         { href: "/quality", label: t('nav.quality'), icon: Award, allowedRoles: ['admin_global', 'admin_lab', 'quality_admin'] },
         { href: "/admin", label: t('nav.config'), icon: ShieldCheck, allowedRoles: ['admin_global', 'admin_lab'] },
     ];
@@ -332,6 +334,8 @@ export default function Layout() {
                                     <span className="hidden xl:inline">{t('common.import')}</span>
                                     <input
                                         type="file"
+                                        aria-label="Importar Backup"
+                                        title="Importar Backup"
                                         accept=".json"
                                         className="hidden"
                                         onChange={async (e) => {
