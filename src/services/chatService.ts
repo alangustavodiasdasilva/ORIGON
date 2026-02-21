@@ -11,21 +11,26 @@ export interface ChatMessage {
 
 const STORAGE_KEY = 'fibertech_chat_history';
 
-const isSupabaseEnabled = () => !!import.meta.env.VITE_SUPABASE_URL && !!import.meta.env.VITE_SUPABASE_ANON_KEY;
+const isSupabaseEnabled = () => {
+    const url = import.meta.env.VITE_SUPABASE_URL;
+    const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
+    return !!url && url !== 'YOUR_SUPABASE_URL' && !!key && key !== 'YOUR_SUPABASE_ANON_KEY';
+};
 
 export const ChatService = {
     async getMessages(): Promise<ChatMessage[]> {
         if (isSupabaseEnabled()) {
-            const { data, error } = await supabase
-                .from('chat_mensagens')
-                .select('*')
-                .order('timestamp', { ascending: true }); // Messages in chronological order
+            try {
+                const { data, error } = await supabase
+                    .from('chat_mensagens')
+                    .select('*')
+                    .order('timestamp', { ascending: true }); // Messages in chronological order
 
-            if (error) {
-                console.error("Error fetching chat:", error);
-                return [];
+                if (error) throw error;
+                return data || [];
+            } catch (err) {
+                console.warn("Supabase chat fetch failed, falling back to local:", err);
             }
-            return data;
         }
 
         try {

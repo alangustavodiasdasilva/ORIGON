@@ -20,7 +20,11 @@ export interface Analista {
 
 const STORAGE_KEY = 'fibertech_analistas';
 
-const isSupabaseEnabled = () => !!import.meta.env.VITE_SUPABASE_URL && !!import.meta.env.VITE_SUPABASE_ANON_KEY;
+const isSupabaseEnabled = () => {
+    const url = import.meta.env.VITE_SUPABASE_URL;
+    const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
+    return !!url && url !== 'YOUR_SUPABASE_URL' && !!key && key !== 'YOUR_SUPABASE_ANON_KEY';
+};
 
 const getStoredAnalistas = (): Analista[] => {
     try {
@@ -39,36 +43,41 @@ const saveStoredAnalistas = (analistas: Analista[]) => {
 export const AnalistaService = {
     async list(): Promise<Analista[]> {
         if (isSupabaseEnabled()) {
-            const { data, error } = await supabase.from('analistas').select('*');
-            if (error) throw error;
-            // CRITICAL SAFETY NET: If Supabase empty, try local first
-            if (data && data.length > 0) return data;
-
-            const localData = getStoredAnalistas();
-            if (localData.length > 0) {
-                console.warn("Supabase (Analistas) empty. Fall back to local.");
-                return localData;
+            try {
+                const { data, error } = await supabase.from('analistas').select('*');
+                if (error) throw error;
+                if (data && data.length > 0) return data;
+            } catch (err) {
+                console.warn("Supabase list failed, falling back to local:", err);
             }
 
-            return [];
+            const localData = getStoredAnalistas();
+            return localData || [];
         }
         return getStoredAnalistas();
     },
 
     async listByLab(labId: string): Promise<Analista[]> {
         if (isSupabaseEnabled()) {
-            const { data, error } = await supabase.from('analistas').select('*').eq('lab_id', labId);
-            if (error) throw error;
-            return data || [];
+            try {
+                const { data, error } = await supabase.from('analistas').select('*').eq('lab_id', labId);
+                if (error) throw error;
+                return data || [];
+            } catch (err) {
+                console.warn("Supabase listByLab failed, falling back to local:", err);
+            }
         }
         return getStoredAnalistas().filter(a => a.lab_id === labId);
     },
 
     async get(id: string): Promise<Analista | undefined> {
         if (isSupabaseEnabled()) {
-            const { data, error } = await supabase.from('analistas').select('*').eq('id', id).single();
-            if (error) return undefined;
-            return data;
+            try {
+                const { data, error } = await supabase.from('analistas').select('*').eq('id', id).single();
+                if (!error && data) return data;
+            } catch (err) {
+                console.warn("Supabase get failed, falling back to local:", err);
+            }
         }
         return getStoredAnalistas().find(a => a.id === id);
     },

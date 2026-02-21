@@ -101,29 +101,54 @@ export const parseStatusOSFileInChunks = async (
                 let totalProcessed = 0;
 
                 for (const row of rawData) {
+                    const getVal = (keys: string[]) => {
+                        for (const key of keys) {
+                            if (row[key as keyof StatusOSRawData] !== undefined) return row[key as keyof StatusOSRawData];
+                        }
+                        return undefined;
+                    };
+
+                    const tomadorVal = String(getVal(["Tomador", "tomador"]) || "").trim();
+                    const clienteVal = String(getVal(["Cliente", "cliente"]) || "").trim();
+                    let finalCliente = clienteVal;
+                    if (tomadorVal && clienteVal && tomadorVal !== clienteVal) {
+                        finalCliente = `${tomadorVal}|||${clienteVal}`;
+                    } else if (tomadorVal && !clienteVal) {
+                        finalCliente = tomadorVal;
+                    }
+
+                    const rawRegistrado = getVal(["Registrado", "Registro", "registrado"]);
+                    const rawRecepcao = getVal(["Recepção", "Recepcao", "recepção", "recepcao"]);
+                    const rawAcondicionado = getVal(["Acondicionado", "acondicionado"]);
+                    const rawFinalizado = getVal(["Finalizado", "finalizado"]);
+                    const rawAmostras = getVal(["Amostras", "amostras", "Total Amostras"]);
+                    const rawPesoMala = getVal(["Peso  Mala", "Peso Mala", "peso mala"]);
+                    const rawPesoMedio = getVal(["Peso Médio Amostra", "Peso Medio Amostra", "Peso Médio", "Peso Medio"]);
+                    const rawHoras = getVal(["Horas", "horas"]);
+
                     const parsed: StatusOSParsed = {
-                        os_numero: String(row["O.S."] || ""),
-                        romaneio: String(row["Romaneio"] || ""),
-                        cliente: row["Cliente"] || "",
-                        fazenda: row["Fazenda"] || "",
-                        usina: row["Usina"] || "",
-                        variedade: row["Variedade"] || "",
+                        os_numero: String(getVal(["O.S.", "OS", "o.s."]) || ""),
+                        romaneio: String(getVal(["Romaneio", "romaneio"]) || ""),
+                        cliente: finalCliente,
+                        fazenda: String(getVal(["Fazenda", "fazenda"]) || ""),
+                        usina: String(getVal(["Usina", "usina"]) || ""),
+                        variedade: String(getVal(["Variedade", "variedade"]) || ""),
 
-                        data_registro: excelDateToJSDate(Number(row["Registrado"])),
-                        data_recepcao: excelDateToJSDate(Number(row["Recepção"])),
-                        data_acondicionamento: excelDateToJSDate(Number(row["Acondicionado"])),
-                        data_finalizacao: excelDateToJSDate(Number(row["Finalizado"])),
+                        data_registro: excelDateToJSDate(Number(rawRegistrado)),
+                        data_recepcao: excelDateToJSDate(Number(rawRecepcao)),
+                        data_acondicionamento: excelDateToJSDate(Number(rawAcondicionado)),
+                        data_finalizacao: excelDateToJSDate(Number(rawFinalizado)),
 
-                        revisor: row["Revisor"] || "",
-                        status: row["Status"] || "",
+                        revisor: String(getVal(["Revisor", "revisor"]) || ""),
+                        status: String(getVal(["Status", "status"]) || ""),
 
-                        total_amostras: Number(row["Amostras"] || 0),
-                        peso_mala: Number(row["Peso  Mala"] || 0),
-                        peso_medio: Number(row["Peso Médio Amostra"] || 0),
-                        horas: Number(row["Horas"] || 0),
+                        total_amostras: Number(rawAmostras || 0),
+                        peso_mala: Number(rawPesoMala || 0),
+                        peso_medio: Number(rawPesoMedio || 0),
+                        horas: Number(rawHoras || 0),
 
-                        nota_fiscal: row["Nota Fiscal"] ? String(row["Nota Fiscal"]) : "",
-                        fatura: row["Fatura"] ? String(row["Fatura"]) : "",
+                        nota_fiscal: getVal(["Nota Fiscal", "nota fiscal"]) ? String(getVal(["Nota Fiscal", "nota fiscal"])) : "",
+                        fatura: getVal(["Fatura", "fatura"]) ? String(getVal(["Fatura", "fatura"])) : "",
                     };
 
                     if (parsed.os_numero && parsed.cliente) {

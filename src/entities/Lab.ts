@@ -13,7 +13,11 @@ export interface Lab {
 
 const STORAGE_KEY = 'fibertech_labs';
 
-const isSupabaseEnabled = () => !!import.meta.env.VITE_SUPABASE_URL && !!import.meta.env.VITE_SUPABASE_ANON_KEY;
+const isSupabaseEnabled = () => {
+    const url = import.meta.env.VITE_SUPABASE_URL;
+    const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
+    return !!url && url !== 'YOUR_SUPABASE_URL' && !!key && key !== 'YOUR_SUPABASE_ANON_KEY';
+};
 
 const getStoredLabs = (): Lab[] => {
     try {
@@ -56,9 +60,12 @@ export const LabService = {
 
     async get(id: string): Promise<Lab | undefined> {
         if (isSupabaseEnabled()) {
-            const { data, error } = await supabase.from('laboratorios').select('*').eq('id', id).single();
-            if (error) return undefined;
-            return data;
+            try {
+                const { data, error } = await supabase.from('laboratorios').select('*').eq('id', id).single();
+                if (!error && data) return data;
+            } catch (err) {
+                console.warn("Supabase LabService.get failed:", err);
+            }
         }
         return getStoredLabs().find(l => l.id === id);
     },

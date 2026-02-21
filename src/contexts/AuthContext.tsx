@@ -42,7 +42,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
                 // If user has a specific lab AND is not a global admin, load it
                 if (parsedUser.lab_id && parsedUser.acesso !== 'admin_global') {
-                    const lab = await LabService.get(parsedUser.lab_id);
+                    let lab = await LabService.get(parsedUser.lab_id);
+                    if (!lab) {
+                        const allLabs = await LabService.list();
+                        lab = allLabs.find(l => String(l.id) === String(parsedUser.lab_id));
+                    }
                     if (lab) setCurrentLab(lab);
                 } else {
                     // Restore selected lab for global admin so F5 keeps them in the lab
@@ -52,8 +56,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     }
                 }
             }
-            // Seed database if empty
-            await checkAndSeed();
+            // Seed database if empty - wrapped in try-catch to prevent app hang
+            try {
+                await checkAndSeed();
+            } catch (e) {
+                console.warn("Database seeding failed (likely offline):", e);
+            }
 
             setIsLoading(false);
         };
@@ -124,7 +132,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     setCurrentLab(null);
                     localStorage.removeItem("fibertech_selected_lab");
                 } else if (found.lab_id) {
-                    const lab = await LabService.get(found.lab_id);
+                    let lab = await LabService.get(found.lab_id);
+                    if (!lab) {
+                        const allLabs = await LabService.list();
+                        lab = allLabs.find(l => String(l.id) === String(found.lab_id));
+                    }
                     if (lab) {
                         setCurrentLab(lab);
                         localStorage.setItem("fibertech_selected_lab", JSON.stringify(lab));
@@ -146,7 +158,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     const selectLab = async (labId: string) => {
-        const lab = await LabService.get(labId);
+        let lab = await LabService.get(labId);
+        if (!lab) {
+            // Fallback: sometimes LabService.get single query fails for string type mismatches, let's find from list
+            const allLabs = await LabService.list();
+            lab = allLabs.find(l => String(l.id) === String(labId));
+        }
+
         if (lab) {
             setCurrentLab(lab);
             localStorage.setItem("fibertech_selected_lab", JSON.stringify(lab));

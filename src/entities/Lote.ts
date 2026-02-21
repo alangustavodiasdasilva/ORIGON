@@ -15,7 +15,11 @@ export interface Lote {
 
 const STORAGE_KEY = 'fibertech_lotes';
 
-const isSupabaseEnabled = () => !!import.meta.env.VITE_SUPABASE_URL && !!import.meta.env.VITE_SUPABASE_ANON_KEY;
+const isSupabaseEnabled = () => {
+    const url = import.meta.env.VITE_SUPABASE_URL;
+    const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
+    return !!url && url !== 'YOUR_SUPABASE_URL' && !!key && key !== 'YOUR_SUPABASE_ANON_KEY';
+};
 
 const getStoredLotes = (): Lote[] => {
     try {
@@ -41,26 +45,28 @@ const saveStoredLotes = (lotes: Lote[]) => {
 export const LoteService = {
     async list(): Promise<Lote[]> {
         if (isSupabaseEnabled()) {
-            const { data, error } = await supabase.from('lotes').select('*').order('created_at', { ascending: false });
-            if (error) throw error;
-            if (data && data.length > 0) return data;
-
-            // CRITICAL SAFETY NET
-            const local = getStoredLotes();
-            if (local.length > 0) {
-                console.warn("Supabase (Lotes) empty. Using Local Storage Fallback.");
-                return local;
+            try {
+                const { data, error } = await supabase.from('lotes').select('*').order('created_at', { ascending: false });
+                if (error) throw error;
+                if (data && data.length > 0) return data;
+            } catch (err) {
+                console.warn("Supabase LoteService.list failed, falling back to local:", err);
             }
-            return [];
+
+            const local = getStoredLotes();
+            return local || [];
         }
         return getStoredLotes();
     },
 
     async get(id: string): Promise<Lote | undefined> {
         if (isSupabaseEnabled()) {
-            const { data, error } = await supabase.from('lotes').select('*').eq('id', id).single();
-            if (error) return undefined;
-            return data;
+            try {
+                const { data, error } = await supabase.from('lotes').select('*').eq('id', id).single();
+                if (!error && data) return data;
+            } catch (err) {
+                console.warn("Supabase LoteService.get failed:", err);
+            }
         }
         return getStoredLotes().find(l => l.id === id);
     },

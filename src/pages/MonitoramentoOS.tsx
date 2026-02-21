@@ -1,21 +1,58 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
-import { parseStatusOSFileInChunks } from "@/lib/statusOSParser";
+import { parseStatusOSFileInChunks, type StatusOSParsed } from "@/lib/statusOSParser";
 import { statusOSService } from "@/services/statusOS.service";
+import { producaoService } from "@/services/producao.service";
+import type { ProducaoData } from "@/services/producao.service";
+import { LabService, type Lab } from "@/entities/Lab";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Upload, FileSpreadsheet, Search, Loader2, RefreshCw, Activity as ActivityIcon, Trash2, AlertTriangle, Clock, Star, Printer } from "lucide-react";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer } from 'recharts';
+import { Upload, RefreshCw, Trash2, Loader2, Printer, Users, LayoutGrid, ClipboardList, Database, Activity, Clock, Search, Star, PlusSquare, MinusSquare, Inbox } from "lucide-react";
+import { LineChart, Line, BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
 import { format, differenceInHours } from "date-fns";
+import { ptBR } from "date-fns/locale";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
-// import { ptBR } from "date-fns/locale";
+import { useToast } from "@/contexts/ToastContext";
+import { supabase } from "@/lib/supabase"; // Ensure supabase is imported
+
+const CustomTooltip = ({ active, payload, label }: any) => {
+    if (active && payload && payload.length) {
+        const sortedPayload = [...payload].sort((a: any, b: any) => {
+            if (a.name === 'Total Recebido') return -1;
+            if (b.name === 'Total Recebido') return 1;
+            return b.value - a.value;
+        });
+        return (
+            <div className="bg-white/95 backdrop-blur-sm border border-neutral-200 p-4 shadow-2xl rounded-xl animate-in fade-in zoom-in duration-200">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-400 mb-2 border-b border-neutral-100 pb-1">{label}</p>
+                <div className="space-y-1.5">
+                    {sortedPayload.map((entry: any, index: number) => (
+                        <div key={index} className="flex items-center justify-between gap-8">
+                            <div className="flex items-center gap-2">
+                                <style>{`.tooltip-color-bg-${index}-${entry.name.replace(/[^a-zA-Z]/g, '')} { background-color: ${entry.color}; }`}</style>
+                                <div className={`h-2 w-2 rounded-full tooltip-color-bg-${index}-${entry.name.replace(/[^a-zA-Z]/g, '')}`} />
+                                <span className={cn("text-[11px] font-medium", entry.name === 'Total Recebido' ? "text-black font-black" : "text-neutral-600")}>{entry.name}</span>
+                            </div>
+                            <span className={cn("text-[11px] font-mono", entry.name === 'Total Recebido' ? "text-black font-black" : "font-bold text-black")}>{entry.value.toLocaleString('pt-BR')}</span>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        );
+    }
+    return null;
+};
+
+interface IProducaoVinculo {
+    data_producao: string;
+    peso: number;
+}
 
 interface OSItem {
     id: string;
     os_numero: string;
+    tomador?: string;
     cliente: string;
     fazenda: string;
     revisor: string;
@@ -29,63 +66,63 @@ interface OSItem {
 }
 
 export default function MonitoramentoOS() {
-    const { currentLab, user } = useAuth();
+    const { currentLab, user, selectLab } = useAuth();
     const labId = currentLab?.id || user?.lab_id;
+    const { addToast } = useToast();
 
     const [isLoading, setIsLoading] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
+    const [labs, setLabs] = useState<Lab[]>([]);
     const [osList, setOsList] = useState<OSItem[]>([]);
+    const [productionData, setProductionData] = useState<IProducaoVinculo[]>([]);
     const [searchTerm, setSearchTerm] = useState("");
     const [stats, setStats] = useState({ total: 0, faturados: 0, emAberto: 0, totalAmostras: 0, saldoAmostras: 0 });
     const [activeTab, setActiveTab] = useState<'geral' | 'revisores' | 'clientes' | 'saldo_diario'>('geral');
     const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
     const matrixTableRef = useRef<HTMLDivElement>(null);
+    const [collapsedClients, setCollapsedClients] = useState<string[]>([]);
+
     const [selectedChartClients, setSelectedChartClients] = useState<string[]>([]);
     const [selectedReviewers, setSelectedReviewers] = useState<string[]>([]);
-    const [productionData, setProductionData] = useState<any[]>([]);
 
-    // Pinned Cells (Matrix) - Format: Record<"client|date", priorityLevel>
-    // Levels: 1 (Alta/Red), 2 (Media/Amber), 3 (Baixa/Green), 0 (None)
     const [pinnedCells, setPinnedCells] = useState<Record<string, number>>(() => {
         const saved = localStorage.getItem('pinned_matrix_cells_v2_' + (labId || 'default'));
         return saved ? JSON.parse(saved) : {};
     });
 
     const togglePinCell = (client: string, date: string) => {
-        setPinnedCells(prev => {
+        setPinnedCells((prev: Record<string, number>) => {
             const key = `${client}|${date}`;
             const currentLevel = prev[key] || 0;
-            const nextLevel = (currentLevel + 1) % 4; // 0, 1, 2, 3
-
+            const nextLevel = (currentLevel + 1) % 4;
             const next = { ...prev };
-            if (nextLevel === 0) {
-                delete next[key];
-            } else {
-                next[key] = nextLevel;
-            }
-
+            if (nextLevel === 0) delete next[key];
+            else next[key] = nextLevel;
             localStorage.setItem('pinned_matrix_cells_v2_' + (labId || 'default'), JSON.stringify(next));
             return next;
         });
     };
 
     const toggleReviewerSelection = (reviewer: string) => {
-        setSelectedReviewers(prev =>
+        setSelectedReviewers((prev: string[]) =>
             prev.includes(reviewer)
-                ? prev.filter(r => r !== reviewer)
+                ? prev.filter((r: string) => r !== reviewer)
                 : [...prev, reviewer]
         );
     };
 
     const toggleClientSelection = (client: string) => {
-        setSelectedChartClients(prev =>
+        setSelectedChartClients((prev: string[]) =>
             prev.includes(client)
-                ? prev.filter(c => c !== client)
+                ? prev.filter((c: string) => c !== client)
                 : [...prev, client]
         );
     };
 
-    // Lista Filtrada Base para todas as agregações
+    const toggleClientCollapse = (clientName: string) => {
+        setCollapsedClients(prev => prev.includes(clientName) ? prev.filter(c => c !== clientName) : [...prev, clientName]);
+    };
+
     const filteredOS = React.useMemo(() => {
         return osList.filter((item: OSItem) =>
             item.os_numero.toString().includes(searchTerm) ||
@@ -95,247 +132,354 @@ export default function MonitoramentoOS() {
         );
     }, [osList, searchTerm]);
 
-    // Agregações
+    useEffect(() => {
+        if (user?.acesso === 'admin_global') {
+            LabService.list().then(setLabs).catch(console.error);
+        }
+    }, [user]);
+
+    // Supabase Realtime Subscription setup
+    useEffect(() => {
+        if (!labId) return;
+
+        let debounceTimer: NodeJS.Timeout;
+
+        const handleRealtimeChange = (payload: any) => {
+            console.log("REALTIME ACTIVITY DETECTED:", payload);
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => {
+                loadData();
+            }, 2000);
+        };
+
+        const subscription = supabase
+            .channel('status_os_realtime_' + labId)
+            .on(
+                'postgres_changes',
+                // Removendo o filtro de lab_id temporariamente para garantir que o websocket capte tudo na tabela
+                { event: '*', schema: 'public', table: 'status_os_hvi' },
+                handleRealtimeChange
+            )
+            .subscribe((status) => {
+                console.log("Supabase Realtime Status:", status);
+            });
+
+        return () => {
+            clearTimeout(debounceTimer);
+            supabase.removeChannel(subscription);
+        };
+    }, [labId]);
+
     const revisorStats = React.useMemo(() => {
-        const stats: Record<string, number> = {};
+        const s: Record<string, number> = {};
         filteredOS.forEach((os: OSItem) => {
             const rev = os.revisor || 'Não Informado';
-            stats[rev] = (stats[rev] || 0) + (os.total_amostras || 0);
+            s[rev] = (s[rev] || 0) + (os.total_amostras || 0);
         });
-        return Object.entries(stats)
+        return Object.entries(s)
             .sort(([, a], [, b]) => b - a)
             .map(([name, total]) => ({ name, total }));
     }, [filteredOS]);
 
     const clienteStats = React.useMemo(() => {
-        const stats: Record<string, { totalAmostras: number; totalHoras: number; count: number }> = {};
-        filteredOS.forEach((os: OSItem) => {
+        const s: Record<string, { totalAmostras: number; totalHoras: number; count: number }> = {};
+        osList.forEach((os: OSItem) => {
             const cli = os.cliente || 'Não Informado';
-            if (!stats[cli]) stats[cli] = { totalAmostras: 0, totalHoras: 0, count: 0 };
-
-            stats[cli].totalAmostras += (os.total_amostras || 0);
-            if (os.horas) {
-                stats[cli].totalHoras += os.horas;
-                stats[cli].count += 1;
-            }
+            if (!s[cli]) s[cli] = { totalAmostras: 0, totalHoras: 0, count: 0 };
+            s[cli].totalAmostras += (os.total_amostras || 0);
+            if (os.horas) { s[cli].totalHoras += os.horas; s[cli].count += 1; }
         });
-
-        return Object.entries(stats)
+        return Object.entries(s)
             .sort(([, a], [, b]) => b.totalAmostras - a.totalAmostras)
             .map(([name, data]) => ({
                 name,
                 total: data.totalAmostras,
                 avgTime: data.count > 0 ? (data.totalHoras / data.count).toFixed(1) : '-'
             }));
-    }, [filteredOS]);
+    }, [osList]);
 
-    // Agregação para Gráfico de Produtividade Diária por Revisor
     const revisorDailyStats = React.useMemo(() => {
+        if (osList.length === 0) return { data: [], keys: [], keyColors: {} };
         const grouped: Record<string, any> = {};
         const revisoresSet = new Set<string>();
 
-        // 1. Process Finished O.S. Data (Review / Analysts)
-        filteredOS.forEach((os: OSItem) => {
+        osList.forEach((os: OSItem) => {
+            if (os.data_recepcao) {
+                try {
+                    const recDateObj = new Date(os.data_recepcao);
+                    if (!isNaN(recDateObj.getTime())) {
+                        const dateKey = format(recDateObj, 'yyyy-MM-dd');
+                        const displayDate = format(recDateObj, 'dd/MM');
+                        if (!grouped[dateKey]) grouped[dateKey] = { name: displayDate, rawDate: dateKey };
+                        grouped[dateKey]['Volume Recebido'] = (grouped[dateKey]['Volume Recebido'] || 0) + (os.total_amostras || 0);
+                    }
+                } catch (e) { }
+            }
+
             if (os.data_finalizacao) {
                 try {
                     const finDateObj = new Date(os.data_finalizacao);
                     if (!isNaN(finDateObj.getTime())) {
                         const dateKey = format(finDateObj, 'yyyy-MM-dd');
                         const displayDate = format(finDateObj, 'dd/MM');
-
-                        if (!grouped[dateKey]) {
-                            grouped[dateKey] = { name: displayDate, rawDate: dateKey };
-                        }
-
-                        // Total Revised (by analysts)
-                        grouped[dateKey]['Total Produzido'] = (grouped[dateKey]['Total Produzido'] || 0) + (os.total_amostras || 0);
-
-                        // Per individual analyst
+                        if (!grouped[dateKey]) grouped[dateKey] = { name: displayDate, rawDate: dateKey };
+                        grouped[dateKey]['Total Revisado (Analistas)'] = (grouped[dateKey]['Total Revisado (Analistas)'] || 0) + (os.total_amostras || 0);
                         if (os.revisor) {
                             revisoresSet.add(os.revisor);
                             grouped[dateKey][os.revisor] = (grouped[dateKey][os.revisor] || 0) + (os.total_amostras || 0);
                         }
                     }
-                } catch (e) {
-                    console.warn("Invalid finalization date:", os.data_finalizacao);
-                }
+                } catch (e) { }
             }
         });
 
-        // 2. Process Physical Production Data (Analysis / Operation)
-        // This makes the "Total Analisado" match exactly what is in the Operation tab
-        productionData.forEach((prod: any) => {
+        productionData.forEach((prod: IProducaoVinculo) => {
             if (prod.data_producao) {
                 try {
-                    // Supabase DATE type is usually 'YYYY-MM-DD'
                     const dateParts = prod.data_producao.split('-');
                     const prodDateObj = new Date(parseInt(dateParts[0]), parseInt(dateParts[1]) - 1, parseInt(dateParts[2]), 12, 0, 0);
-
                     if (!isNaN(prodDateObj.getTime())) {
                         const dateKey = format(prodDateObj, 'yyyy-MM-dd');
                         const displayDate = format(prodDateObj, 'dd/MM');
-
-                        if (!grouped[dateKey]) {
-                            grouped[dateKey] = { name: displayDate, rawDate: dateKey };
-                        }
-
-                        // Total Analyzed (by machine/operation)
-                        grouped[dateKey]['Total Analisado'] = (grouped[dateKey]['Total Analisado'] || 0) + (prod.peso || 0);
+                        if (!grouped[dateKey]) grouped[dateKey] = { name: displayDate, rawDate: dateKey };
+                        grouped[dateKey]['Volume Produzido (Análise)'] = (grouped[dateKey]['Volume Produzido (Análise)'] || 0) + (prod.peso || 0);
                     }
-                } catch (e) {
-                    console.warn("Invalid production date:", prod.data_producao);
-                }
+                } catch (e) { }
             }
         });
 
-        const data = Object.values(grouped).sort((a: any, b: any) => a.rawDate.localeCompare(b.rawDate));
-        const keys = Array.from(revisoresSet);
-
-        // Generate consistent colors for reviewers
+        const dataArr = Object.values(grouped).sort((a: any, b: any) => a.rawDate.localeCompare(b.rawDate));
+        const keysList = Array.from(revisoresSet);
         const colors = ['#10b981', '#3b82f6', '#8b5cf6', '#f59e0b', '#ef4444', '#ec4899', '#6366f1', '#14b8a6'];
-        const keyColors = keys.reduce((acc, key, index) => {
+        const keyColors = keysList.reduce((acc: Record<string, string>, key: string, index: number) => {
             acc[key] = colors[index % colors.length];
             return acc;
         }, {} as Record<string, string>);
 
-        return { data, keys, keyColors };
-    }, [filteredOS, productionData]);
+        return { data: dataArr, keys: keysList, keyColors };
+    }, [osList, productionData]);
 
-    // Agregação para Gráfico de Volume Diário por Cliente
     const clienteDailyStats = React.useMemo(() => {
         const grouped: Record<string, any> = {};
-        const activeClients = selectedChartClients.length > 0 ? selectedChartClients : [];
+        const stableClients = clienteStats.slice(0, 30).map((c: any) => c.name);
 
-        filteredOS.forEach((os: OSItem) => {
-            if (!os.data_finalizacao || !os.cliente) return;
+        osList.forEach((os: OSItem) => {
+            if (!os.cliente) return;
+            let dateStr = os.data_recepcao;
+
             try {
-                const dateObj = new Date(os.data_finalizacao);
+                const dateObj = new Date(dateStr);
                 if (isNaN(dateObj.getTime())) return;
-
                 const dateKey = format(dateObj, 'yyyy-MM-dd');
                 const displayDate = format(dateObj, 'dd/MM');
+                if (!grouped[dateKey]) grouped[dateKey] = { name: displayDate, rawDate: dateKey };
 
-                if (!grouped[dateKey]) {
-                    grouped[dateKey] = { name: displayDate, rawDate: dateKey, Outros: 0 };
-                }
-
-                if (activeClients.includes(os.cliente)) {
+                if (stableClients.includes(os.cliente)) {
                     grouped[dateKey][os.cliente] = (grouped[dateKey][os.cliente] || 0) + os.total_amostras;
-                } else {
-                    grouped[dateKey]['Outros'] = (grouped[dateKey]['Outros'] || 0) + os.total_amostras;
                 }
-            } catch (e) {
-                console.warn("Invalid date:", os.data_finalizacao);
-            }
+                grouped[dateKey]['Total Recebido'] = (grouped[dateKey]['Total Recebido'] || 0) + os.total_amostras;
+            } catch (e) { }
         });
 
-        const data = Object.values(grouped).sort((a: any, b: any) => a.rawDate.localeCompare(b.rawDate));
+        const dataArr = Object.values(grouped).sort((a: any, b: any) => a.rawDate.localeCompare(b.rawDate));
 
-        // Final keys: selected clients + 'Outros' (if 'Outros' has values)
-        const keys = [...activeClients];
-        const hasOutros = data.some(d => d.Outros > 0);
-        if (hasOutros) {
-            keys.push('Outros');
-        }
+        const keysList = [...stableClients];
+        if (dataArr.length > 0) keysList.push('Total Recebido');
 
         const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#6366f1', '#14b8a6', '#f97316', '#06b6d4'];
-        const keyColors = keys.reduce((acc, key, index) => {
-            if (key === 'Outros') {
-                acc[key] = '#94a3b8'; // Slate-400 for 'Others'
+        const keyColors = keysList.reduce((acc: Record<string, string>, key: string, index: number) => {
+            if (key === 'Total Recebido') {
+                acc[key] = '#000000'; // Black for Total Recebido
             } else {
                 acc[key] = colors[index % colors.length];
             }
             return acc;
         }, {} as Record<string, string>);
 
-        return { data, keys, keyColors };
-    }, [filteredOS, selectedChartClients]);
+        return { data: dataArr, keys: keysList, keyColors };
+    }, [osList, clienteStats]);
 
-    // Agregação para Tabela Pivot de Saldo de Análises Diário (Não Finalizadas)
-    const saldoDiarioPivotStats = React.useMemo(() => {
-        const matrix: Record<string, Record<string, { total: number; maxDelay: number }>> = {};
-        const datesSet = new Set<string>();
-        const clientsSet = new Set<string>();
-        const delayedItems: (OSItem & { delayHours: number })[] = [];
+    const saldoChartData = React.useMemo(() => {
+        let buckets = { 'No Prazo (<24h)': 0, 'Atenção (24-48h)': 0, 'Crítico (>48h)': 0 };
         const now = new Date();
-        let totalPendingAmostras = 0;
-        let criticalCount = 0; // > 48h
 
-        // Utiliza filteredOS para que a busca funcione nesta aba também
         filteredOS.forEach((os: OSItem) => {
-            // SÓ entra se data_finalizacao estiver em BRANCO
-            if (os.data_finalizacao || !os.data_recepcao || !os.cliente) return;
+            const finalizacaoStr = String(os.data_finalizacao || '').trim();
+            const recepcaoStr = String(os.data_recepcao || '').trim();
+            const hasFinalizacao = finalizacaoStr !== '' && finalizacaoStr !== 'null' && finalizacaoStr !== 'undefined' && finalizacaoStr !== '0';
+            const hasRecepcao = recepcaoStr !== '' && recepcaoStr !== 'null' && recepcaoStr !== 'undefined' && recepcaoStr !== '0';
 
+            // REGRA: Pendente apenas se coluna 'Finalizado' estiver vazia 
+            if (hasFinalizacao || !hasRecepcao) return;
             try {
                 const dateObj = new Date(os.data_recepcao);
                 if (isNaN(dateObj.getTime())) return;
+                const hours = differenceInHours(now, dateObj);
+                if (hours < 24) buckets['No Prazo (<24h)'] += os.total_amostras;
+                else if (hours < 48) buckets['Atenção (24-48h)'] += os.total_amostras;
+                else buckets['Crítico (>48h)'] += os.total_amostras;
+            } catch (e) { }
+        });
 
+        return [
+            { name: 'No Prazo', value: buckets['No Prazo (<24h)'], fill: '#10b981', fullLabel: 'No Prazo (<24h)' },
+            { name: 'Atenção', value: buckets['Atenção (24-48h)'], fill: '#f59e0b', fullLabel: 'Atenção (24-48h)' },
+            { name: 'Crítico', value: buckets['Crítico (>48h)'], fill: '#ef4444', fullLabel: 'Crítico (>48h)' }
+        ];
+    }, [filteredOS]);
+
+    const saldoDiarioPivotStats = React.useMemo(() => {
+        const matrix: Record<string, {
+            clientName: string; // This is actually Tomador
+            total: number;
+            maxDelay: number;
+            dates: Record<string, { total: number; maxDelay: number }>;
+            clientes: Record<string, {
+                total: number;
+                maxDelay: number;
+                dates: Record<string, { total: number; maxDelay: number }>;
+            }>;
+        }> = {};
+        const datesSet = new Set<string>();
+        const now = new Date();
+        let totalPendingAmostras = 0;
+        let totalGeral = 0;
+        let criticalCount = 0;
+
+        filteredOS.forEach((os: OSItem) => {
+            const finalizacaoStr = String(os.data_finalizacao || '').trim();
+            const recepcaoStr = String(os.data_recepcao || '').trim();
+            const hasFinalizacao = finalizacaoStr !== '' && finalizacaoStr !== 'null' && finalizacaoStr !== 'undefined' && finalizacaoStr !== '0';
+            const hasRecepcao = recepcaoStr !== '' && recepcaoStr !== 'null' && recepcaoStr !== 'undefined' && recepcaoStr !== '0';
+
+            // Pendente apenas se coluna 'Finalizado' estiver vazia 
+            if (hasFinalizacao || !hasRecepcao || !os.cliente) return;
+            try {
+                const dateObj = new Date(os.data_recepcao);
+                if (isNaN(dateObj.getTime())) return;
                 const dateKey = format(dateObj, 'yyyy-MM-dd');
                 datesSet.add(dateKey);
-                clientsSet.add(os.cliente);
+
+                const tomadorName = os.tomador || os.cliente;
+                const clienteName = os.cliente || 'NÃO INFORMADO';
 
                 const delayHours = differenceInHours(now, dateObj);
-                totalPendingAmostras += os.total_amostras;
+                const amostras = os.total_amostras || 0;
+                totalPendingAmostras += amostras;
+                totalGeral += amostras;
 
-                if (delayHours >= 24) {
-                    delayedItems.push({ ...os, delayHours });
-                }
-                if (delayHours >= 48) {
-                    criticalCount++;
-                }
+                if (delayHours >= 48) criticalCount++;
 
-                if (!matrix[os.cliente]) matrix[os.cliente] = {};
-                if (!matrix[os.cliente][dateKey]) matrix[os.cliente][dateKey] = { total: 0, maxDelay: 0 };
-
-                matrix[os.cliente][dateKey].total += os.total_amostras;
-                if (delayHours > matrix[os.cliente][dateKey].maxDelay) {
-                    matrix[os.cliente][dateKey].maxDelay = delayHours;
+                if (!matrix[tomadorName]) {
+                    matrix[tomadorName] = { clientName: tomadorName, total: 0, maxDelay: 0, dates: {}, clientes: {} };
                 }
-            } catch (e) {
-                console.warn("Invalid date:", os.data_recepcao);
-            }
+                const tomadorGroup = matrix[tomadorName];
+                tomadorGroup.total += amostras;
+                if (delayHours > tomadorGroup.maxDelay) tomadorGroup.maxDelay = delayHours;
+
+                if (!tomadorGroup.dates[dateKey]) tomadorGroup.dates[dateKey] = { total: 0, maxDelay: 0 };
+                tomadorGroup.dates[dateKey].total += amostras;
+                if (delayHours > tomadorGroup.dates[dateKey].maxDelay) tomadorGroup.dates[dateKey].maxDelay = delayHours;
+
+                if (!tomadorGroup.clientes[clienteName]) {
+                    tomadorGroup.clientes[clienteName] = { total: 0, maxDelay: 0, dates: {} };
+                }
+                const clienteGroup = tomadorGroup.clientes[clienteName];
+                clienteGroup.total += amostras;
+                if (delayHours > clienteGroup.maxDelay) clienteGroup.maxDelay = delayHours;
+
+                if (!clienteGroup.dates[dateKey]) clienteGroup.dates[dateKey] = { total: 0, maxDelay: 0 };
+                clienteGroup.dates[dateKey].total += amostras;
+                if (delayHours > clienteGroup.dates[dateKey].maxDelay) clienteGroup.dates[dateKey].maxDelay = delayHours;
+            } catch (e) { }
         });
 
         const sortedDates = Array.from(datesSet).sort();
-
-        // Sort clients by priority:
-        // 1. Clients with ANY pinned cell first
-        // 2. Clients with the oldest delay (maxDelay) come first
-        // 3. Then by total pending samples
-        const sortedClients = Array.from(clientsSet).sort((a, b) => {
-            // Find max priority for each row (smaller number is higher priority)
+        const sortedClients = Object.values(matrix).sort((a, b) => {
             const getPriorityRank = (client: string) => {
-                const levels = Object.entries(pinnedCells)
-                    .filter(([key]) => key.startsWith(client + '|'))
-                    .map(([, level]) => level);
-                if (levels.length === 0) return 99; // No priority
-                return Math.min(...levels); // 1 is highest
+                const levels = Object.entries(pinnedCells).filter(([key]) => key.startsWith(client + '|')).map(([, level]) => level as number);
+                return levels.length === 0 ? 99 : Math.min(...levels);
             };
-
-            const rankA = getPriorityRank(a);
-            const rankB = getPriorityRank(b);
-
+            const rankA = getPriorityRank(a.clientName), rankB = getPriorityRank(b.clientName);
             if (rankA !== rankB) return rankA - rankB;
 
-            const maxDelayA = Math.max(...Object.values(matrix[a]).map(d => d.maxDelay));
-            const maxDelayB = Math.max(...Object.values(matrix[b]).map(d => d.maxDelay));
-
-            if (maxDelayB !== maxDelayA) return maxDelayB - maxDelayA;
-
-            const totalA = Object.values(matrix[a]).reduce((sum, d) => sum + d.total, 0);
-            const totalB = Object.values(matrix[b]).reduce((sum, d) => sum + d.total, 0);
-            return totalB - totalA;
+            if (b.maxDelay !== a.maxDelay) return b.maxDelay - a.maxDelay;
+            return b.total - a.total;
+        }).map(g => {
+            const sortedClientesKeys = Object.keys(g.clientes).sort((c1, c2) => {
+                if (g.clientes[c2].maxDelay !== g.clientes[c1].maxDelay) return g.clientes[c2].maxDelay - g.clientes[c1].maxDelay;
+                return g.clientes[c2].total - g.clientes[c1].total;
+            });
+            return {
+                ...g,
+                sortedClientes: sortedClientesKeys.map(k => ({ name: k, ...g.clientes[k] }))
+            };
         });
 
-        // Sort delayed items by delay (descending - older first)
-        const sortedDelayed = delayedItems.sort((a, b) => b.delayHours - a.delayHours);
-
-        const avgDelay = delayedItems.length > 0
-            ? Math.round(delayedItems.reduce((acc, curr) => acc + curr.delayHours, 0) / delayedItems.length)
-            : 0;
-
-        return { matrix, sortedDates, sortedClients, sortedDelayed, totalPendingAmostras, avgDelay, criticalCount };
+        return { sortedClients, sortedDates, totalPendingAmostras, totalGeral, criticalCount, matrix: {} };
     }, [filteredOS, pinnedCells]);
+
+    const carteiraClientesPivotStats = React.useMemo(() => {
+        const matrix: Record<string, {
+            clientName: string; // This is actually Tomador
+            total: number;
+            dates: Record<string, { total: number }>;
+            clientes: Record<string, {
+                total: number;
+                dates: Record<string, { total: number }>;
+            }>;
+        }> = {};
+        const datesSet = new Set<string>();
+        let totalGeral = 0;
+
+        filteredOS.forEach((os: OSItem) => {
+            const recepcaoStr = String(os.data_recepcao || '').trim();
+            const hasRecepcao = recepcaoStr !== '' && recepcaoStr !== 'null' && recepcaoStr !== 'undefined' && recepcaoStr !== '0';
+
+            if (!hasRecepcao || !os.cliente) return;
+            try {
+                const dateObj = new Date(os.data_recepcao);
+                if (isNaN(dateObj.getTime())) return;
+                const dateKey = format(dateObj, 'yyyy-MM-dd');
+                datesSet.add(dateKey);
+
+                const tomadorName = os.tomador || os.cliente;
+                const clienteName = os.cliente || 'NÃO INFORMADO';
+                const amostras = os.total_amostras || 0;
+
+                totalGeral += amostras;
+
+                if (!matrix[tomadorName]) {
+                    matrix[tomadorName] = { clientName: tomadorName, total: 0, dates: {}, clientes: {} };
+                }
+                const tomadorGroup = matrix[tomadorName];
+                tomadorGroup.total += amostras;
+
+                if (!tomadorGroup.dates[dateKey]) tomadorGroup.dates[dateKey] = { total: 0 };
+                tomadorGroup.dates[dateKey].total += amostras;
+
+                if (!tomadorGroup.clientes[clienteName]) {
+                    tomadorGroup.clientes[clienteName] = { total: 0, dates: {} };
+                }
+                const clienteGroup = tomadorGroup.clientes[clienteName];
+                clienteGroup.total += amostras;
+
+                if (!clienteGroup.dates[dateKey]) clienteGroup.dates[dateKey] = { total: 0 };
+                clienteGroup.dates[dateKey].total += amostras;
+            } catch (e) { }
+        });
+
+        const sortedDates = Array.from(datesSet).sort();
+        const sortedClients = Object.values(matrix).sort((a, b) => b.total - a.total).map(g => {
+            const sortedClientesKeys = Object.keys(g.clientes).sort((c1, c2) => g.clientes[c2].total - g.clientes[c1].total);
+            return {
+                ...g,
+                sortedClientes: sortedClientesKeys.map(k => ({ name: k, ...g.clientes[k] }))
+            };
+        });
+
+        return { sortedClients, sortedDates, totalGeral };
+    }, [filteredOS]);
 
     useEffect(() => {
         if (labId) loadData();
@@ -345,47 +489,45 @@ export default function MonitoramentoOS() {
         if (!labId) return;
         setIsLoading(true);
         try {
-            const data: any = await statusOSService.getAll(labId);
-            setOsList(data);
+            const rawData = (await statusOSService.getAll(labId)) as OSItem[];
+            const mappedData = rawData.map(os => {
+                let t = os.cliente;
+                let c = os.cliente;
+                if (os.cliente && os.cliente.includes('|||')) {
+                    const parts = os.cliente.split('|||');
+                    t = parts[0]?.trim() || t;
+                    c = parts[1]?.trim() || t;
+                }
+                return { ...os, tomador: t, cliente: c };
+            });
+            setOsList(mappedData);
+            const data = mappedData;
 
-            // Calculate stats locally or fetch from service
             const total = data.length;
-            const faturados = data.filter((d: any) => d.status?.toLowerCase().includes('faturado')).length;
-            const emAberto = total - faturados;
-            const totalAmostras = data.reduce((acc: number, curr: any) => acc + (curr.total_amostras || 0), 0);
-            const saldoAmostras = data
-                .filter((d: any) => !d.data_finalizacao)
-                .reduce((acc: number, curr: any) => acc + (curr.total_amostras || 0), 0);
+            const faturados = data.filter((d: OSItem) => d.status?.toLowerCase().includes('faturado')).length;
+            const emAbertoValue = total - faturados;
+            const totalAmostrasValue = data.reduce((acc: number, curr: OSItem) => acc + (curr.total_amostras || 0), 0);
+            const saldoAmostrasValue = data.filter((d: OSItem) => !d.data_finalizacao && d.data_recepcao).reduce((acc: number, curr: OSItem) => acc + (curr.total_amostras || 0), 0);
+            setStats({ total, faturados, emAberto: emAbertoValue, totalAmostras: totalAmostrasValue, saldoAmostras: saldoAmostrasValue });
 
-            setStats({ total, faturados, emAberto, totalAmostras, saldoAmostras });
+            try {
+                const prodData = await producaoService.list(labId);
+                if (prodData) setProductionData(prodData.map((p: ProducaoData) => ({ data_producao: p.data_producao || "", peso: (p.peso as number) || 0 })));
+            } catch (err) { console.warn("Producao chart data fail:", err); }
 
-            // Fetch physical production (Operation) to unify with analysis line
-            const { data: prodData } = await supabase
-                .from('operacao_producao')
-                .select('*')
-                .eq('lab_id', labId);
-            if (prodData) setProductionData(prodData);
+            const topC = data.reduce((acc: Record<string, number>, curr: OSItem) => {
+                const cli = curr.cliente || 'Não Informado';
+                acc[cli] = (acc[cli] || 0) + (curr.total_amostras || 0);
+                return acc;
+            }, {} as Record<string, number>);
+            const sortedAll = Object.entries(topC).sort(([, a], [, b]) => b - a).map(([n]) => n);
+            setSelectedChartClients([...sortedAll, 'Total Recebido']);
 
-            // Initialize chart selection with top 5 clients if not already set
-            const top5 = data
-                .reduce((acc: any, curr: any) => {
-                    const cli = curr.cliente || 'Não Informado';
-                    acc[cli] = (acc[cli] || 0) + (curr.total_amostras || 0);
-                    return acc;
-                }, {} as Record<string, number>);
-
-            const sortedTop5 = Object.entries(top5)
-                .sort(([, a], [, b]) => (b as number) - (a as number))
-                .slice(0, 5)
-                .map(([name]) => name);
-
-            setSelectedChartClients(sortedTop5);
-
-            // Initialize reviewers - select all by default
-            const revs = Array.from(new Set(data.filter((d: any) => d.revisor).map((d: any) => d.revisor))) as string[];
-            setSelectedReviewers([...revs, 'Volume Produzido (Análise)', 'Total Revisado (Analistas)']);
+            const revs = Array.from(new Set(data.filter((d: OSItem) => d.revisor).map((d: OSItem) => d.revisor))) as string[];
+            setSelectedReviewers([...revs, 'Volume Produzido (Análise)', 'Total Revisado (Analistas)', 'Volume Recebido']);
         } catch (error) {
             console.error("Erro ao carregar dados:", error);
+            addToast({ title: "Erro de Conexão", description: "Não foi possível carregar os dados de monitoramento.", type: "error" });
         } finally {
             setIsLoading(false);
         }
@@ -393,43 +535,27 @@ export default function MonitoramentoOS() {
 
     const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
-
+        if (!file) return;
         if (!labId) {
-            alert("Erro: Nenhum laboratório selecionado. Por favor, selecione um laboratório no menu superior.");
+            addToast({ title: "Laboratório Inválido", description: "Selecione um laboratório antes de importar a planilha.", type: "error" });
+            event.target.value = "";
             return;
         }
-
-        if (!file) return;
-
         setIsUploading(true);
         try {
-            // Use streaming/chunked parser to handle large files
             let totalRecords = 0;
-
-            await parseStatusOSFileInChunks(file, async (batch) => {
+            await parseStatusOSFileInChunks(file, async (batch: StatusOSParsed[]) => {
                 if (batch.length > 0) {
                     await statusOSService.uploadData(batch, labId);
                     totalRecords += batch.length;
-                    // Optional: Update UI with progress if we had a progress bar
                 }
-            }, 2000); // Process 2000 rows at a time to keep memory low
-
-            if (totalRecords === 0) {
-                alert("Nenhum dado válido encontrado no arquivo.");
-                return;
-            }
-
+            }, 2000);
+            if (totalRecords === 0) { addToast({ title: "Arquivo Vazio", description: "Nenhum dado válido encontrado.", type: "warning" }); return; }
             await loadData();
-            alert(`Sucesso! ${totalRecords} registros processados.`);
+            addToast({ title: "Sucesso!", description: `${totalRecords} registros processados.`, type: "success" });
         } catch (error: any) {
             console.error("Erro no upload:", error);
-            // Show specific error message
-            const msg = error.message || "Erro desconhecido";
-            if (msg.includes("column") && msg.includes("horas")) {
-                alert("Erro: A coluna 'horas' não existe no banco de dados. Por favor, execute o script SQL atualizado.");
-            } else {
-                alert(`Erro ao processar arquivo: ${msg}`);
-            }
+            addToast({ title: "Erro de Processamento", description: error.message || "Erro desconhecido", type: "error" });
         } finally {
             setIsUploading(false);
             event.target.value = "";
@@ -437,536 +563,343 @@ export default function MonitoramentoOS() {
     };
 
     const handleClearData = async () => {
-        if (!labId) return;
-
-        if (!window.confirm("ATENÇÃO: Tem certeza que deseja apagar TODOS os dados de monitoramento?\n\nEsta ação não pode ser desfeita.")) {
-            return;
-        }
-
+        if (!labId || !window.confirm("ATENÇÃO: Tem certeza?")) return;
         setIsLoading(true);
         try {
             await statusOSService.clearData(labId);
             await loadData();
-            alert("Dados apagados com sucesso.");
-        } catch (error) {
-            console.error("Erro ao limpar dados:", error);
-            alert("Erro ao limpar dados. Verifique o console.");
-        } finally {
-            setIsLoading(false);
-        }
+            addToast({ title: "Dados Limpos", type: "success" });
+        } catch (error) { addToast({ title: "Erro ao limpar", type: "error" }); } finally { setIsLoading(false); }
     };
 
     const handleExportPDF = async () => {
         if (!matrixTableRef.current) return;
         setIsGeneratingPDF(true);
-
         try {
             const element = matrixTableRef.current;
-
-            const canvas = await html2canvas(element, {
-                scale: 2,
-                useCORS: true,
-                logging: false,
-                backgroundColor: "#ffffff"
-            });
-
+            const canvas = await html2canvas(element, { scale: 2, useCORS: true, logging: false, backgroundColor: "#ffffff" });
             const imgData = canvas.toDataURL("image/png");
-            const pdf = new jsPDF({
-                orientation: "landscape",
-                unit: "mm",
-                format: "a4"
-            });
-
+            const pdf = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
             const pdfWidth = pdf.internal.pageSize.getWidth();
-            const pdfHeight = pdf.internal.pageSize.getHeight();
-
             const imgProps = pdf.getImageProperties(imgData);
-            const imgContentWidth = pdfWidth - 20; // 10mm margin each side
-            const imgContentHeight = (imgProps.height * imgContentWidth) / imgProps.width;
-
-            // Header Section
-            pdf.setFillColor(26, 32, 44); // bg-neutral-900 color
-            pdf.rect(0, 0, pdfWidth, 20, 'F');
-
-            pdf.setTextColor(255, 255, 255);
-            pdf.setFontSize(14);
-            pdf.setFont("helvetica", "bold");
+            const icw = pdfWidth - 20;
+            const ich = (imgProps.height * icw) / imgProps.width;
+            pdf.setFillColor(26, 32, 44); pdf.rect(0, 0, pdfWidth, 20, 'F');
+            pdf.setTextColor(255, 255, 255); pdf.setFontSize(14); pdf.setFont("helvetica", "bold");
             pdf.text("ORIGO INTELLIGENCE - RELATÓRIO DE SALDO DIÁRIO", 10, 12);
-
-            pdf.setFontSize(8);
-            pdf.setFont("helvetica", "normal");
-            pdf.text(`LABORATÓRIO: ${currentLab?.nome || 'NÃO IDENTIFICADO'}`, 10, 17);
-            pdf.text(`DATA EMISSÃO: ${format(new Date(), 'dd/MM/yyyy HH:mm')}`, pdfWidth - 60, 17);
-
-            // Add the table image
-            pdf.addImage(imgData, "PNG", 10, 25, imgContentWidth, imgContentHeight);
-
-            // Footer
-            pdf.setFontSize(7);
-            pdf.setTextColor(150, 150, 150);
-            const footerY = Math.min(25 + imgContentHeight + 10, pdfHeight - 5);
-            pdf.text("Análise baseada no monitoramento em tempo real de O.S. pendentes.", 10, footerY);
-            pdf.text(`Página 1 de 1`, pdfWidth - 25, footerY);
-
+            pdf.addImage(imgData, "PNG", 10, 25, icw, ich);
             pdf.save(`Relatorio_Saldo_Diario_${format(new Date(), 'yyyyMMdd_HHmm')}.pdf`);
-        } catch (error) {
-            console.error("Erro ao gerar PDF:", error);
-            alert("Erro ao gerar PDF.");
-        } finally {
-            setIsGeneratingPDF(false);
-        }
+        } catch (error) { console.error("Erro ao gerar PDF:", error); } finally { setIsGeneratingPDF(false); }
     };
 
     return (
-        <div className="max-w-[95%] mx-auto py-8 animate-fade-in text-black pb-24 min-h-screen">
-            {/* Header */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-8 border-b border-black pb-8 mb-8">
-                <div className="flex items-center gap-4">
-                    <div className="h-12 w-12 bg-black text-white flex items-center justify-center rounded-lg shadow-lg">
-                        <FileSpreadsheet className="h-6 w-6" />
+        <div className="max-w-[1400px] mx-auto py-12 px-6 text-black pb-32 min-h-screen font-sans">
+            {/* Executive Header */}
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-10 mb-12 animate-in fade-in slide-in-from-top duration-700">
+                <div className="flex items-center gap-6">
+                    <div className="h-16 w-16 bg-neutral-900 text-white flex items-center justify-center rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.15)] transform -rotate-3 hover:rotate-0 transition-transform duration-500">
+                        <Database className="h-8 w-8" />
                     </div>
                     <div>
-                        <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-500 block mb-1">
-                            Gestão HVI
-                        </span>
-                        <h1 className="text-3xl font-serif text-black leading-none">Monitoramento de O.S.</h1>
+                        <div className="flex items-center gap-2 mb-1">
+                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                            <span className="text-[10px] font-black uppercase tracking-[0.3em] text-neutral-400">Inteligência Operacional</span>
+                        </div>
+                        <div className="flex items-center gap-4">
+                            <h1 className="text-4xl font-serif text-black leading-tight tracking-tight">Monitoramento de O.S.</h1>
+                            {user?.acesso === 'admin_global' && (
+                                <select
+                                    title="Selecione o Laboratório"
+                                    aria-label="Selecione o Laboratório"
+                                    className="ml-4 bg-white border-2 border-neutral-200 text-black text-[10px] font-bold uppercase tracking-widest rounded-xl px-4 py-2 hover:border-black transition-all cursor-pointer outline-none"
+                                    value={labId || ""}
+                                    onChange={(e) => {
+                                        if (e.target.value) selectLab(e.target.value);
+                                    }}
+                                >
+                                    <option value="" disabled>SELECIONE O LABORATÓRIO</option>
+                                    {labs.map(l => <option key={l.id} value={l.id}>{l.nome}</option>)}
+                                </select>
+                            )}
+                        </div>
                     </div>
                 </div>
 
-                <div className="flex gap-3">
-                    <Button variant="outline" onClick={loadData} disabled={isLoading} className="border-neutral-300">
-                        <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
-                        Atualizar
-                    </Button>
-                    <Button
-                        variant="outline"
-                        onClick={handleClearData}
-                        disabled={isLoading || osList.length === 0}
-                        className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
-                    >
-                        <Trash2 className="h-4 w-4 mr-2" />
-                        Limpar Dados
-                    </Button>
-                    <div className="relative group">
+                <div className="flex flex-wrap gap-4 items-center">
+                    <div className="relative group flex-1 min-w-[200px]">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400" />
                         <input
-                            type="file"
-                            accept=".xlsx,.xls"
-                            onChange={handleFileUpload}
-                            disabled={isUploading}
-                            title="Upload Excel"
-                            aria-label="Upload Excel"
-                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20"
+                            type="text"
+                            placeholder="Buscar O.S, Cliente..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="w-full h-12 pl-10 pr-4 bg-white border border-neutral-200 text-sm focus:border-black focus:ring-1 focus:ring-black outline-none transition-all rounded-xl"
                         />
-                        <Button className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-md relative z-10 pointer-events-none">
-                            {isUploading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Upload className="h-4 w-4 mr-2" />}
-                            Importar Excel
+                    </div>
+
+                    <div className="flex items-center gap-1 bg-neutral-100 p-1.5 rounded-xl border border-neutral-200/50">
+                        <Button variant="ghost" size="sm" onClick={loadData} disabled={isLoading} className="h-9 px-4 text-[10px] font-black uppercase tracking-widest hover:bg-white hover:shadow-sm">
+                            <RefreshCw className={cn("h-3.5 w-3.5 mr-2", isLoading && "animate-spin")} /> {isLoading ? "Sincronizando..." : "Sincronizar"}
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={handleClearData} disabled={isLoading || osList.length === 0} className="h-9 px-4 text-[10px] font-black uppercase tracking-widest text-red-500 hover:bg-red-50">
+                            <Trash2 className="h-3.5 w-3.5 mr-2" /> Limpar
+                        </Button>
+                    </div>
+
+                    <div className="relative group">
+                        <input type="file" accept=".xlsx,.xls" onChange={handleFileUpload} disabled={isUploading} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20" title="Importar Excel" aria-label="Importar Excel" />
+                        <Button className="h-12 px-8 bg-black hover:bg-neutral-800 text-white rounded-xl shadow-[0_10px_20px_rgba(0,0,0,0.1)] flex items-center gap-3 active:scale-95 transition-all">
+                            {isUploading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Upload className="h-5 w-5" />}
+                            <span className="text-[11px] font-black uppercase tracking-widest">Importar Planilha</span>
                         </Button>
                     </div>
                 </div>
             </div>
 
-            {/* Tabs */}
-            <div className="flex gap-2 mb-6 border-b border-neutral-200">
-                <button
-                    onClick={() => setActiveTab('geral')}
-                    className={`px-4 py-2 text-sm font-bold uppercase tracking-wider border-b-2 transition-colors ${activeTab === 'geral' ? 'border-black text-black' : 'border-transparent text-neutral-400 hover:text-neutral-600'}`}
-                >
-                    Visão Geral
-                </button>
-                <button
-                    onClick={() => setActiveTab('revisores')}
-                    className={`px-4 py-2 text-sm font-bold uppercase tracking-wider border-b-2 transition-colors ${activeTab === 'revisores' ? 'border-black text-black' : 'border-transparent text-neutral-400 hover:text-neutral-600'}`}
-                >
-                    Por Revisor
-                </button>
-                <button
-                    onClick={() => setActiveTab('clientes')}
-                    className={`px-4 py-2 text-sm font-bold uppercase tracking-wider border-b-2 transition-colors ${activeTab === 'clientes' ? 'border-black text-black' : 'border-transparent text-neutral-400 hover:text-neutral-600'}`}
-                >
-                    Por Cliente
-                </button>
-                <button
-                    onClick={() => setActiveTab('saldo_diario')}
-                    className={`px-4 py-2 text-sm font-bold uppercase tracking-wider border-b-2 transition-colors ${activeTab === 'saldo_diario' ? 'border-black text-black' : 'border-transparent text-neutral-400 hover:text-neutral-600'}`}
-                >
-                    Saldo de Análises Diário
-                </button>
+            {/* Contemporary Tab Navigation */}
+            <div className="flex items-center gap-2 mb-10 overflow-x-auto pb-2 no-scrollbar">
+                {[
+                    { id: 'geral', label: 'Dashboard', icon: Activity },
+                    { id: 'revisores', label: 'Produtividade', icon: Users },
+                    { id: 'clientes', label: 'Carteira de Clientes', icon: LayoutGrid },
+                    { id: 'saldo_diario', label: 'Saldo Diário', icon: ClipboardList }
+                ].map((tab) => (
+                    <button
+                        key={tab.id}
+                        onClick={() => setActiveTab(tab.id as any)}
+                        className={cn(
+                            "flex items-center gap-3 px-6 py-3 text-xs font-black uppercase tracking-widest transition-all rounded-2xl border-2 whitespace-nowrap",
+                            activeTab === tab.id
+                                ? "bg-black text-white border-black shadow-[0_10px_20px_rgba(0,0,0,0.1)]"
+                                : "bg-white text-neutral-400 border-neutral-100 hover:border-neutral-200 hover:text-neutral-600"
+                        )}
+                    >
+                        <tab.icon className={cn("h-4 w-4", activeTab === tab.id ? "text-white" : "text-neutral-300")} />
+                        {tab.label}
+                    </button>
+                ))}
             </div>
 
-            {activeTab === 'revisores' && (
-                <div className="space-y-6">
-                    {/* Selection Area for Reviewers */}
-                    <div className="bg-white border border-neutral-200 rounded-xl p-4 shadow-sm animate-fade-in text-black">
-                        <div className="flex items-center justify-between mb-3">
-                            <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400">Filtrar Gráfico (Revisores & Totais)</h3>
-                            <div className="flex gap-4">
-                                <button
-                                    onClick={() => setSelectedReviewers([...revisorDailyStats.keys, 'Volume Produzido (Análise)', 'Total Revisado (Analistas)'])}
-                                    className="text-[10px] font-bold text-neutral-400 hover:text-black transition-colors"
-                                >
-                                    SELECIONAR TUDO
-                                </button>
-                                <button
-                                    onClick={() => setSelectedReviewers([])}
-                                    className="text-[10px] font-bold text-neutral-400 hover:text-black transition-colors"
-                                >
-                                    LIMPAR SELEÇÃO
-                                </button>
-                            </div>
+            {activeTab === 'geral' && (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 mb-12 animate-in fade-in duration-1000">
+                    <div className="group bg-white border border-neutral-200 p-8 rounded-[2rem] shadow-[0_10px_30px_rgba(0,0,0,0.02)] hover:shadow-[0_20px_50px_rgba(0,0,0,0.05)] transition-all duration-500">
+                        <div className="flex items-center justify-between mb-6">
+                            <span className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Registros Ativos</span>
+                            <div className="h-8 w-8 rounded-full bg-blue-50 flex items-center justify-center"><Activity className="h-4 w-4 text-blue-500" /></div>
                         </div>
-                        <div className="flex flex-wrap gap-2">
-                            {/* Static KPI Lines */}
-                            <button
-                                onClick={() => toggleReviewerSelection('Volume Produzido (Análise)')}
-                                className={cn(
-                                    "px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all border flex items-center gap-2",
-                                    selectedReviewers.includes('Volume Produzido (Análise)')
-                                        ? "bg-black text-white border-black shadow-md"
-                                        : "bg-neutral-50 text-neutral-500 border-neutral-200 hover:border-neutral-400"
-                                )}
-                            >
-                                <div className="h-2 w-2 rounded-full border border-white/20" style={{ backgroundColor: '#000000' }} />
-                                Volume Produzido
-                            </button>
-                            <button
-                                onClick={() => toggleReviewerSelection('Total Revisado (Analistas)')}
-                                className={cn(
-                                    "px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all border flex items-center gap-2",
-                                    selectedReviewers.includes('Total Revisado (Analistas)')
-                                        ? "bg-red-600 text-white border-red-600 shadow-md"
-                                        : "bg-neutral-50 text-neutral-500 border-neutral-200 hover:border-neutral-400"
-                                )}
-                            >
-                                <div className="h-2 w-2 rounded-full" style={{ backgroundColor: '#dc2626' }} />
-                                Total Revisado
-                            </button>
-
-                            {/* Individual Reviewers */}
-                            {revisorDailyStats.keys.map(rev => (
-                                <button
-                                    key={rev}
-                                    onClick={() => toggleReviewerSelection(rev)}
-                                    className={cn(
-                                        "px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all border flex items-center gap-2",
-                                        selectedReviewers.includes(rev)
-                                            ? "bg-white text-black border-black shadow-sm"
-                                            : "bg-neutral-50 text-neutral-500 border-neutral-200 hover:border-neutral-400"
-                                    )}
-                                >
-                                    <div
-                                        className="h-2 w-2 rounded-full"
-                                        style={{ backgroundColor: revisorDailyStats.keyColors[rev] || '#ddd' }}
-                                    />
-                                    {rev}
-                                </button>
-                            ))}
-                        </div>
+                        <div className="text-4xl font-serif text-black mb-1">{stats.total.toLocaleString('pt-BR')}</div>
+                        <div className="text-[10px] font-bold text-neutral-400 uppercase tracking-tight">Obras de Serviço Catalogadas</div>
                     </div>
 
-                    {/* Chart Section */}
-                    <div className="bg-white border border-neutral-200 rounded-xl p-6 shadow-sm text-black">
-                        <h3 className="font-bold text-sm uppercase tracking-wide mb-6">Evolução Diária (Análise Operação vs Revisão Analistas)</h3>
-                        <div className="h-[350px] w-full">
+                    <div className="group bg-black p-8 rounded-[2rem] shadow-[0_10px_30px_rgba(0,0,0,0.15)] relative overflow-hidden transition-all duration-500 hover:-translate-y-1">
+                        <div className="absolute -right-8 -bottom-8 opacity-10">
+                            <Activity className="h-40 w-40 text-white" />
+                        </div>
+                        <div className="flex items-center justify-between mb-6 relative z-10">
+                            <span className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Saldo de Análise</span>
+                            <div className="h-8 w-8 rounded-full bg-white/10 flex items-center justify-center"><ClipboardList className="h-4 w-4 text-white" /></div>
+                        </div>
+                        <div className="text-4xl font-serif text-white mb-1 relative z-10">{stats.saldoAmostras.toLocaleString('pt-BR')}</div>
+                        <div className="text-[10px] font-bold text-neutral-500 uppercase tracking-tight relative z-10">Amostras Pendentes de Finalização</div>
+                    </div>
+
+                    <div className="group bg-white border border-neutral-200 p-8 rounded-[2rem] shadow-[0_10px_30px_rgba(0,0,0,0.02)] transition-all duration-500">
+                        <div className="flex items-center justify-between mb-6">
+                            <span className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Total Amostras</span>
+                            <div className="h-8 w-8 rounded-full bg-amber-50 flex items-center justify-center"><Database className="h-4 w-4 text-amber-500" /></div>
+                        </div>
+                        <div className="text-4xl font-serif text-black mb-1">{stats.totalAmostras.toLocaleString('pt-BR')}</div>
+                        <div className="text-[10px] font-bold text-neutral-400 uppercase tracking-tight">Carga total histórica no sistema</div>
+                    </div>
+
+                    <div className="group bg-white border border-neutral-200 p-8 rounded-[2rem] shadow-[0_10px_30px_rgba(0,0,0,0.02)] transition-all duration-500">
+                        <div className="flex items-center justify-between mb-6">
+                            <span className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Ciclo Médio</span>
+                            <div className="h-8 w-8 rounded-full bg-emerald-50 flex items-center justify-center"><RefreshCw className="h-4 w-4 text-emerald-500" /></div>
+                        </div>
+                        <div className="text-4xl font-serif text-black mb-1">{(stats.total > 0 ? (stats.totalAmostras / stats.total).toFixed(1) : "0")}</div>
+                        <div className="text-[10px] font-bold text-neutral-400 uppercase tracking-tight">Amostras por Ordem de Serviço</div>
+                    </div>
+                </div>
+            )}
+
+            {(activeTab === 'geral' || activeTab === 'revisores') && (
+                <div className="space-y-8 animate-fade-in">
+                    <div className="bg-white border border-neutral-200 rounded-3xl p-8 shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
+                        <div className="flex flex-col gap-6 mb-8">
+                            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 pb-6 border-b border-neutral-100">
+                                <div>
+                                    <h3 className="text-2xl font-serif text-black leading-tight tracking-tight flex items-center gap-2">
+                                        {activeTab === 'geral' ? <Activity className="h-6 w-6 text-neutral-400" /> : <Users className="h-6 w-6 text-neutral-400" />}
+                                        {activeTab === 'geral' ? 'Produção Geral' : 'Performance por Revisor'}
+                                    </h3>
+                                    <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400 mt-1">
+                                        {activeTab === 'geral' ? 'Visão global de entrada e saída' : 'Produtividade diária dos analistas e volume total'}
+                                    </p>
+                                </div>
+
+                                <div className="flex items-center gap-3">
+                                    <button
+                                        type="button"
+                                        onClick={(e) => {
+                                            e.preventDefault();
+                                            toggleReviewerSelection('Volume Produzido (Análise)');
+                                        }}
+                                        className={cn(
+                                            "flex items-center gap-3 px-4 py-2 rounded-xl border-2 transition-all cursor-pointer hover:shadow-sm",
+                                            selectedReviewers.includes('Volume Produzido (Análise)')
+                                                ? "bg-black text-white border-black"
+                                                : "bg-white text-neutral-400 border-neutral-100 hover:border-black hover:text-black"
+                                        )}
+                                    >
+                                        <Activity className="h-3.5 w-3.5" />
+                                        <span className="text-[10px] font-black uppercase tracking-widest">Volume Produzido</span>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={(e) => {
+                                            e.preventDefault();
+                                            toggleReviewerSelection('Total Revisado (Analistas)');
+                                        }}
+                                        className={cn(
+                                            "flex items-center gap-3 px-4 py-2 rounded-xl border-2 transition-all cursor-pointer hover:shadow-sm",
+                                            selectedReviewers.includes('Total Revisado (Analistas)')
+                                                ? "bg-red-600 text-white border-red-600"
+                                                : "bg-white text-neutral-400 border-neutral-100 hover:border-red-600 hover:text-red-600"
+                                        )}
+                                    >
+                                        <Users className="h-3.5 w-3.5" />
+                                        <span className="text-[10px] font-black uppercase tracking-widest">Total Revisado</span>
+                                    </button>
+                                    {activeTab === 'geral' && (
+                                        <button
+                                            type="button"
+                                            onClick={(e) => {
+                                                e.preventDefault();
+                                                toggleReviewerSelection('Volume Recebido');
+                                            }}
+                                            className={cn(
+                                                "flex items-center gap-3 px-4 py-2 rounded-xl border-2 transition-all cursor-pointer hover:shadow-sm",
+                                                selectedReviewers.includes('Volume Recebido')
+                                                    ? "bg-blue-600 text-white border-blue-600"
+                                                    : "bg-white text-neutral-400 border-neutral-100 hover:border-blue-600 hover:text-blue-600"
+                                            )}
+                                        >
+                                            <Inbox className="h-3.5 w-3.5" />
+                                            <span className="text-[10px] font-black uppercase tracking-widest">Volume Recebido</span>
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+
+                            {activeTab === 'revisores' && (
+                                <div className="flex flex-col gap-3">
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Analistas:</span>
+                                        <span className="text-[8px] font-bold text-neutral-300 uppercase italic">Arraste para ver a lista completa →</span>
+                                    </div>
+                                    <div className="flex items-center gap-2 overflow-x-auto pb-4 no-scrollbar -mx-2 px-2">
+                                        {revisorDailyStats.keys.map((rev: string) => {
+                                            const totalRev = osList.filter(o => o.revisor === rev).reduce((sum, o) => sum + (o.total_amostras || 0), 0);
+                                            const hashRev = rev.replace(/[^a-zA-Z0-9]/g, '') + Math.random().toString(36).substr(2, 4);
+                                            return (
+                                                <button
+                                                    key={rev}
+                                                    onClick={() => toggleReviewerSelection(rev)}
+                                                    className={cn(
+                                                        "flex items-center gap-3 px-4 py-2.5 rounded-xl border-2 transition-all shrink-0 min-w-fit",
+                                                        selectedReviewers.includes(rev)
+                                                            ? `text-white border-transparent rev-btn-${hashRev}`
+                                                            : "bg-neutral-50/50 text-neutral-400 border-transparent hover:bg-white hover:border-neutral-200"
+                                                    )}
+                                                >
+                                                    {selectedReviewers.includes(rev) && (
+                                                        <style>{`
+                                                        .rev-btn-${hashRev} { background-color: ${revisorDailyStats.keyColors[rev]}; box-shadow: 0 4px 12px ${revisorDailyStats.keyColors[rev]}33; }
+                                                    `}</style>
+                                                    )}
+                                                    <style>{`.rev-ind-${hashRev} { background-color: ${selectedReviewers.includes(rev) ? 'white' : (revisorDailyStats.keyColors[rev] || '#e5e5e5')}; }`}</style>
+
+                                                    <div className={`h-1.5 w-1.5 rounded-full rev-ind-${hashRev}`} />
+                                                    <span className="text-[9px] font-black uppercase tracking-wider">{rev}</span>
+                                                    <span className="text-[10px] font-mono font-bold opacity-80 pl-2 border-l border-white/20">{totalRev.toLocaleString('pt-BR')}</span>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="h-[450px] w-full bg-neutral-50/30 rounded-2xl p-4">
                             <ResponsiveContainer width="100%" height="100%">
-                                <LineChart data={revisorDailyStats.data} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f5f5f5" />
-                                    <XAxis dataKey="name" stroke="#a3a3a3" tick={{ fontSize: 12 }} />
-                                    <YAxis stroke="#a3a3a3" tick={{ fontSize: 12 }} />
-                                    <RechartsTooltip
-                                        contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                                <LineChart data={revisorDailyStats.data} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                                    <XAxis
+                                        dataKey="name"
+                                        axisLine={false} tickLine={false}
+                                        tick={{ fill: '#9ca3af', fontSize: 10, fontWeight: 700 }}
+                                        dy={10}
                                     />
-                                    <Legend onClick={(e: any) => toggleReviewerSelection(e.value)} wrapperStyle={{ cursor: 'pointer' }} />
+                                    <YAxis
+                                        axisLine={false} tickLine={false}
+                                        tick={{ fill: '#9ca3af', fontSize: 10, fontWeight: 700 }}
+                                    />
+                                    <RechartsTooltip content={<CustomTooltip />} />
                                     {selectedReviewers.includes('Volume Produzido (Análise)') && (
-                                        <Line
-                                            type="monotone"
-                                            name="Volume Produzido (Análise)"
-                                            dataKey="Total Analisado"
-                                            stroke="#000000"
-                                            strokeWidth={4}
-                                            strokeDasharray="5 5"
-                                            dot={{ r: 5, strokeWidth: 2, fill: "#000000" }}
-                                            activeDot={{ r: 8 }}
-                                        />
+                                        <Line type="monotone" name="Volume Produzido" dataKey="Volume Produzido (Análise)" stroke="#000" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
                                     )}
                                     {selectedReviewers.includes('Total Revisado (Analistas)') && (
-                                        <Line
-                                            type="monotone"
-                                            name="Total Revisado (Analistas)"
-                                            dataKey="Total Produzido"
-                                            stroke="#dc2626"
-                                            strokeWidth={3}
-                                            dot={{ r: 4, strokeWidth: 2, fill: "#dc2626" }}
-                                            activeDot={{ r: 6 }}
-                                        />
+                                        <Line type="monotone" name="Total Revisado" dataKey="Total Revisado (Analistas)" stroke="#dc2626" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
                                     )}
-                                    {revisorDailyStats.keys.map((key) => selectedReviewers.includes(key) && (
-                                        <Line
-                                            key={key}
-                                            type="monotone"
-                                            dataKey={key}
-                                            stroke={revisorDailyStats.keyColors[key]}
-                                            strokeWidth={2}
-                                            dot={{ r: 3 }}
-                                            activeDot={{ r: 5 }}
-                                        />
+                                    {(activeTab === 'geral' && selectedReviewers.includes('Volume Recebido')) && (
+                                        <Line type="monotone" name="Volume Recebido" dataKey="Volume Recebido" stroke="#2563eb" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
+                                    )}
+                                    {activeTab === 'revisores' && revisorDailyStats.keys.filter((k: string) => selectedReviewers.includes(k)).map((rev: string) => (
+                                        <Line key={rev} type="monotone" dataKey={rev} stroke={revisorDailyStats.keyColors[rev]} strokeWidth={2} dot={false} />
                                     ))}
                                 </LineChart>
                             </ResponsiveContainer>
                         </div>
                     </div>
 
-                    {/* Table Section */}
-                    <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden shadow-sm animate-fade-in">
-                        <div className="p-4 border-b border-neutral-100 bg-neutral-50">
-                            <h3 className="font-bold text-sm uppercase tracking-wide">Total por Revisor</h3>
-                        </div>
-                        <table className="w-full text-sm text-left">
-                            <thead className="bg-neutral-50 text-[10px] uppercase font-bold text-neutral-500 tracking-wider">
-                                <tr>
-                                    <th className="p-4">Revisor</th>
-                                    <th className="p-4 text-right">Total Amostras</th>
-                                    <th className="p-4 w-full"></th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-neutral-100">
-                                {revisorStats.map((stat) => (
-                                    <tr
-                                        key={stat.name}
-                                        className={cn(
-                                            "hover:bg-neutral-50 transition-colors cursor-pointer group",
-                                            selectedReviewers.includes(stat.name) ? "bg-neutral-50/50" : ""
-                                        )}
-                                        onClick={() => toggleReviewerSelection(stat.name)}
-                                    >
-                                        <td className="p-4">
-                                            <div className="flex items-center gap-3">
-                                                <div className={cn(
-                                                    "h-4 w-4 rounded border flex items-center justify-center transition-all",
-                                                    selectedReviewers.includes(stat.name)
-                                                        ? "bg-black border-black text-white"
-                                                        : "border-neutral-300 bg-white group-hover:border-neutral-500"
-                                                )}>
-                                                    {selectedReviewers.includes(stat.name) && <Star className="h-2 w-2 fill-white" />}
-                                                </div>
-                                                <span className="font-bold text-neutral-800">{stat.name}</span>
-                                            </div>
-                                        </td>
-                                        <td className="p-4 text-right font-mono font-bold">{stat.total.toLocaleString('pt-BR')}</td>
-                                        <td className="p-4">
-                                            <div className="h-2 bg-neutral-100 rounded-full overflow-hidden w-48">
-                                                {/* eslint-disable-next-line react-dom/no-unsafe-inline-style, tailwindcss/no-custom-classname, react/inline-styles */}
-                                                <div
-                                                    className="h-full bg-black rounded-full"
-                                                    style={{ width: `${(stat.total / (revisorStats[0]?.total || 1)) * 100}%` }}
-                                                />
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            )}
-
-            {activeTab === 'saldo_diario' && (
-                <div className="space-y-6 animate-fade-in">
-                    {/* Summary Cards for Saldo Tab */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        <div className="bg-neutral-900 text-white p-6 rounded-xl border border-neutral-800 shadow-lg">
-                            <span className="text-[10px] font-bold uppercase tracking-[0.2em] opacity-40 block mb-2">Total Pendente</span>
-                            <div className="text-3xl font-serif text-white">{saldoDiarioPivotStats.totalPendingAmostras.toLocaleString('pt-BR')}</div>
-                            <div className="text-[9px] uppercase font-mono mt-1 text-neutral-500">Amostras sem finalização</div>
-                        </div>
-                        <div className={`p-6 rounded-xl border shadow-sm ${saldoDiarioPivotStats.criticalCount > 0 ? 'bg-red-50 border-red-200' : saldoDiarioPivotStats.sortedDelayed.length > 0 ? 'bg-amber-50 border-amber-200' : 'bg-white border-neutral-200'}`}>
-                            <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400 block mb-2">Estado Crítico</span>
-                            <div className={`text-3xl font-serif ${saldoDiarioPivotStats.criticalCount > 0 ? 'text-red-600 font-bold' : 'text-neutral-300'}`}>
-                                {saldoDiarioPivotStats.criticalCount}
+                    {activeTab === 'revisores' && (
+                        <div className="bg-white border border-neutral-200 rounded-3xl p-8 shadow-[0_8px_30px_rgb(0,0,0,0.04)] text-black mt-8">
+                            <div className="flex items-center justify-between mb-8 border-b border-neutral-100 pb-4">
+                                <h3 className="text-xl font-serif text-black leading-tight flex items-center gap-2">
+                                    <Star className="h-5 w-5 text-amber-400 fill-amber-400" />
+                                    Tabela Geral Analistas
+                                </h3>
+                                <span className="text-[10px] uppercase font-bold text-neutral-400">Total Histórico</span>
                             </div>
-                            <div className="text-[9px] uppercase font-mono mt-1 text-neutral-400">Superior a 48 horas</div>
-                        </div>
-                        <div className={`p-6 rounded-xl border shadow-sm ${saldoDiarioPivotStats.avgDelay > 24 ? 'bg-neutral-50 border-neutral-200' : 'bg-white border-neutral-200'}`}>
-                            <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400 block mb-2">Média de Espera</span>
-                            <div className={`text-3xl font-serif ${saldoDiarioPivotStats.avgDelay > 24 ? 'text-neutral-800' : 'text-neutral-300'}`}>
-                                {saldoDiarioPivotStats.avgDelay}h
-                            </div>
-                            <div className="text-[9px] uppercase font-mono mt-1 text-neutral-400">Tempo médio de análise</div>
-                        </div>
-                    </div>
-
-                    <div id="matrix-capture-container" ref={matrixTableRef} className="bg-white border border-neutral-200 rounded-xl overflow-hidden shadow-sm">
-                        <div className="p-4 border-b border-neutral-100 bg-neutral-900 text-white flex justify-between items-center">
-                            <div className="flex items-center gap-3">
-                                <div className="h-2 w-2 bg-amber-500 rounded-full animate-pulse" />
-                                <h3 className="font-bold text-sm uppercase tracking-wide">Saldo de Análises Diário por Produtor</h3>
-                            </div>
-                            <div className="flex items-center gap-4">
-                                <button
-                                    onClick={handleExportPDF}
-                                    disabled={isGeneratingPDF}
-                                    className="flex items-center gap-2 px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white text-[10px] font-bold rounded transition-colors disabled:opacity-50 border border-white/10"
-                                >
-                                    {isGeneratingPDF ? (
-                                        <Loader2 className="h-3 w-3 animate-spin" />
-                                    ) : (
-                                        <Printer className="h-3 w-3" />
-                                    )}
-                                    {isGeneratingPDF ? "GERANDO..." : "RELATÓRIO PDF"}
-                                </button>
-                                <span className="text-[10px] font-mono opacity-60 hidden md:inline">Matriz de Produtores vs Entrada</span>
-                            </div>
-                        </div>
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-sm text-left border-collapse">
-                                <thead className="bg-[#1a202c] text-white text-[10px] uppercase font-bold tracking-wider">
-                                    <tr>
-                                        <th className="p-2 border-r border-[#2d3748] min-w-[280px] sticky left-0 z-10 bg-[#1a202c]">Produtor / Cliente</th>
-                                        {saldoDiarioPivotStats.sortedDates.map(date => (
-                                            <th key={date} className="p-2 text-center border-r border-[#2d3748] min-w-[100px]">
-                                                {format(new Date(date + 'T12:00:00'), 'dd/MM/yyyy')}
-                                            </th>
-                                        ))}
-                                        <th className="p-2 text-center bg-[#2d3748] sticky right-0 z-10">Total</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-neutral-100 font-medium">
-                                    {saldoDiarioPivotStats.sortedClients.map((client) => {
-                                        let rowTotal = 0;
-                                        return (
-                                            <tr key={client} className="hover:bg-neutral-50 transition-colors group">
-                                                <td className="p-2 font-bold text-neutral-800 border-r border-neutral-100 sticky left-0 z-10 bg-white group-hover:bg-neutral-50 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]">
-                                                    {client}
-                                                </td>
-                                                {saldoDiarioPivotStats.sortedDates.map(date => {
-                                                    const cellData = saldoDiarioPivotStats.matrix[client]?.[date];
-                                                    const val = cellData?.total || 0;
-                                                    const delay = cellData?.maxDelay || 0;
-                                                    rowTotal += val;
-
-                                                    const isDelayed = delay >= 24;
-                                                    const isCritical = delay >= 48;
-                                                    const priorityLevel = pinnedCells[`${client}|${date}`] || 0;
-
-                                                    return (
-                                                        <td
-                                                            key={date}
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                if (val > 0) togglePinCell(client, date);
-                                                            }}
-                                                            className={cn(
-                                                                "p-2 text-center border-r border-neutral-100 relative cursor-pointer transition-all min-w-[70px]",
-                                                                priorityLevel === 1 ? "bg-red-600 shadow-inner" :
-                                                                    priorityLevel === 2 ? "bg-amber-500 shadow-inner" :
-                                                                        priorityLevel === 3 ? "bg-emerald-500 shadow-inner" :
-                                                                            isCritical ? "bg-red-50/30" :
-                                                                                isDelayed ? "bg-amber-50/30" : ""
-                                                            )}
-                                                        >
-                                                            {val > 0 ? (
-                                                                <div className="flex flex-col items-center select-none">
-                                                                    <span className={cn(
-                                                                        "font-mono text-sm leading-tight",
-                                                                        priorityLevel > 0 ? "text-white font-black" :
-                                                                            isCritical ? "text-red-700 font-black" :
-                                                                                isDelayed ? "text-amber-700 font-bold" :
-                                                                                    "text-neutral-700"
-                                                                    )}>
-                                                                        {val.toLocaleString('pt-BR')}
-                                                                    </span>
-                                                                    {isDelayed && (
-                                                                        <div className={cn(
-                                                                            "flex items-center gap-1 mt-0.5 text-[8px] font-bold px-1 py-0.2 rounded-full",
-                                                                            priorityLevel === 1 ? "text-red-100 bg-red-400/50" :
-                                                                                priorityLevel === 2 ? "text-amber-100 bg-amber-400/50" :
-                                                                                    priorityLevel === 3 ? "text-emerald-100 bg-emerald-400/50" :
-                                                                                        isCritical ? "text-red-600 bg-red-100 border border-red-200" :
-                                                                                            "text-amber-600 bg-amber-100 border border-amber-200"
-                                                                        )}>
-                                                                            <Clock className="h-2 w-2" />
-                                                                            {delay > 48 ? `${(delay / 24).toFixed(1)}d` : `${delay}h`}
-                                                                        </div>
-                                                                    )}
-                                                                </div>
-                                                            ) : (
-                                                                <span className="text-neutral-200">-</span>
-                                                            )}
-                                                        </td>
-                                                    );
-                                                })}
-                                                <td className="p-2 text-center font-mono font-bold bg-neutral-50 text-neutral-800 sticky right-0 z-10 shadow-[-2px_0_5px_-2px_rgba(0,0,0,0.05)] border-l border-neutral-200">
-                                                    {rowTotal.toLocaleString('pt-BR')}
-                                                </td>
-                                            </tr>
-                                        );
-                                    })}
-                                    {/* Linha de Totais por Dia */}
-                                    <tr className="bg-neutral-50 text-neutral-900 font-bold text-[11px] border-t-2 border-neutral-200">
-                                        <td className="p-2 border-r border-neutral-200 uppercase text-[10px] sticky left-0 z-10 bg-neutral-50">Total Geral / Dia</td>
-                                        {saldoDiarioPivotStats.sortedDates.map(date => {
-                                            const dayTotal = saldoDiarioPivotStats.sortedClients.reduce((acc, client) => acc + (saldoDiarioPivotStats.matrix[client]?.[date]?.total || 0), 0);
-                                            return (
-                                                <td key={date} className="p-2 text-center font-mono whitespace-nowrap border-r border-neutral-200 text-neutral-700">
-                                                    {dayTotal.toLocaleString('pt-BR')}
-                                                </td>
-                                            );
-                                        })}
-                                        <td className="p-2 text-center font-mono bg-neutral-100 text-lg text-emerald-600 sticky right-0 z-10 border-l border-neutral-200">
-                                            {saldoDiarioPivotStats.sortedClients.reduce((acc, client) => {
-                                                const row = saldoDiarioPivotStats.matrix[client] || {};
-                                                return acc + Object.values(row).reduce((a, b) => a + (b.total || 0), 0);
-                                            }, 0).toLocaleString('pt-BR')}
-                                        </td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-
-                    {/* Alertas Detalhados com Design Refinado */}
-                    {saldoDiarioPivotStats.sortedDelayed.length > 0 && (
-                        <div className="bg-white border border-red-100 rounded-xl overflow-hidden shadow-md">
-                            <div className="p-4 border-b border-red-50 bg-white flex items-center justify-between">
-                                <div className="flex items-center gap-3">
-                                    <div className="h-8 w-8 bg-red-600 text-white flex items-center justify-center rounded-lg">
-                                        <AlertTriangle className="h-5 w-5" />
-                                    </div>
-                                    <div>
-                                        <h3 className="font-bold text-sm uppercase tracking-wide text-red-700">Amostras com Atraso Crítico</h3>
-                                        <div className="text-[10px] text-red-400 font-medium uppercase font-mono tracking-wider">Atenção Necessária Imediata</div>
-                                    </div>
-                                </div>
-                                <div className="bg-red-50 text-red-600 px-3 py-1 rounded-full text-[10px] font-bold border border-red-100">
-                                    {saldoDiarioPivotStats.sortedDelayed.length} O.S. PENDENTES
-                                </div>
-                            </div>
-                            <div className="overflow-x-auto">
+                            <div className="overflow-x-auto no-scrollbar">
                                 <table className="w-full text-sm text-left">
-                                    <thead className="text-[10px] uppercase font-bold text-neutral-400 bg-neutral-50">
+                                    <thead className="bg-neutral-50 text-[10px] uppercase font-bold text-neutral-500 tracking-wider">
                                         <tr>
-                                            <th className="p-4">O.S.</th>
-                                            <th className="p-4">Produtor / Cliente</th>
-                                            <th className="p-4 text-center">Data Entrada</th>
-                                            <th className="p-4 text-center">Tempo de Espera</th>
-                                            <th className="p-4 text-right">Amostras</th>
+                                            <th className="p-4 rounded-l-xl">Revisor</th>
+                                            <th className="p-4 text-right">Total Amostras</th>
+                                            <th className="p-4 rounded-r-xl w-full">Impacto (%)</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-neutral-100">
-                                        {saldoDiarioPivotStats.sortedDelayed.map((os) => (
-                                            <tr key={os.id} className="hover:bg-red-50/20 transition-colors group">
-                                                <td className="p-4 font-mono font-bold text-neutral-900 text-xs">#{os.os_numero}</td>
-                                                <td className="p-4 font-bold text-neutral-700">{os.cliente}</td>
-                                                <td className="p-4 text-center text-neutral-500 font-mono text-xs">
-                                                    {format(new Date(os.data_recepcao), 'dd/MM HH:mm')}
+                                        {revisorStats.map((stat, i) => (
+                                            <tr key={stat.name} className="hover:bg-neutral-50/50 transition-colors group cursor-pointer" onClick={() => toggleReviewerSelection(stat.name)}>
+                                                <td className="p-4">
+                                                    <div className="flex items-center gap-3">
+                                                        <span className="text-[10px] font-bold text-neutral-300 w-4">#{i + 1}</span>
+                                                        <div className={cn("h-4 w-4 rounded border flex items-center justify-center transition-all", selectedReviewers.includes(stat.name) ? "bg-black border-black text-white" : "border-neutral-300 bg-white group-hover:border-neutral-500")}>
+                                                            {selectedReviewers.includes(stat.name) && <Star className="h-2 w-2 fill-white" />}
+                                                        </div>
+                                                        <span className="font-bold text-neutral-800 tracking-wider text-[11px]">{stat.name}</span>
+                                                    </div>
                                                 </td>
-                                                <td className="p-4 text-center">
-                                                    <span className={`text-[10px] font-bold px-3 py-1 rounded-full inline-flex items-center gap-1.5 ${os.delayHours && os.delayHours > 48 ? 'bg-red-600 text-white shadow-sm' : 'bg-amber-500 text-white shadow-sm'}`}>
-                                                        <Clock className="h-3 w-3" />
-                                                        {os.delayHours && os.delayHours > 48 ? `${(os.delayHours / 24).toFixed(1)} DIAS` : `${os.delayHours} HORAS`}
-                                                    </span>
-                                                </td>
-                                                <td className="p-4 text-right font-bold text-black font-mono">
-                                                    {os.total_amostras}
+                                                <td className="p-4 text-right font-mono font-bold">{stat.total.toLocaleString('pt-BR')}</td>
+                                                <td className="p-4">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="h-1.5 bg-neutral-100 rounded-full flex-1 overflow-hidden">
+                                                            <div className="h-full bg-black rounded-full transition-all" style={{ width: `${(stat.total / (revisorStats[0]?.total || 1)) * 100}%` }} />
+                                                        </div>
+                                                    </div>
                                                 </td>
                                             </tr>
                                         ))}
@@ -979,69 +912,101 @@ export default function MonitoramentoOS() {
             )}
 
             {activeTab === 'clientes' && (
-                <div className="space-y-6">
-                    {/* Selection Area */}
-                    <div className="bg-white border border-neutral-200 rounded-xl p-4 shadow-sm">
-                        <div className="flex items-center justify-between mb-3">
-                            <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400">Filtrar Gráfico (Top Clientes)</h3>
-                            <button
-                                onClick={() => setSelectedChartClients([])}
-                                className="text-[10px] font-bold text-neutral-400 hover:text-black transition-colors"
-                            >
-                                LIMPAR SELEÇÃO
-                            </button>
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                            {clienteStats.slice(0, 15).map(cli => (
-                                <button
-                                    key={cli.name}
-                                    onClick={() => toggleClientSelection(cli.name)}
-                                    className={cn(
-                                        "px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all border flex items-center gap-2",
-                                        selectedChartClients.includes(cli.name)
-                                            ? "bg-black text-white border-black shadow-md"
-                                            : "bg-neutral-50 text-neutral-500 border-neutral-200 hover:border-neutral-400"
-                                    )}
-                                >
-                                    <div
-                                        className="h-2 w-2 rounded-full"
-                                        style={{ backgroundColor: clienteDailyStats.keyColors[cli.name] || '#ddd' }}
-                                    />
-                                    {cli.name}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
+                <div className="space-y-8 animate-fade-in">
+                    <div className="bg-white border border-neutral-200 rounded-3xl p-8 shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
+                        <div className="flex flex-col gap-6 mb-8">
+                            <div>
+                                <h3 className="text-2xl font-serif text-black leading-tight tracking-tight flex items-center gap-2">
+                                    <LayoutGrid className="h-6 w-6 text-neutral-400" />
+                                    Distribuição por Cliente
+                                </h3>
+                                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400 mt-1">Volume de amostras recebidas por cliente no tempo</p>
+                            </div>
 
-                    {/* Chart Section */}
-                    <div className="bg-white border border-neutral-200 rounded-xl p-6 shadow-sm">
-                        <div className="flex justify-between items-center mb-6">
-                            <h3 className="font-bold text-sm uppercase tracking-wide">Evolução Diária (Volume por Cliente)</h3>
-                            <div className="flex items-center gap-2">
-                                <div className="h-3 w-3 bg-neutral-300 rounded" />
-                                <span className="text-[10px] font-bold text-neutral-400 uppercase">Sombreado: Demais Clientes</span>
+                            <div className="flex flex-col gap-3">
+                                <div className="flex items-center justify-between">
+                                    <span className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Clientes Ativos:</span>
+                                    <div className="flex items-center gap-4">
+                                        <button
+                                            onClick={() => setSelectedChartClients([])}
+                                            className="text-[9px] font-bold text-neutral-400 uppercase tracking-widest hover:text-red-500 transition-colors flex items-center gap-1.5 px-2 py-1 bg-neutral-50 hover:bg-red-50 rounded-lg cursor-pointer"
+                                        >
+                                            <Trash2 className="h-3 w-3" /> Limpar Filtros
+                                        </button>
+                                        <span className="text-[8px] font-bold text-neutral-300 uppercase italic">Arraste para ver mais clientes →</span>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-2 overflow-x-auto pb-4 -mx-2 px-2">
+                                    {clienteDailyStats.keys.includes('Total Recebido') && (
+                                        <button
+                                            onClick={() => toggleClientSelection('Total Recebido')}
+                                            className={cn(
+                                                "flex items-center gap-3 px-5 py-3 rounded-xl border-2 transition-all shrink-0 min-w-fit shadow-sm",
+                                                selectedChartClients.includes('Total Recebido')
+                                                    ? "bg-black text-white border-black"
+                                                    : "bg-neutral-100 text-neutral-500 border-transparent hover:bg-neutral-200 hover:text-black"
+                                            )}
+                                        >
+                                            <div className={cn("h-2 w-2 rounded-full", selectedChartClients.includes('Total Recebido') ? "bg-white" : "bg-black")} />
+                                            <div className="flex flex-col items-start">
+                                                <span className="text-[11px] font-black uppercase tracking-widest">Total Recebido</span>
+                                            </div>
+                                        </button>
+                                    )}
+                                    <div className="w-px h-8 bg-neutral-200 mx-2 flex-shrink-0" />
+                                    {clienteDailyStats.keys.filter(k => k !== 'Total Recebido').slice(0, 30).map((cName: string) => {
+                                        const cInfo = clienteStats.find((item: any) => item.name === cName) || { avgTime: '-', total: 0 };
+                                        const hashClient = cName.replace(/[^a-zA-Z0-9]/g, '') + Math.random().toString(36).substr(2, 4);
+                                        return (
+                                            <button
+                                                key={cName}
+                                                onClick={() => toggleClientSelection(cName)}
+                                                className={cn(
+                                                    "flex items-center gap-3 px-4 py-2.5 rounded-xl border-2 transition-all shrink-0 min-w-fit",
+                                                    selectedChartClients.includes(cName)
+                                                        ? `text-white border-transparent client-btn-${hashClient}`
+                                                        : "bg-neutral-50/50 text-neutral-400 border-transparent hover:bg-white hover:border-neutral-200"
+                                                )}
+                                            >
+                                                {selectedChartClients.includes(cName) && (
+                                                    <style>{`
+                                                    .client-btn-${hashClient} { background-color: ${clienteDailyStats.keyColors[cName]}; box-shadow: 0 4px 12px ${clienteDailyStats.keyColors[cName]}33; }
+                                                `}</style>
+                                                )}
+                                                <style>{`.client-ind-${hashClient} { background-color: ${selectedChartClients.includes(cName) ? 'white' : (clienteDailyStats.keyColors[cName] || '#e5e5e5')}; }`}</style>
+                                                <div className={`h-1.5 w-1.5 rounded-full client-ind-${hashClient}`} />
+                                                <div className="flex flex-col items-start">
+                                                    <span className="text-[9px] font-black uppercase tracking-wider">{cName}</span>
+                                                    <div className="flex items-center gap-2 mt-0.5">
+                                                        <span className="text-[7px] font-mono opacity-60">Avg: {cInfo.avgTime}h</span>
+                                                        <span className="text-[8px] font-mono font-bold opacity-80 pl-2 border-l border-current/20">{cInfo.total.toLocaleString('pt-BR')}</span>
+                                                    </div>
+                                                </div>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
                             </div>
                         </div>
-                        <div className="h-[350px] w-full">
+
+                        <div className="h-[450px] w-full bg-neutral-50/30 rounded-2xl p-4">
                             <ResponsiveContainer width="100%" height="100%">
-                                <LineChart data={clienteDailyStats.data} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f5f5f5" />
-                                    <XAxis dataKey="name" stroke="#a3a3a3" tick={{ fontSize: 12 }} />
-                                    <YAxis stroke="#a3a3a3" tick={{ fontSize: 12 }} />
-                                    <RechartsTooltip
-                                        contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
-                                    />
-                                    <Legend />
-                                    {clienteDailyStats.keys.map((key) => (
+                                <LineChart data={clienteDailyStats.data} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#9ca3af', fontSize: 10, fontWeight: 700 }} dy={10} />
+                                    <YAxis axisLine={false} tickLine={false} tick={{ fill: '#9ca3af', fontSize: 10, fontWeight: 700 }} />
+                                    <RechartsTooltip content={<CustomTooltip />} />
+                                    {clienteDailyStats.keys.filter(key => selectedChartClients.includes(key)).map((key: string) => (
                                         <Line
                                             key={key}
                                             type="monotone"
+                                            connectNulls={true}
                                             dataKey={key}
                                             stroke={clienteDailyStats.keyColors[key]}
-                                            strokeWidth={key === 'Outros' ? 1.5 : 3}
-                                            strokeDasharray={key === 'Outros' ? "5 5" : undefined}
-                                            dot={key === 'Outros' ? false : { r: 4, strokeWidth: 2 }}
-                                            activeDot={{ r: 6 }}
+                                            strokeWidth={3}
+                                            dot={{ r: 4, strokeWidth: 0, fill: clienteDailyStats.keyColors[key] }}
+                                            activeDot={{ r: 7, strokeWidth: 0, fill: clienteDailyStats.keyColors[key] }}
+                                            strokeDasharray={key === 'Outros' ? "5 5" : "0"}
                                         />
                                     ))}
                                 </LineChart>
@@ -1049,157 +1014,231 @@ export default function MonitoramentoOS() {
                         </div>
                     </div>
 
-                    {/* Table Section */}
-                    <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden shadow-sm animate-fade-in text-black">
-                        <div className="p-4 border-b border-neutral-100 bg-neutral-50 flex justify-between items-center">
-                            <h3 className="font-bold text-sm uppercase tracking-wide">Volume e Performance por Cliente</h3>
+                    {/* New Pivot Table */}
+                    <div className="bg-white border border-neutral-200 rounded-[2rem] overflow-hidden shadow-[0_8px_30px_rgb(0,0,0,0.04)] mt-12 w-full">
+                        <div className="p-8 pb-4 border-b border-neutral-100 flex items-center gap-4">
+                            <div className="h-10 w-10 bg-neutral-100 text-neutral-500 rounded-xl flex items-center justify-center">
+                                <Database className="h-5 w-5" />
+                            </div>
+                            <div>
+                                <h3 className="text-xl font-serif text-black leading-tight tracking-tight">Recebimento Diário (Detalhado)</h3>
+                                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400 mt-0.5">Amostras recebidas por cliente agrupadas por data</p>
+                            </div>
                         </div>
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-sm text-left">
-                                <thead className="bg-neutral-50 text-[10px] uppercase font-bold text-neutral-500 tracking-wider font-mono">
-                                    <tr>
-                                        <th className="p-4 w-10"></th>
-                                        <th className="p-4">Produtor / Cliente</th>
-                                        <th className="p-4 text-center">Tempo Médio (H)</th>
-                                        <th className="p-4 text-right">Amostras Totais</th>
+                        <div className="overflow-x-auto no-scrollbar max-h-[600px] overflow-y-auto w-full relative">
+                            <table className="w-full text-[11px] text-left border-collapse">
+                                <thead className="sticky top-0 bg-white shadow-sm z-30 border-b-2 border-neutral-200">
+                                    <tr className="bg-neutral-50/50">
+                                        <th className="p-3 text-left border-b border-r border-neutral-200 bg-neutral-50 sticky left-0 z-40 w-64 shadow-[2px_0_5px_rgba(0,0,0,0.02)]">
+                                            <span className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Rótulos de Linha</span>
+                                        </th>
+                                        {carteiraClientesPivotStats.sortedDates.map((d: string) => (
+                                            <th key={d} className="p-3 text-center border-b border-r border-neutral-100 min-w-[85px] whitespace-nowrap bg-neutral-50/50">
+                                                <div className="text-[11px] font-serif text-black">{format(new Date(d + 'T12:00:00'), 'dd/MMM', { locale: ptBR })}</div>
+                                            </th>
+                                        ))}
+                                        <th className="p-3 text-right border-b border-neutral-200 bg-neutral-100/50 sticky right-0 z-30 w-28 shadow-[-2px_0_5px_rgba(0,0,0,0.02)]">
+                                            <span className="text-[10px] font-black uppercase tracking-widest text-neutral-500">Total Geral</span>
+                                        </th>
                                     </tr>
                                 </thead>
-                                <tbody className="divide-y divide-neutral-100 font-medium">
-                                    {clienteStats.map((stat) => (
-                                        <tr
-                                            key={stat.name}
-                                            className={cn(
-                                                "hover:bg-neutral-50 transition-colors cursor-pointer group",
-                                                selectedChartClients.includes(stat.name) ? "bg-blue-50/30" : ""
-                                            )}
-                                            onClick={() => toggleClientSelection(stat.name)}
-                                        >
-                                            <td className="p-4">
-                                                <div className={cn(
-                                                    "h-4 w-4 rounded border flex items-center justify-center transition-all",
-                                                    selectedChartClients.includes(stat.name)
-                                                        ? "bg-black border-black text-white"
-                                                        : "border-neutral-300 bg-white group-hover:border-neutral-500"
-                                                )}>
-                                                    {selectedChartClients.includes(stat.name) && <Star className="h-2 w-2 fill-white" />}
-                                                </div>
-                                            </td>
-                                            <td className="p-4 font-bold text-neutral-800">
-                                                {stat.name}
-                                            </td>
-                                            <td className="p-4 text-center">
-                                                <span className="font-mono bg-neutral-100 px-2 py-1 rounded text-neutral-600 text-xs">
-                                                    {stat.avgTime}h
-                                                </span>
-                                            </td>
-                                            <td className="p-4 text-right font-mono font-bold text-black border-l border-neutral-50">
-                                                {stat.total.toLocaleString('pt-BR')}
-                                            </td>
-                                        </tr>
+                                <tbody className="divide-y divide-neutral-100 font-mono">
+                                    {carteiraClientesPivotStats.sortedClients.map((client: any) => (
+                                        <React.Fragment key={client.clientName}>
+                                            <tr className="bg-white hover:bg-neutral-50 transition-colors group cursor-pointer" onClick={() => toggleClientCollapse(client.clientName)}>
+                                                <td className="p-3 flex items-center gap-2 font-bold text-black border-l-4 border-l-black border-r border-neutral-200 sticky left-0 z-10 bg-white group-hover:bg-neutral-50 transition-colors shadow-[2px_0_5px_rgba(0,0,0,0.02)]">
+                                                    {collapsedClients.includes(client.clientName) ? <PlusSquare className="h-3.5 w-3.5 text-black" /> : <MinusSquare className="h-3.5 w-3.5 text-black" />}
+                                                    <span className="truncate" title={client.clientName}>{client.clientName}</span>
+                                                </td>
+                                                {carteiraClientesPivotStats.sortedDates.map((date: string) => {
+                                                    const total = client.dates[date]?.total || 0;
+                                                    return (
+                                                        <td key={date} className="p-1.5 text-center border-r border-neutral-100 transition-colors relative overflow-hidden text-black font-bold group-hover:bg-neutral-50">
+                                                            {total > 0 ? total : ""}
+                                                        </td>
+                                                    );
+                                                })}
+                                                <td className="p-3 text-right font-black text-base text-black border-neutral-200 sticky right-0 z-10 bg-white group-hover:bg-neutral-50 transition-colors shadow-[-2px_0_5px_rgba(0,0,0,0.02)]">
+                                                    {client.total.toLocaleString('pt-BR')}
+                                                </td>
+                                            </tr>
+                                            {!collapsedClients.includes(client.clientName) && client.sortedClientes.map((clienteNode: any, idx: number) => (
+                                                <tr key={`${client.clientName}-${clienteNode.name}`} className={cn("bg-neutral-50/30 hover:bg-neutral-50/80 transition-colors", idx === client.sortedClientes.length - 1 ? "border-b-2 border-b-neutral-200" : "")}>
+                                                    <td className="p-3 pl-10 text-[10px] font-bold text-neutral-600 truncate border-r border-neutral-200 sticky left-0 z-10 bg-neutral-50/90 shadow-[2px_0_5px_rgba(0,0,0,0.02)]" title={clienteNode.name}>
+                                                        {clienteNode.name}
+                                                    </td>
+                                                    {carteiraClientesPivotStats.sortedDates.map((date: string) => {
+                                                        const total = clienteNode.dates[date]?.total || 0;
+                                                        return (
+                                                            <td key={date} className="p-1.5 text-center border-r border-neutral-100/50 text-neutral-500 font-bold">
+                                                                {total > 0 ? total : ""}
+                                                            </td>
+                                                        );
+                                                    })}
+                                                    <td className="p-3 text-right font-black text-sm text-neutral-600 border-neutral-200 sticky right-0 z-10 bg-neutral-50/90 shadow-[-2px_0_5px_rgba(0,0,0,0.02)]">
+                                                        {clienteNode.total.toLocaleString('pt-BR')}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </React.Fragment>
                                     ))}
                                 </tbody>
+                                <tfoot className="sticky bottom-0 bg-black text-white font-bold border-t-2 border-black z-20">
+                                    <tr>
+                                        <td className="p-3 uppercase tracking-widest text-left font-serif sticky left-0 bg-black z-30 shadow-[2px_0_5px_rgb(0,0,0)]">Total Geral</td>
+                                        {carteiraClientesPivotStats.sortedDates.map((date: string) => {
+                                            const totalCol = carteiraClientesPivotStats.sortedClients.reduce((acc, client) => acc + (client.dates[date]?.total || 0), 0);
+                                            return <td key={date} className="p-3 text-center font-mono text-sm">{totalCol > 0 ? totalCol.toLocaleString('pt-BR') : ''}</td>
+                                        })}
+                                        <td className="p-3 text-right font-mono text-sm sticky right-0 bg-black z-30 shadow-[-2px_0_5px_rgb(0,0,0)]">{carteiraClientesPivotStats.totalGeral.toLocaleString('pt-BR')}</td>
+                                    </tr>
+                                </tfoot>
                             </table>
                         </div>
                     </div>
                 </div>
             )}
 
-            {activeTab === 'geral' && (
-                <>
-                    {/* KPI Cards */}
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-                        <div className="bg-white border p-6 rounded-xl shadow-sm">
-                            <div className="flex justify-between items-start mb-2">
-                                <span className="text-[10px] font-bold uppercase tracking-widest text-neutral-400">Total Registros</span>
-                                <FileSpreadsheet className="h-4 w-4 text-neutral-300" />
-                            </div>
-                            <div className="text-3xl font-serif">{stats.total}</div>
+            {activeTab === 'saldo_diario' && (
+                <div className="space-y-8 animate-fade-in pb-20">
+                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 bg-white border border-neutral-200 rounded-3xl p-8 shadow-sm">
+                        <div>
+                            <h3 className="text-2xl font-serif text-black leading-tight tracking-tight flex items-center gap-2">
+                                <Clock className="h-6 w-6 text-neutral-400" />
+                                Matriz de Envelhecimento
+                            </h3>
+                            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400 mt-1">Status de pendências por cliente e tempo de recepção</p>
                         </div>
-
-                        <div className="bg-white border p-6 rounded-xl shadow-sm border-amber-200">
-                            <div className="flex justify-between items-start mb-2">
-                                <span className="text-[10px] font-bold uppercase tracking-widest text-amber-500">Saldo de Análise</span>
-                                <ActivityIcon className="h-4 w-4 text-amber-500" />
+                        <div className="flex items-center gap-6">
+                            <div className="flex gap-4 border-r border-neutral-100 pr-6 mr-6">
+                                <div className="text-center">
+                                    <div className="text-xl font-serif text-amber-500">{saldoDiarioPivotStats.totalPendingAmostras.toLocaleString('pt-BR')}</div>
+                                    <div className="text-[9px] font-bold uppercase text-neutral-400">Total Pendente</div>
+                                </div>
+                                <div className="text-center">
+                                    <div className="text-xl font-serif text-red-500">{saldoDiarioPivotStats.criticalCount}</div>
+                                    <div className="text-[9px] font-bold uppercase text-neutral-400">Críticos (+48h)</div>
+                                </div>
                             </div>
-                            <div className="text-3xl font-serif text-amber-600">{stats.saldoAmostras.toLocaleString('pt-BR')}</div>
-                            <div className="text-[9px] text-neutral-400 mt-1 uppercase font-mono">Amostras Pendentes</div>
-                        </div>
-
-                        <div className="bg-white border p-6 rounded-xl shadow-sm">
-                            <div className="flex justify-between items-start mb-2">
-                                <span className="text-[10px] font-bold uppercase tracking-widest text-neutral-400">Total Amostras</span>
-                                <ActivityIcon className="h-4 w-4 text-blue-500" />
-                            </div>
-                            <div className="text-3xl font-serif text-blue-600">{stats.totalAmostras.toLocaleString('pt-BR')}</div>
+                            <Button variant="outline" size="sm" onClick={handleExportPDF} disabled={isGeneratingPDF} className="h-10 px-6 rounded-xl border-neutral-200 font-bold text-[10px] uppercase tracking-widest hover:bg-black hover:text-white transition-all">
+                                {isGeneratingPDF ? <Loader2 className="h-4 w-4 animate-spin" /> : <Printer className="h-4 w-4 mr-2" />} Exportar PDF
+                            </Button>
                         </div>
                     </div>
 
-                    {/* List Section */}
-                    <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden shadow-sm">
-                        <div className="p-4 border-b border-neutral-100 flex justify-between items-center bg-neutral-50">
-                            <h3 className="font-bold text-sm uppercase tracking-wide">Histórico Simplificado</h3>
-                            <div className="relative">
-                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400" />
-                                <Input
-                                    value={searchTerm}
-                                    onChange={(e) => setSearchTerm(e.target.value)}
-                                    placeholder="Buscar Cliente ou Revisor..."
-                                    className="pl-9 w-64 h-9 text-xs"
-                                />
-                            </div>
-                        </div>
-
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-sm text-left">
-                                <thead className="bg-neutral-50 text-[10px] uppercase font-bold text-neutral-500 tracking-wider">
-                                    <tr>
-                                        <th className="p-4">O.S.</th>
-                                        <th className="p-4">Cliente</th>
-                                        <th className="p-4">Revisor</th>
-                                        <th className="p-4 text-center">Horas</th>
-                                        <th className="p-4 text-right">Amostras</th>
+                    <div ref={matrixTableRef} className="bg-white border border-neutral-200 rounded-[2rem] overflow-hidden shadow-[0_8px_30px_rgb(0,0,0,0.04)] mt-8">
+                        <div className="overflow-x-auto no-scrollbar max-h-[600px] overflow-y-auto w-full relative">
+                            <table className="w-full text-[11px] text-left border-collapse">
+                                <thead className="sticky top-0 bg-white shadow-sm z-30 border-b-2 border-neutral-200">
+                                    <tr className="bg-neutral-50/50">
+                                        <th className="p-3 text-left border-b border-r border-neutral-200 bg-neutral-50 sticky left-0 z-40 w-64 shadow-[2px_0_5px_rgba(0,0,0,0.02)]">
+                                            <span className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Tomador e Cliente</span>
+                                        </th>
+                                        {saldoDiarioPivotStats.sortedDates.map((d: string) => (
+                                            <th key={d} className="p-3 text-center border-b border-r border-neutral-100 min-w-[85px] whitespace-nowrap bg-neutral-50/50">
+                                                <div className="text-[11px] font-serif text-black">{format(new Date(d + 'T12:00:00'), 'dd/MM')}</div>
+                                                <div className="text-[8px] font-black uppercase text-neutral-400 tracking-tighter">{format(new Date(d + 'T12:00:00'), 'iii', { locale: ptBR })}</div>
+                                            </th>
+                                        ))}
+                                        <th className="p-3 text-right border-b border-neutral-200 bg-neutral-100/50 sticky right-0 z-30 w-28 shadow-[-2px_0_5px_rgba(0,0,0,0.02)]">
+                                            <span className="text-[10px] font-black uppercase tracking-widest text-neutral-500">Global</span>
+                                        </th>
                                     </tr>
                                 </thead>
-                                <tbody className="divide-y divide-neutral-100">
-                                    {isLoading ? (
-                                        <tr>
-                                            <td colSpan={5} className="p-8 text-center text-neutral-400">
-                                                <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2" />
-                                                Carregando...
-                                            </td>
-                                        </tr>
-                                    ) : filteredOS.length === 0 ? (
-                                        <tr>
-                                            <td colSpan={5} className="p-8 text-center text-neutral-400 font-mono text-xs">
-                                                Nenhum registro encontrado.
-                                            </td>
-                                        </tr>
-                                    ) : (
-                                        filteredOS.map((os) => (
-                                            <tr key={os.id} className="hover:bg-neutral-50 transition-colors group">
-                                                <td className="p-4 font-mono font-bold text-black text-xs">{os.os_numero}</td>
-                                                <td className="p-4 font-bold text-neutral-700">{os.cliente}</td>
-                                                <td className="p-4 text-xs font-medium text-neutral-600">
-                                                    {os.revisor || '-'}
+                                <tbody className="divide-y divide-neutral-100 font-mono">
+                                    {saldoDiarioPivotStats.sortedClients.map((client: any) => (
+                                        <React.Fragment key={client.clientName}>
+                                            <tr className="bg-white hover:bg-neutral-50 transition-colors group cursor-pointer" onClick={() => toggleClientCollapse(client.clientName)}>
+                                                <td className="p-3 flex items-center gap-2 font-bold text-black border-l-4 border-l-black border-r border-neutral-200 sticky left-0 z-10 bg-white group-hover:bg-neutral-50 transition-colors shadow-[2px_0_5px_rgba(0,0,0,0.02)]">
+                                                    {collapsedClients.includes(client.clientName) ? <PlusSquare className="h-3.5 w-3.5 text-black" /> : <MinusSquare className="h-3.5 w-3.5 text-black" />}
+                                                    <span className="truncate">{client.clientName}</span>
                                                 </td>
-                                                <td className="p-4 text-center font-mono text-xs">
-                                                    {os.horas ? `${os.horas}h` : '-'}
-                                                </td>
-                                                <td className="p-4 text-right font-bold text-neutral-800 font-mono">
-                                                    {os.total_amostras}
+                                                {saldoDiarioPivotStats.sortedDates.map((date: string) => {
+                                                    const cell = client.dates[date];
+                                                    const total = cell?.total || 0;
+                                                    const pin = pinnedCells[`${client.clientName}|${date}`];
+
+                                                    let cellStyle = "text-neutral-200";
+                                                    if (pin === 1) cellStyle = "bg-red-500/90 text-white border-red-600 shadow-inner";
+                                                    else if (pin === 2) cellStyle = "bg-amber-400/90 text-white border-amber-500 shadow-inner";
+                                                    else if (pin === 3) cellStyle = "bg-emerald-500/90 text-white border-emerald-600 shadow-inner";
+                                                    else if (total > 0 && cell?.maxDelay >= 48) cellStyle = "bg-white text-black"; // Auto-Red removed, leaving dot? Clean as requested
+                                                    else if (total > 0 && cell?.maxDelay >= 24) cellStyle = "bg-white text-black"; // Auto-Yellow removed, using plain text
+                                                    else if (total > 0) cellStyle = "bg-white text-black";
+
+                                                    return (
+                                                        <td key={date}
+                                                            onClick={(e) => { e.stopPropagation(); togglePinCell(client.clientName, date); }}
+                                                            className={cn("p-1.5 text-center border-r border-neutral-100 transition-colors relative overflow-hidden", cellStyle)}
+                                                        >
+                                                            {total > 0 ? (
+                                                                <div className="flex flex-col items-center justify-center h-full py-1">
+                                                                    <span className="font-mono font-black text-sm relative z-10 leading-none">{total}</span>
+                                                                    {cell.maxDelay > 0 && (
+                                                                        <span className={cn("text-[8px] font-black opacity-60 mt-0.5 leading-none", pin ? "text-white" : "text-black/40")}>{cell.maxDelay}h</span>
+                                                                    )}
+                                                                    {cell.maxDelay >= 48 && !pin && (
+                                                                        <div className="absolute top-1 right-1">
+                                                                            <div className="h-1.5 w-1.5 rounded-full bg-red-400 animate-pulse" />
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            ) : ""}
+                                                        </td>
+                                                    );
+                                                })}
+                                                <td className="p-3 text-right font-black text-base text-black border-neutral-200 sticky right-0 z-10 bg-white group-hover:bg-neutral-50 transition-colors shadow-[-2px_0_5px_rgba(0,0,0,0.02)]">
+                                                    {client.total.toLocaleString('pt-BR')}
                                                 </td>
                                             </tr>
-                                        ))
-                                    )}
+                                            {!collapsedClients.includes(client.clientName) && client.sortedClientes.map((clienteNode: any, idx: number) => (
+                                                <tr key={`${client.clientName}-${clienteNode.name}`} className={cn("bg-neutral-50/30 hover:bg-neutral-50/80 transition-colors", idx === client.sortedClientes.length - 1 ? "border-b-2 border-b-neutral-200" : "")}>
+                                                    <td className="p-3 pl-10 text-[10px] font-bold text-neutral-600 truncate border-r border-neutral-200 sticky left-0 z-10 bg-neutral-50/90 shadow-[2px_0_5px_rgba(0,0,0,0.02)]">
+                                                        {clienteNode.name}
+                                                    </td>
+                                                    {saldoDiarioPivotStats.sortedDates.map((date: string) => {
+                                                        const cell = clienteNode.dates[date];
+                                                        const total = cell?.total || 0;
+                                                        return (
+                                                            <td key={date} className="p-1.5 text-center border-r border-neutral-100/50">
+                                                                {total > 0 ? (
+                                                                    <div className="flex flex-col items-center text-neutral-500 py-1 relative">
+                                                                        <span className="font-mono font-bold text-[11px] leading-none">{total}</span>
+                                                                        {cell.maxDelay > 0 && <span className="text-[7px] font-black opacity-50 mt-0.5 leading-none">{cell.maxDelay}h</span>}
+                                                                        {cell.maxDelay >= 48 && (
+                                                                            <div className="absolute top-0 right-0">
+                                                                                <div className="h-1 w-1 rounded-full bg-red-400/50" />
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                ) : ""}
+                                                            </td>
+                                                        );
+                                                    })}
+                                                    <td className="p-3 text-right font-black text-sm text-neutral-600 border-neutral-200 sticky right-0 z-10 bg-neutral-50/90 shadow-[-2px_0_5px_rgba(0,0,0,0.02)]">
+                                                        {clienteNode.total.toLocaleString('pt-BR')}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </React.Fragment>
+                                    ))}
                                 </tbody>
+                                <tfoot className="sticky bottom-0 bg-black text-white font-bold border-t-2 border-black z-20">
+                                    <tr>
+                                        <td className="p-3 uppercase tracking-widest text-left font-serif sticky left-0 bg-black z-30 shadow-[2px_0_5px_rgb(0,0,0)]">Total Geral</td>
+                                        {saldoDiarioPivotStats.sortedDates.map((date: string) => {
+                                            const totalCol = saldoDiarioPivotStats.sortedClients.reduce((acc, client) => acc + (client.dates[date]?.total || 0), 0);
+                                            return <td key={date} className="p-3 text-center font-mono text-sm">{totalCol > 0 ? totalCol.toLocaleString('pt-BR') : ''}</td>
+                                        })}
+                                        <td className="p-3 text-right font-mono text-sm sticky right-0 bg-black z-30 shadow-[-2px_0_5px_rgb(0,0,0)]">{saldoDiarioPivotStats.totalGeral.toLocaleString('pt-BR')}</td>
+                                    </tr>
+                                </tfoot>
                             </table>
                         </div>
-                        <div className="p-2 border-t border-neutral-100 bg-neutral-50 text-right text-[10px] text-neutral-400 uppercase font-bold">
-                            Exibindo {filteredOS.length} de {osList.length} registros
-                        </div>
                     </div>
-                </>
-            )}
-        </div>
+                </div>
+            )
+            }
+        </div >
     );
 }
