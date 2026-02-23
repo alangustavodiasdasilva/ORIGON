@@ -37,21 +37,25 @@ export const LabService = {
     async list(): Promise<Lab[]> {
         if (isSupabaseEnabled()) {
             try {
-                const { data, error } = await supabase.from('laboratorios').select('*');
+                const { data, error } = await supabase.from('laboratorios').select('*').order('nome');
                 if (error) throw error;
 
-                // CRITICAL SAFETY NET: If Supabase is empty but we have local data, use local data
-                if ((!data || data.length === 0)) {
-                    const localData = getStoredLabs();
-                    if (localData.length > 0) {
-                        console.warn("Supabase is empty. Falling back to LOCAL STORAGE to prevent data loss.");
-                        return localData;
-                    }
+                // Se Supabase retornou dados, ele é fonte de verdade — sincroniza o localStorage
+                if (data && data.length > 0) {
+                    saveStoredLabs(data);
+                    return data;
                 }
 
-                return data;
+                // Se Supabase veio vazio mas local tem dados: preserva local (evita apagar tudo)
+                const localData = getStoredLabs();
+                if (localData.length > 0) {
+                    console.warn("Supabase retornou vazio. Usando localStorage como fallback.");
+                    return localData;
+                }
+
+                return [];
             } catch (error) {
-                console.warn("Supabase (Laboratorios) unavailable, falling back to local storage:", error);
+                console.warn("Supabase (Laboratorios) indisponível, usando localStorage:", error);
                 return getStoredLabs();
             }
         }
@@ -78,6 +82,10 @@ export const LabService = {
                 console.error("Supabase create lab error:", error);
                 throw error;
             }
+            // Sincroniza localStorage com novo lab
+            const stored = getStoredLabs();
+            stored.push(newLab);
+            saveStoredLabs(stored);
             return newLab;
         }
 
@@ -97,13 +105,17 @@ export const LabService = {
         if (isSupabaseEnabled()) {
             const { data: updated, error } = await supabase.from('laboratorios').update(data).eq('id', id).select().single();
             if (error) throw error;
+            // Sincroniza localStorage
+            const stored = getStoredLabs();
+            const idx = stored.findIndex(l => l.id === id);
+            if (idx >= 0) stored[idx] = updated;
+            saveStoredLabs(stored);
             return updated;
         }
 
         const labs = getStoredLabs();
         const index = labs.findIndex(l => l.id === id);
         if (index === -1) throw new Error("Lab not found");
-
         labs[index] = { ...labs[index], ...data, updated_at: new Date().toISOString() };
         saveStoredLabs(labs);
         return labs[index];
@@ -113,11 +125,36 @@ export const LabService = {
         if (isSupabaseEnabled()) {
             const { error } = await supabase.from('laboratorios').delete().eq('id', id);
             if (error) throw error;
-            return;
         }
+        // SEMPRE limpa do localStorage — independente do Supabase estar ativo ou não
+        // Isso evita o "ghost lab" que voltava após atualização de página
+        const stored = getStoredLabs();
+        saveStoredLabs(stored.filter(l => l.id !== id));
+    },
 
-        const labs = getStoredLabs();
-        const filtered = labs.filter(l => l.id !== id);
-        saveStoredLabs(filtered);
+    /**
+     * Inscreve para atualizações em tempo real da tabela 'laboratorios'.
+     * Chame no useEffect e retorne o unsubscribe para cleanup.
+     *
+     * Exemplo de uso em um componente:
+     *   useEffect(() => {
+     *     return LabService.subscribe(() => loadLabs());
+     *   }, []);
+     */
+    subscribe(onUpdate: () => void): () => void {
+        if (!isSupabaseEnabled()) return () => { };
+
+        const channel = supabase
+            .channel('laboratorios-realtime')
+            .on(
+                'postgres_changes',
+                { event: '*', schema: 'public', table: 'laboratorios' },
+                () => { onUpdate(); }
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
     }
 };

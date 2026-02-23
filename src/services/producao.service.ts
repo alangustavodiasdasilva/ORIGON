@@ -80,25 +80,22 @@ export const producaoService = {
     },
 
     async list(labId?: string): Promise<ProducaoData[]> {
-        const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-
         if (isSupabaseEnabled()) {
             try {
-                // Background cleanup: Delete records older than 24h
-                supabase
-                    .from('operacao_producao')
-                    .delete()
-                    .lt('created_at', twentyFourHoursAgo)
-                    .then(({ error }) => {
-                        if (error) console.warn("Background cleanup error (producao):", error);
-                    });
+                // Background cleanup: DISABLED so older records don't get deleted automatically
+                // supabase
+                //     .from('operacao_producao')
+                //     .delete()
+                //     .lt('created_at', twentyFourHoursAgo)
+                //     .then(({ error }) => {
+                //         if (error) console.warn("Background cleanup error (producao):", error);
+                //     });
 
                 let query = supabase
                     .from('operacao_producao')
-                    .select('*')
-                    .gte('created_at', twentyFourHoursAgo); // Only fetch recent data
+                    .select('*');
 
-                if (labId) {
+                if (labId !== 'all') {
                     query = query.eq('lab_id', labId);
                 }
 
@@ -112,24 +109,9 @@ export const producaoService = {
 
         // Local Storage filtering
         const local = getStoredProducao();
-        const filtered = local.filter(p => {
-            const createdAt = (p as any).created_at ? new Date((p as any).created_at).getTime() : 0;
-            const cutoff = new Date(twentyFourHoursAgo).getTime();
-            // If no created_at (legacy data), deciding to keep or discard? 
-            // Logic: If no created_at, assume old and hide, OR show if strictly required. 
-            // Given the requirement "must add to view", assume strictly ephemeral.
-            // But for safety on existing data without timestamp, maybe we should keep them?
-            // User said "dados que ele adicionar terão periodo de 24 horas".
-            // Let's rely on timestamp if present.
-            return createdAt >= cutoff;
-        });
+        const filtered = local;
 
-        // Clean up local storage
-        if (filtered.length !== local.length) {
-            saveStoredProducao(filtered);
-        }
-
-        return labId ? filtered.filter(p => p.lab_id === labId) : filtered;
+        return labId === 'all' ? filtered : (labId ? filtered.filter(p => p.lab_id === labId) : filtered);
     },
 
     async deleteAll(labId: string) {

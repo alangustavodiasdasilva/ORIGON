@@ -46,8 +46,8 @@ export default function LoadingScreen() {
                 <div className="w-64 space-y-3">
                     <div className="h-[2px] w-full bg-neutral-100 overflow-hidden">
                         <div
-                            className="h-full bg-black transition-all duration-300 ease-out"
-                            style={{ width: `${progress}%` }}
+                            className="h-full bg-black transition-all duration-300 ease-out w-dynamic"
+                            style={{ '--dynamic-width': `${progress}%` } as React.CSSProperties}
                         />
                     </div>
                     <div className="flex justify-between text-[9px] font-mono uppercase tracking-widest text-neutral-400">
@@ -64,22 +64,6 @@ export default function LoadingScreen() {
                 </p>
             </div>
 
-            <style>{`
-                @keyframes pulse-slow {
-                    0%, 100% { transform: scale(1); opacity: 1; }
-                    50% { transform: scale(0.98); opacity: 0.8; }
-                }
-                @keyframes spin-slow {
-                    from { transform: rotate(0deg); }
-                    to { transform: rotate(360deg); }
-                }
-                .animate-pulse-slow {
-                    animation: pulse-slow 4s ease-in-out infinite;
-                }
-                .animate-spin-slow {
-                    animation: spin-slow 12s linear infinite;
-                }
-            `}</style>
         </div>
     );
 }

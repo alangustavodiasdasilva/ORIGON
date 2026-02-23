@@ -1,26 +1,29 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { lazy, Suspense } from "react";
 import Layout from "@/components/shared/Layout";
 import LoadingScreen from "@/components/shared/LoadingScreen";
 import { ToastProvider } from "@/contexts/ToastContext";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { LabProvider } from "@/contexts/LabContext";
+import { SyncProvider } from "@/contexts/SyncContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 import { ErrorBoundary } from "@/components/shared/ErrorBoundary";
 
-// Regular imports instead of lazy for stability
-import Inicio from "@/pages/Inicio";
-import Home from "@/pages/Home";
-import Registro from "@/pages/Registro";
-import Analysis from "@/pages/Analysis";
-import Icac from "@/pages/Icac";
-import Interlaboratorial from "@/pages/Interlaboratorial";
-import Export from "@/pages/Export";
-import Admin from "@/pages/Admin";
-import Login from "@/pages/Login";
-import Quality from "@/pages/Quality";
-import Operacao from "@/pages/Operacao";
-import MonitoramentoOS from "@/pages/MonitoramentoOS";
+// Lazy imports — cada página só é carregada quando o usuário navegar até ela
+const Inicio = lazy(() => import("@/pages/Inicio"));
+const Home = lazy(() => import("@/pages/Home"));
+const Registro = lazy(() => import("@/pages/Registro"));
+const Analysis = lazy(() => import("@/pages/Analysis"));
+const Icac = lazy(() => import("@/pages/Icac"));
+const Interlaboratorial = lazy(() => import("@/pages/Interlaboratorial"));
+const Export = lazy(() => import("@/pages/Export"));
+const Admin = lazy(() => import("@/pages/Admin"));
+const Login = lazy(() => import("@/pages/Login"));
+const Quality = lazy(() => import("@/pages/Quality"));
+const Operacao = lazy(() => import("@/pages/Operacao"));
+const MonitoramentoOS = lazy(() => import("@/pages/MonitoramentoOS"));
+
 
 function AppRoutes() {
     const { isAuthenticated, isLoading: authLoading } = useAuth();
@@ -31,28 +34,32 @@ function AppRoutes() {
 
     if (!isAuthenticated) {
         return (
-            <Routes>
-                <Route path="*" element={<Login />} />
-            </Routes>
+            <Suspense fallback={<LoadingScreen />}>
+                <Routes>
+                    <Route path="*" element={<Login />} />
+                </Routes>
+            </Suspense>
         );
     }
 
     return (
-        <Routes>
-            <Route path="/" element={<Layout />}>
-                <Route index element={<Inicio />} />
-                <Route path="lotes" element={<Home />} />
-                <Route path="registro" element={<Registro />} />
-                <Route path="analysis" element={<Analysis />} />
-                <Route path="icac" element={<Icac />} />
-                <Route path="interlaboratorial" element={<Interlaboratorial />} />
-                <Route path="operacao" element={<Operacao />} />
-                <Route path="monitoramento-os" element={<MonitoramentoOS />} />
-                <Route path="export" element={<Export />} />
-                <Route path="quality" element={<Quality />} />
-                <Route path="admin" element={<Admin />} />
-            </Route>
-        </Routes>
+        <Suspense fallback={<LoadingScreen />}>
+            <Routes>
+                <Route path="/" element={<Layout />}>
+                    <Route index element={<Inicio />} />
+                    <Route path="lotes" element={<Home />} />
+                    <Route path="registro" element={<Registro />} />
+                    <Route path="analysis" element={<Analysis />} />
+                    <Route path="icac" element={<Icac />} />
+                    <Route path="interlaboratorial" element={<Interlaboratorial />} />
+                    <Route path="operacao" element={<Operacao />} />
+                    <Route path="monitoramento-os" element={<MonitoramentoOS />} />
+                    <Route path="export" element={<Export />} />
+                    <Route path="quality" element={<Quality />} />
+                    <Route path="admin" element={<Admin />} />
+                </Route>
+            </Routes>
+        </Suspense>
     );
 }
 
@@ -64,9 +71,11 @@ export default function App() {
                     <ToastProvider>
                         <AuthProvider>
                             <LabProvider>
-                                <BrowserRouter>
-                                    <AppRoutes />
-                                </BrowserRouter>
+                                <SyncProvider>
+                                    <BrowserRouter basename={import.meta.env.BASE_URL}>
+                                        <AppRoutes />
+                                    </BrowserRouter>
+                                </SyncProvider>
                             </LabProvider>
                         </AuthProvider>
                     </ToastProvider>

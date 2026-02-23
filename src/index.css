@@ -73,6 +73,29 @@
   }
 }
 
+@keyframes fadeSlideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Barra de progresso que varre da esquerda para a direita */
+@keyframes progressBar {
+  0% {
+    background-position: 200% 0;
+  }
+
+  100% {
+    background-position: -200% 0;
+  }
+}
+
 @keyframes scale-in {
   from {
     opacity: 0;
@@ -128,6 +151,26 @@
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@keyframes spin-slow {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes slide-right {
+  from {
+    transform: translateX(-100%);
+  }
+
+  to {
+    transform: translateX(0);
   }
 }
 
@@ -227,6 +270,35 @@ body.dark,
   .animate-fade-in-up {
     animation: fade-in-up 0.6s ease-out forwards;
     opacity: 0;
+  }
+
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .animate-slide-right {
+    animation: slide-right 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+
+  .bg-dynamic {
+    background-color: var(--bg-color, transparent);
+  }
+
+  .h-dynamic {
+    height: var(--dynamic-height, auto);
+  }
+
+  .shadow-dynamic {
+    box-shadow: var(--dynamic-shadow, none);
+  }
+
+  .w-dynamic {
+    width: var(--dynamic-width, auto);
   }
 }
 

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/contexts/ToastContext";
-import { Upload, BarChart3, Loader2, X, Sun, Moon, Sunset, ArrowRight, Save, Calendar, Copy, FileSpreadsheet, Building2 } from "lucide-react";
+import { Upload, BarChart3, Loader2, X, Sun, Moon, Sunset, ArrowRight, Save, Calendar, Copy, FileSpreadsheet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import Tesseract from 'tesseract.js';
@@ -11,6 +11,7 @@ import ProductionTrendChart from "@/components/analysis/ProductionTrendChart";
 import { producaoService } from "@/services/producao.service";
 import type { ProducaoData } from "@/services/producao.service";
 import { parseProducaoFileInChunks } from "@/lib/producaoParser";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface IOperacaoItem {
     id?: string;
@@ -51,7 +52,8 @@ interface OCRResult {
 }
 
 export default function Operacao() {
-    const { user, currentLab, selectLab, deselectLab } = useAuth();
+    const { user, currentLab, selectLab } = useAuth();
+    const labId = currentLab?.id || user?.lab_id || (user?.acesso === 'admin_global' ? 'all' : undefined);
     const { addToast } = useToast();
     const [isUploading, setIsUploading] = useState(false);
     const [isProcessingOCR, setIsProcessingOCR] = useState(false);
@@ -343,7 +345,7 @@ export default function Operacao() {
     };
 
     const [labs, setLabs] = useState<any[]>([]);
-    useEffect(() => { if (user?.acesso === 'admin_global' && !currentLab) { const fn = async () => { const l = await LabService.list(); setLabs(l); }; fn(); } }, [user, currentLab]);
+    useEffect(() => { if (user?.acesso === 'admin_global') { const fn = async () => { const l = await LabService.list(); setLabs(l); }; fn(); } }, [user]);
 
     if (user?.acesso === 'admin_global' && !currentLab) {
         return (
@@ -364,7 +366,7 @@ export default function Operacao() {
     }
 
     return (
-        <div className="max-w-[95%] mx-auto py-8 text-black pb-24">
+        <div className="w-full py-8 text-black pb-24">
             <div className="flex items-center justify-between mb-8 pb-8 border-b border-black">
                 <div className="flex items-center gap-4">
                     <div className="h-12 w-12 bg-black text-white flex items-center justify-center rounded-lg"><FileSpreadsheet className="h-6 w-6" /></div>
@@ -372,15 +374,18 @@ export default function Operacao() {
                 </div>
                 <div className="flex gap-3">
                     {user?.acesso === 'admin_global' && (
-                        <Button
-                            variant="outline"
-                            onClick={() => deselectLab()}
-                            className="bg-black text-white border-black hover:bg-neutral-800 hover:text-white"
-                            title="Trocar Laboratório"
+                        <select
+                            title="Selecione o Laboratório"
+                            aria-label="Selecione o Laboratório"
+                            className="bg-white border-2 border-neutral-200 text-black text-[10px] font-bold uppercase tracking-widest rounded-xl px-4 py-2 hover:border-black transition-all cursor-pointer outline-none"
+                            value={labId || ""}
+                            onChange={(e) => {
+                                if (e.target.value) selectLab(e.target.value);
+                            }}
                         >
-                            <Building2 className="h-4 w-4 mr-2" />
-                            {currentLab?.nome || "Lab"}
-                        </Button>
+                            <option value="" disabled>SELECIONE O LABORATÓRIO</option>
+                            {labs.map(l => <option key={l.id} value={l.id}>{l.nome}</option>)}
+                        </select>
                     )}
                     <Button variant="outline" onClick={handleClearAllData} className="text-red-600 border-red-100 hover:bg-red-50">Limpar Histórico</Button>
                     <div className="relative">
@@ -389,45 +394,56 @@ export default function Operacao() {
                     </div>
                 </div>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 mb-12 animate-in fade-in duration-700">
-                <div className="group bg-white border border-neutral-200 p-8 rounded-[2rem] shadow-[0_10px_30px_rgba(0,0,0,0.02)] hover:shadow-[0_20px_50px_rgba(0,0,0,0.05)] transition-all duration-500">
-                    <div className="flex items-center justify-between mb-6">
-                        <span className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Turno 1</span>
-                        <div className="h-8 w-8 rounded-full bg-amber-50 flex items-center justify-center"><Sun className="h-4 w-4 text-amber-500" /></div>
-                    </div>
-                    <div className="text-4xl font-serif text-black mb-1">{turno1Total.toLocaleString()}</div>
-                    <div className="text-[10px] font-bold text-neutral-400 uppercase tracking-tight">Carga de Amostras</div>
-                </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 mb-12 animate-in fade-in slide-in-from-bottom-4 duration-700">
+                {isLoading ? (
+                    <>
+                        <Skeleton className="h-[180px] rounded-[2rem]" />
+                        <Skeleton className="h-[180px] rounded-[2rem]" />
+                        <Skeleton className="h-[180px] rounded-[2rem]" />
+                        <Skeleton className="h-[180px] rounded-[2rem]" />
+                    </>
+                ) : (
+                    <>
+                        <div className="group bg-white border border-neutral-200 p-8 rounded-[2rem] shadow-[0_10px_30px_rgba(0,0,0,0.02)] hover:shadow-[0_20px_50px_rgba(0,0,0,0.05)] transition-all duration-500 hover:-translate-y-1">
+                            <div className="flex items-center justify-between mb-6">
+                                <span className="text-[10px] font-black uppercase tracking-widest text-neutral-400 group-hover:text-amber-500 transition-colors">Turno 1</span>
+                                <div className="h-8 w-8 rounded-full bg-amber-50 flex items-center justify-center group-hover:scale-110 transition-transform"><Sun className="h-4 w-4 text-amber-500" /></div>
+                            </div>
+                            <div className="text-4xl font-serif text-black mb-1 tabular-nums">{turno1Total.toLocaleString()}</div>
+                            <div className="text-[10px] font-bold text-neutral-400 uppercase tracking-tight">Carga de Amostras</div>
+                        </div>
 
-                <div className="group bg-white border border-neutral-200 p-8 rounded-[2rem] shadow-[0_10px_30px_rgba(0,0,0,0.02)] hover:shadow-[0_20px_50px_rgba(0,0,0,0.05)] transition-all duration-500">
-                    <div className="flex items-center justify-between mb-6">
-                        <span className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Turno 2</span>
-                        <div className="h-8 w-8 rounded-full bg-orange-50 flex items-center justify-center"><Sunset className="h-4 w-4 text-orange-500" /></div>
-                    </div>
-                    <div className="text-4xl font-serif text-black mb-1">{turno2Total.toLocaleString()}</div>
-                    <div className="text-[10px] font-bold text-neutral-400 uppercase tracking-tight">Carga de Amostras</div>
-                </div>
+                        <div className="group bg-white border border-neutral-200 p-8 rounded-[2rem] shadow-[0_10px_30px_rgba(0,0,0,0.02)] hover:shadow-[0_20px_50px_rgba(0,0,0,0.05)] transition-all duration-500 hover:-translate-y-1">
+                            <div className="flex items-center justify-between mb-6">
+                                <span className="text-[10px] font-black uppercase tracking-widest text-neutral-400 group-hover:text-orange-500 transition-colors">Turno 2</span>
+                                <div className="h-8 w-8 rounded-full bg-orange-50 flex items-center justify-center group-hover:scale-110 transition-transform"><Sunset className="h-4 w-4 text-orange-500" /></div>
+                            </div>
+                            <div className="text-4xl font-serif text-black mb-1 tabular-nums">{turno2Total.toLocaleString()}</div>
+                            <div className="text-[10px] font-bold text-neutral-400 uppercase tracking-tight">Carga de Amostras</div>
+                        </div>
 
-                <div className="group bg-white border border-neutral-200 p-8 rounded-[2rem] shadow-[0_10px_30px_rgba(0,0,0,0.02)] hover:shadow-[0_20px_50px_rgba(0,0,0,0.05)] transition-all duration-500">
-                    <div className="flex items-center justify-between mb-6">
-                        <span className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Turno 3</span>
-                        <div className="h-8 w-8 rounded-full bg-indigo-50 flex items-center justify-center"><Moon className="h-4 w-4 text-indigo-500" /></div>
-                    </div>
-                    <div className="text-4xl font-serif text-black mb-1">{turno3Total.toLocaleString()}</div>
-                    <div className="text-[10px] font-bold text-neutral-400 uppercase tracking-tight">Carga de Amostras</div>
-                </div>
+                        <div className="group bg-white border border-neutral-200 p-8 rounded-[2rem] shadow-[0_10px_30px_rgba(0,0,0,0.02)] hover:shadow-[0_20px_50px_rgba(0,0,0,0.05)] transition-all duration-500 hover:-translate-y-1">
+                            <div className="flex items-center justify-between mb-6">
+                                <span className="text-[10px] font-black uppercase tracking-widest text-neutral-400 group-hover:text-indigo-500 transition-colors">Turno 3</span>
+                                <div className="h-8 w-8 rounded-full bg-indigo-50 flex items-center justify-center group-hover:scale-110 transition-transform"><Moon className="h-4 w-4 text-indigo-500" /></div>
+                            </div>
+                            <div className="text-4xl font-serif text-black mb-1 tabular-nums">{turno3Total.toLocaleString()}</div>
+                            <div className="text-[10px] font-bold text-neutral-400 uppercase tracking-tight">Carga de Amostras</div>
+                        </div>
 
-                <div className="group bg-black p-8 rounded-[2rem] shadow-[0_10px_30px_rgba(0,0,0,0.15)] relative overflow-hidden transition-all duration-500 hover:-translate-y-1">
-                    <div className="absolute -right-8 -bottom-8 opacity-10">
-                        <BarChart3 className="h-40 w-40 text-white" />
-                    </div>
-                    <div className="flex items-center justify-between mb-6 relative z-10">
-                        <span className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Produção Total</span>
-                        <div className="h-8 w-8 rounded-full bg-white/10 flex items-center justify-center"><BarChart3 className="h-4 w-4 text-white" /></div>
-                    </div>
-                    <div className="text-4xl font-serif text-white mb-1 relative z-10">{totalProduzido.toLocaleString()}</div>
-                    <div className="text-[10px] font-bold text-neutral-500 uppercase tracking-tight relative z-10">Total de Amostras Processadas</div>
-                </div>
+                        <div className="group bg-black p-8 rounded-[2rem] shadow-[0_10px_30px_rgba(0,0,0,0.15)] relative overflow-hidden transition-all duration-500 hover:-translate-y-2">
+                            <div className="absolute -right-8 -bottom-8 opacity-10 group-hover:opacity-20 transition-opacity rotate-12 group-hover:rotate-0 duration-700">
+                                <BarChart3 className="h-40 w-40 text-white" />
+                            </div>
+                            <div className="flex items-center justify-between mb-6 relative z-10">
+                                <span className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Produção Total</span>
+                                <div className="h-8 w-8 rounded-full bg-white/10 flex items-center justify-center group-hover:bg-white/20 transition-colors"><BarChart3 className="h-4 w-4 text-white" /></div>
+                            </div>
+                            <div className="text-4xl font-serif text-white mb-1 relative z-10 tabular-nums">{totalProduzido.toLocaleString()}</div>
+                            <div className="text-[10px] font-bold text-neutral-500 uppercase tracking-tight relative z-10">Total de Amostras Processadas</div>
+                        </div>
+                    </>
+                )}
             </div>
             <ProductionTrendChart data={chartData} />
             {pastedImage && (

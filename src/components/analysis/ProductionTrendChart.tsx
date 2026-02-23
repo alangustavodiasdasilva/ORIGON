@@ -15,19 +15,15 @@ const CustomTooltip = ({ active, payload, label }: any) => {
             <div className="bg-white/95 backdrop-blur-sm border border-neutral-200 p-4 shadow-2xl rounded-xl animate-in fade-in zoom-in duration-200">
                 <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-400 mb-2 border-b border-neutral-100 pb-1">{label}</p>
                 <div className="space-y-1.5">
-                    {payload.map((entry: any, index: number) => {
-                        const hashId = `hl-${Math.random().toString(36).substr(2, 6)}`;
-                        return (
-                            <div key={index} className="flex items-center justify-between gap-8">
-                                <div className="flex items-center gap-2">
-                                    <style>{`.${hashId} { background-color: ${entry.stroke || entry.color}; }`}</style>
-                                    <span className={`h-2 w-2 rounded-full shadow-sm ${hashId}`} />
-                                    <span className="text-[11px] font-medium text-neutral-600 uppercase pt-0.5">{entry.name}</span>
-                                </div>
-                                <span className="text-[11px] font-mono font-bold text-black">{Number(entry.value).toLocaleString('pt-BR')}</span>
+                    {payload.map((entry: any, index: number) => (
+                        <div key={`${entry.name}-${index}`} className="flex items-center justify-between gap-8">
+                            <div className="flex items-center gap-2">
+                                <div className="h-2 w-2 rounded-full shadow-sm bg-dynamic" style={{ '--bg-color': entry.stroke || entry.color } as React.CSSProperties} />
+                                <span className="text-[11px] font-medium text-neutral-600 uppercase pt-0.5">{entry.name}</span>
                             </div>
-                        );
-                    })}
+                            <span className="text-[11px] font-mono font-bold text-black">{Number(entry.value).toLocaleString('pt-BR')}</span>
+                        </div>
+                    ))}
                 </div>
             </div>
         );
@@ -385,16 +381,12 @@ export default function ProductionTrendChart({ data }: ProductionTrendChartProps
             </div>
 
             <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-3 pt-6 pb-2 border-t border-neutral-100">
-                {seriesConfig.map((s) => {
-                    const hashName = s.name.replace(/[^a-zA-Z0-9]/g, '');
-                    return (
-                        <div key={s.name} className="flex items-center gap-2">
-                            <style>{`.bg-chart-${hashName} { background-color: ${s.color}; }`}</style>
-                            <span className={`w-3 h-3 rounded-full shadow-sm bg-chart-${hashName}`} />
-                            <span className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest">{formatName(s.name)}</span>
-                        </div>
-                    );
-                })}
+                {seriesConfig.map((s) => (
+                    <div key={s.name} className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full shadow-sm bg-dynamic" style={{ '--bg-color': s.color } as React.CSSProperties} />
+                        <span className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest">{formatName(s.name)}</span>
+                    </div>
+                ))}
             </div>
         </div>
     );

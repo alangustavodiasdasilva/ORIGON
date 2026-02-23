@@ -34,29 +34,19 @@ export default function Login() {
             if (found) {
                 // Show splash screen FIRST
                 setShowSplash(true);
-
-                // After splash completes, perform actual login
-                setTimeout(async () => {
-                    await login(email, senha);
-                    addToast({
-                        title: "Access Authorized",
-                        description: "Welcome to ORIGO Terminal.",
-                        type: "success"
-                    });
-                }, 10000); // Wait for splash to finish
             } else {
                 addToast({
                     title: "Authentication Failed",
                     description: "Invalid credentials.",
                     type: "error"
                 });
+                setIsSubmitting(false);
             }
         } catch (error) {
             addToast({
                 title: "Connection Error",
                 type: "error"
             });
-        } finally {
             setIsSubmitting(false);
         }
     };
@@ -66,8 +56,14 @@ export default function Login() {
             {/* Netflix-style Splash Screen */}
             {showSplash && (
                 <NetflixSplash
-                    onComplete={() => {
-                        // Splash completes, login happens via setTimeout in handleSubmit
+                    onComplete={async () => {
+                        // Splash completes, perform actual login
+                        await login(email, senha);
+                        addToast({
+                            title: "Access Authorized",
+                            description: "Welcome to ORIGO Terminal.",
+                            type: "success"
+                        });
                     }}
                 />
             )}

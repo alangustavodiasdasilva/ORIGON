@@ -18,6 +18,18 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType>({} as AuthContextType);
 
+/**
+ * Utilitário de Hash SHA-256 (Nativa do Browser)
+ */
+async function hashPassword(password: string): Promise<string> {
+    if (!password) return "";
+    const encoder = new TextEncoder();
+    const data = encoder.encode(password);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
 // Mock Seed User for First Run
 const SEED_ADMIN: Omit<Analista, 'id' | 'created_at' | 'updated_at'> = {
     nome: "Administrador Global",
@@ -120,11 +132,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setIsLoading(true);
         try {
             const users = await AnalistaService.list();
-            const found = users.find(u => u.email === email && u.senha === senha);
+            const inputHash = await hashPassword(senha);
+
+            // Verifica se existe usuário com o par email/senha (checa ambos para compatibilidade legada se necessário)
+            const found = users.find(u => u.email === email && (u.senha === senha || u.senha === inputHash));
 
             if (found) {
+                // Segurança: Remove a senha do objeto de sessão antes de salvar no localStorage
+                const { senha: _, ...userSession } = found;
+
+                // Se a senha no banco era texto puro, atualiza para hash (Migração Automática)
+                if (found.senha === senha) {
+                    await AnalistaService.update(found.id, { senha: inputHash });
+                    found.senha = inputHash;
+                }
+
                 setUser(found);
-                localStorage.setItem("fibertech_session", JSON.stringify(found));
+                localStorage.setItem("fibertech_session", JSON.stringify(userSession));
 
                 // Load Lab Context
                 if (found.acesso === 'admin_global') {
@@ -158,6 +182,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     const selectLab = async (labId: string) => {
+        if (labId === 'all') {
+            const allLab = { id: 'all', nome: 'Todos os Laboratórios' };
+            setCurrentLab(allLab as any);
+            localStorage.setItem("fibertech_selected_lab", JSON.stringify(allLab));
+            return;
+        }
+
         let lab = await LabService.get(labId);
         if (!lab) {
             // Fallback: sometimes LabService.get single query fails for string type mismatches, let's find from list

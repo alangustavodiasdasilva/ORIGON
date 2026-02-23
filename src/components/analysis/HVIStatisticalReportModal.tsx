@@ -3,6 +3,7 @@ import { X, Activity, ChevronRight, Binary, ShieldCheck } from "lucide-react";
 import { HVIAnalysisService, type HVIAnalysisReport, type ParameterAnalysis } from "@/services/HVIAnalysisService";
 import { type Sample } from "@/entities/Sample";
 import { cn } from "@/lib/utils";
+import { createPortal } from "react-dom";
 
 // HVI Statistical Report Modal Component
 interface HVIStatisticalReportModalProps {
@@ -41,8 +42,6 @@ export default function HVIStatisticalReportModal({ isOpen, onClose, samples }: 
     }, [activeTab]);
 
     const currentReport = reports[activeTab];
-
-
 
     const getInterpretation = (analysis: ParameterAnalysis, count: number) => {
         if (count === 1) return { label: "INDIVIDUAL", color: "text-neutral-600", bg: "bg-neutral-50", desc: "Amostra única. Medição pontual sem base estatística." };
@@ -84,9 +83,9 @@ export default function HVIStatisticalReportModal({ isOpen, onClose, samples }: 
 
     const activeColor = currentReport?.groupType === 'COLOR' ? currentReport.machine.replace('QUALIDADE: ', '') : null;
 
-    return (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-xl animate-in fade-in duration-300 p-0 md:p-4">
-            <div className="bg-white w-full max-w-[1600px] h-full md:h-[96vh] flex flex-col border-2 border-black overflow-hidden relative shadow-2xl">
+    return createPortal(
+        <div className="fixed inset-0 z-[999] flex items-center justify-center bg-black/60 backdrop-blur-md p-0 md:p-8 overflow-hidden">
+            <div className="bg-white w-full max-w-[1600px] h-full md:h-auto md:max-h-[95vh] flex flex-col border-2 border-black overflow-hidden relative shadow-[20px_20px_0px_rgba(0,0,0,0.15)] animate-in zoom-in-95 duration-300">
 
                 {/* HEADER */}
                 <div className="shrink-0 flex items-center justify-between px-8 py-4 border-b-2 border-black bg-white">
@@ -99,7 +98,7 @@ export default function HVIStatisticalReportModal({ isOpen, onClose, samples }: 
                             <p className="text-[9px] font-mono font-black text-black/40 uppercase tracking-[0.4em] mt-0.5">Fiber Quality Audit System</p>
                         </div>
                     </div>
-                    <button onClick={onClose} className="p-2.5 hover:bg-black hover:text-white transition-all border-2 border-black rounded-full shadow-[3px_3px_0px_#ddd] active:shadow-none active:translate-x-[2px] active:translate-y-[2px]">
+                    <button onClick={onClose} className="p-2.5 hover:bg-black hover:text-white transition-all border-2 border-black rounded-full shadow-[3px_3px_0px_#ddd] active:shadow-none active:translate-x-[2px] active:translate-y-[2px]" title="Fechar Relatório">
                         <X className="h-5 w-5" />
                     </button>
                 </div>
@@ -125,7 +124,7 @@ export default function HVIStatisticalReportModal({ isOpen, onClose, samples }: 
                                         >
                                             <div className="flex items-center gap-3">
                                                 {r.groupType === 'COLOR' && (
-                                                    <div className="h-3 w-3 rounded-full border border-black/30 shadow-sm" style={{ backgroundColor: r.machine.replace('QUALIDADE: ', '') }} />
+                                                    <div className="h-3 w-3 rounded-full border border-black/30 shadow-sm bg-dynamic" style={{ '--bg-color': r.machine.replace('QUALIDADE: ', '') } as React.CSSProperties} />
                                                 )}
                                                 <span className="truncate max-w-[180px]">{getCleanLabel(r.machine, r.groupType)}</span>
                                             </div>
@@ -137,8 +136,6 @@ export default function HVIStatisticalReportModal({ isOpen, onClose, samples }: 
                                     ))}
                                 </div>
                             </div>
-
-
                         </div>
                     </div>
 
@@ -159,7 +156,7 @@ export default function HVIStatisticalReportModal({ isOpen, onClose, samples }: 
                                     <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b-4 border-black pb-8">
                                         <div className="space-y-3">
                                             <div className="flex items-center gap-5">
-                                                {activeColor && <div className="h-16 w-4 rounded-sm shadow-lg" style={{ backgroundColor: activeColor }} />}
+                                                {activeColor && <div className="h-16 w-4 rounded-sm shadow-lg bg-dynamic" style={{ '--bg-color': activeColor } as React.CSSProperties} />}
                                                 <h3 className="text-4xl md:text-6xl font-serif font-black tracking-tighter text-black uppercase italic leading-none">
                                                     {getCleanLabel(currentReport.machine, currentReport.groupType)}
                                                 </h3>
@@ -260,8 +257,8 @@ export default function HVIStatisticalReportModal({ isOpen, onClose, samples }: 
                                                         {(analysis.distribution || []).map((d: { label: string; value: number; percent: number }, i: number) => (
                                                             <div
                                                                 key={i}
-                                                                className="flex-1 bg-black/90 hover:bg-black transition-all cursor-pointer relative group"
-                                                                style={{ height: `${d.percent}%` }}
+                                                                className="flex-1 bg-black/90 hover:bg-black transition-all cursor-pointer relative group h-dynamic"
+                                                                style={{ '--dynamic-height': `${d.percent}%` } as React.CSSProperties}
                                                                 title={`${d.label}: ${d.percent.toFixed(1)}%`}
                                                             >
                                                                 <div className="absolute -top-6 left-1/2 -translate-x-1/2 bg-black text-white text-[7px] px-1 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
@@ -312,6 +309,7 @@ export default function HVIStatisticalReportModal({ isOpen, onClose, samples }: 
                     </div>
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 }

@@ -52,7 +52,7 @@ export default function Layout() {
                 AnalistaService.updateLastActive(user.id, loteId || null);
             };
 
-            const heartbeat = setInterval(updatePresence, 2000);
+            const heartbeat = setInterval(updatePresence, 15000); // 15s — reduz de 30 req/min para 4 req/min
 
             // Initial call
             updatePresence();
@@ -79,7 +79,7 @@ export default function Layout() {
         };
 
         loadOnline();
-        const interval = setInterval(loadOnline, 2000);
+        const interval = setInterval(loadOnline, 10000); // 10s — usuários online não exige atualização instantânea
         return () => clearInterval(interval);
     }, [user?.id]);
 
@@ -178,7 +178,7 @@ export default function Layout() {
             )}
 
             {/* Desktop Sidebar */}
-            <aside className="fixed inset-y-0 left-0 z-50 w-72 border-r border-black bg-white/80 backdrop-blur-md hidden lg:flex flex-col">
+            <aside className="fixed inset-y-0 left-0 z-50 w-72 border-r border-black bg-white hidden lg:flex flex-col shadow-xl">
                 <div className="p-10 pb-12">
                     <div className="flex items-center gap-4">
                         {/* ORIGO Small Logo */}
@@ -278,7 +278,7 @@ export default function Layout() {
             </aside>
 
             {/* Main Content */}
-            <div className="lg:ml-72 flex-1 flex flex-col min-h-screen relative z-10 transition-all duration-300">
+            <div className="lg:ml-72 flex-1 flex flex-col min-h-screen relative z-10">
                 <header className="sticky top-0 z-40 h-16 lg:h-20 bg-white/80 backdrop-blur-sm border-b border-neutral-100 flex items-center justify-between px-4 lg:px-10">
                     <div className="flex items-center gap-4 lg:gap-8">
                         {/* Mobile Menu Trigger */}
@@ -363,8 +363,8 @@ export default function Layout() {
                     </div>
                 </header>
 
-                <main className="flex-1 relative w-full overflow-x-hidden">
-                    <div className="p-4 lg:p-10 max-w-[1600px] mx-auto w-full">
+                <main className="flex-1 relative w-full">
+                    <div className="p-4 lg:p-10 w-full">
                         <Outlet />
                     </div>
                 </main>

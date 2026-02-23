@@ -10,12 +10,21 @@ import LabsTab from "@/components/admin/LabsTab";
 import AnalystsTab from "@/components/admin/AnalystsTab";
 import { LabService } from "@/entities/Lab";
 import type { Lab } from "@/entities/Lab";
+import { MigrationService } from "@/services/MigrationService";
+import { Loader2 } from "lucide-react";
+
+const isSupabaseEnabled = () => {
+    const url = import.meta.env.VITE_SUPABASE_URL;
+    const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
+    return !!url && url !== 'YOUR_SUPABASE_URL' && !!key && key !== 'YOUR_SUPABASE_ANON_KEY';
+};
 
 export default function Admin() {
     const { user, currentLab, deselectLab } = useAuth();
     const { addToast } = useToast();
     const [activeTab, setActiveTab] = useState("dashboard");
     const [onlineAnalysts, setOnlineAnalysts] = useState<Analista[]>([]);
+    const [isSyncing, setIsSyncing] = useState(false);
 
     // Segurança: Redireciona usuários comuns para a Home, permite admin_global e admin_lab
     if (user && user.acesso !== 'admin_global' && user.acesso !== 'admin_lab') {
@@ -50,6 +59,29 @@ export default function Admin() {
         return () => clearInterval(interval);
     }, [user, currentLab]);
 
+    const handleSync = async () => {
+        if (!isSupabaseEnabled()) {
+            addToast({
+                title: "Configuração Necessária",
+                description: "Adicione as chaves no arquivo .env para habilitar a nuvem.",
+                type: "warning"
+            });
+            return;
+        }
+
+        setIsSyncing(true);
+        try {
+            await MigrationService.pushLocalToCloud();
+            addToast({ title: "Sincronização Concluída", description: "Seus dados locais foram enviados para a nuvem.", type: "success" });
+            // Forçar reload dos dados das abas
+            window.location.reload();
+        } catch (error: any) {
+            addToast({ title: "Erro na Sincronização", description: error.message, type: "error" });
+        } finally {
+            setIsSyncing(false);
+        }
+    };
+
     // Filtrar abas baseadas no nível de acesso
     const tabs = [
         { id: "dashboard", label: "Visão Geral", icon: Activity },
@@ -74,9 +106,19 @@ export default function Admin() {
                             <ShieldCheck className="h-5 w-5" />
                         </div>
                         <div>
-                            <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-500 block mb-1">
-                                {user?.acesso === 'admin_global' ? 'Global Administration' : 'Lab Administration'}
-                            </span>
+                            <div className="flex items-center gap-2 mb-1">
+                                <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-500 block">
+                                    {user?.acesso === 'admin_global' ? 'Global Administration' : 'Lab Administration'}
+                                </span>
+                                <span className={cn(
+                                    "px-2 py-0.5 text-[8px] font-black uppercase tracking-widest rounded-full border",
+                                    isSupabaseEnabled()
+                                        ? "bg-emerald-50 text-emerald-600 border-emerald-200"
+                                        : "bg-amber-50 text-amber-600 border-amber-200"
+                                )}>
+                                    {isSupabaseEnabled() ? '● Cloud Sync Active' : '⚠ Local Storage Mode'}
+                                </span>
+                            </div>
                             <h1 className="text-4xl font-serif text-black leading-none">
                                 {currentLab ? `Config: ${currentLab.nome}` : 'System Config'}
                             </h1>
@@ -104,10 +146,12 @@ export default function Admin() {
                         Export Logs
                     </Button>
                     <Button
-                        onClick={() => addToast({ title: "System Synced", type: "success" })}
-                        className="rounded-none h-12 px-6 bg-black text-white hover:bg-neutral-800 font-bold text-[10px] uppercase tracking-widest transition-colors"
+                        onClick={handleSync}
+                        disabled={isSyncing}
+                        className="rounded-none h-12 px-6 bg-black text-white hover:bg-neutral-800 font-bold text-[10px] uppercase tracking-widest transition-colors flex items-center gap-2"
                     >
-                        Sync Nodes
+                        {isSyncing ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                        {isSyncing ? 'Sincronizando...' : 'Sync Nodes (Push)'}
                     </Button>
                 </div>
             </div>
