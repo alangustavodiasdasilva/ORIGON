@@ -1767,7 +1767,7 @@ export default function MonitoramentoOS() {
 
                                                         let cellStyle = "text-neutral-200";
                                                         if (pin === 1) cellStyle = "bg-red-500/90 text-white border-red-600 shadow-inner";
-                                                        else if (pin === 2) cellStyle = "bg-amber-400/90 text-white border-amber-500 shadow-inner";
+                                                        else if (pin === 2) cellStyle = "bg-amber-400/90 text-amber-950 border-amber-500 shadow-inner font-bolder";
                                                         else if (pin === 3) cellStyle = "bg-emerald-500/90 text-white border-emerald-600 shadow-inner";
                                                         else if (total > 0 && cell?.maxDelay >= 48) cellStyle = "bg-white text-black"; // Auto-Red removed, leaving dot? Clean as requested
                                                         else if (total > 0 && cell?.maxDelay >= 24) cellStyle = "bg-white text-black"; // Auto-Yellow removed, using plain text
@@ -1782,7 +1782,7 @@ export default function MonitoramentoOS() {
                                                                     <div className="flex flex-col items-center justify-center h-full py-1">
                                                                         <span className="font-mono font-black text-sm relative z-10 leading-none">{total}</span>
                                                                         {cell.maxDelay > 0 && (
-                                                                            <span className={cn("text-[8px] font-black opacity-60 mt-0.5 leading-none", pin ? "text-white" : "text-black/40")}>{cell.maxDelay}h</span>
+                                                                            <span className={cn("text-[10px] font-black mt-0.5 leading-none", pin ? (pin === 2 ? "text-amber-900" : "text-white") : "text-neutral-400")}>{cell.maxDelay}h</span>
                                                                         )}
                                                                         {cell.maxDelay >= 48 && !pin && (
                                                                             <div className="absolute top-1 right-1">
@@ -1809,9 +1809,9 @@ export default function MonitoramentoOS() {
                                                             return (
                                                                 <td key={date} className="p-1.5 text-center border-r border-neutral-100/50">
                                                                     {total > 0 ? (
-                                                                        <div className="flex flex-col items-center text-neutral-500 py-1 relative">
-                                                                            <span className="font-mono font-bold text-[11px] leading-none">{total}</span>
-                                                                            {cell.maxDelay > 0 && <span className="text-[7px] font-black opacity-50 mt-0.5 leading-none">{cell.maxDelay}h</span>}
+                                                                        <div className="flex flex-col items-center text-neutral-600 py-1 relative">
+                                                                            <span className="font-mono font-bold text-xs leading-none">{total}</span>
+                                                                            {cell.maxDelay > 0 && <span className="text-[9px] font-black text-neutral-400 mt-0.5 leading-none">{cell.maxDelay}h</span>}
                                                                             {cell.maxDelay >= 48 && (
                                                                                 <div className="absolute top-0 right-0">
                                                                                     <div className="h-1 w-1 rounded-full bg-red-400/50" />
