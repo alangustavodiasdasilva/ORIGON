@@ -8,7 +8,7 @@ export interface ProducaoData {
     turno: string;
     produto: string;
     peso: number;
-    metadata?: any;
+    metadata?: Record<string, unknown>;
     created_at?: string;
 }
 
@@ -38,8 +38,8 @@ const saveStoredProducao = (data: ProducaoData[]) => {
 };
 
 export const producaoService = {
-    async uploadData(data: ProducaoData[], _labId?: string) {
-        if (data.length === 0) return;
+    async uploadData(data: ProducaoData[]): Promise<boolean> {
+        if (data.length === 0) return true;
 
         if (isSupabaseEnabled()) {
             try {
@@ -60,7 +60,7 @@ export const producaoService = {
 
                     if (error) throw error;
                 }
-                return; // Success
+                return true; // Success
             } catch (err) {
                 console.warn("Supabase upload failed, falling back to local:", err);
             }
@@ -73,10 +73,11 @@ export const producaoService = {
         const now = new Date().toISOString();
         data.forEach(item => {
             const idx = updated.findIndex(u => u.identificador_unico === item.identificador_unico && u.lab_id === item.lab_id);
-            if (idx >= 0) updated[idx] = { ...item, created_at: now } as any;
-            else updated.push({ ...item, created_at: now } as any);
+            if (idx >= 0) updated[idx] = { ...item, created_at: now };
+            else updated.push({ ...item, created_at: now });
         });
         saveStoredProducao(updated);
+        return false;
     },
 
     async list(labId?: string): Promise<ProducaoData[]> {
@@ -115,19 +116,32 @@ export const producaoService = {
     },
 
     async deleteAll(labId: string) {
-        if (isSupabaseEnabled()) {
-            try {
-                const { error } = await supabase
-                    .from('operacao_producao')
-                    .delete()
-                    .eq('lab_id', labId);
-
-                if (error) throw error;
-            } catch (err) {
-                console.warn("Supabase delete failed:", err);
-            }
+        // 1. Apaga do localStorage imediatamente
+        if (!labId || labId === 'all') {
+            localStorage.removeItem(STORAGE_KEY);
+        } else {
+            const local = getStoredProducao().filter(p => p.lab_id !== labId);
+            saveStoredProducao(local);
         }
-        const local = getStoredProducao().filter(p => p.lab_id !== labId);
-        saveStoredProducao(local);
+
+        // 2. Tenta apagar no Supabase como background task sem travar o UI
+        if (isSupabaseEnabled()) {
+            (async () => {
+                try {
+                    let query = supabase.from('operacao_producao').delete();
+                    if (labId !== 'all' && labId) {
+                        query = query.eq('lab_id', labId);
+                    } else {
+                        query = query.not('identificador_unico', 'is', null);
+                    }
+                    const { error } = await query;
+                    if (error) console.error("Erro deletando base supabase background", error);
+                } catch (err) {
+                    console.warn("Supabase delete failed background:", err);
+                }
+            })();
+        }
+
+        return true;
     }
 };

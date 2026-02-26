@@ -52,29 +52,30 @@ const saveStoredStatusOS = (data: StatusOS[]) => {
 };
 
 export const statusOSService = {
-    async uploadData(data: any[], labId: string) {
+    async uploadData(data: Partial<StatusOS>[], labId: string) {
         const now = new Date().toISOString();
         // Formata os dados para o banco
         const formattedData = data.map(item => ({
+            id: item.id || Math.random().toString(36).substring(2, 9),
             lab_id: labId,
-            os_numero: item.os_numero,
-            romaneio: item.romaneio,
-            cliente: item.cliente,
-            fazenda: item.fazenda,
-            usina: item.usina,
-            variedade: item.variedade,
-            data_registro: item.data_registro,
-            data_recepcao: item.data_recepcao,
-            data_acondicionamento: item.data_acondicionamento,
-            data_finalizacao: item.data_finalizacao,
-            revisor: item.revisor,
-            status: item.status,
-            total_amostras: item.total_amostras,
-            peso_mala: item.peso_mala,
-            peso_medio: item.peso_medio,
-            horas: item.horas,
-            nota_fiscal: item.nota_fiscal,
-            fatura: item.fatura,
+            os_numero: item.os_numero || "",
+            romaneio: item.romaneio || "",
+            cliente: item.cliente || "",
+            fazenda: item.fazenda || "",
+            usina: item.usina || "",
+            variedade: item.variedade || "",
+            data_registro: item.data_registro || "",
+            data_recepcao: item.data_recepcao || "",
+            data_acondicionamento: item.data_acondicionamento || "",
+            data_finalizacao: item.data_finalizacao || "",
+            revisor: item.revisor || "",
+            status: item.status || "",
+            total_amostras: item.total_amostras || 0,
+            peso_mala: item.peso_mala || 0,
+            peso_medio: item.peso_medio || 0,
+            horas: item.horas || 0,
+            nota_fiscal: item.nota_fiscal || "",
+            fatura: item.fatura || "",
             created_at: now
         }));
 
@@ -99,7 +100,7 @@ export const statusOSService = {
 
                 // SUCESSO NO SUPABASE: Atualizar o localStorage à imagem do Supabase
                 // para evitar duplicação no próximo merge
-                const local = getStoredStatusOS() as any[];
+                const local = getStoredStatusOS();
                 const updated = [...local];
                 formattedData.forEach(item => {
                     const idx = updated.findIndex(u => u.os_numero === item.os_numero && u.lab_id === item.lab_id);
@@ -114,7 +115,7 @@ export const statusOSService = {
         }
 
         // FALLBACK OFFLINE: salvar apenas no localStorage
-        const local = getStoredStatusOS() as any[];
+        const local = getStoredStatusOS();
         const updated = [...local];
         formattedData.forEach(item => {
             const idx = updated.findIndex(u => u.os_numero === item.os_numero && u.lab_id === item.lab_id);
@@ -134,7 +135,7 @@ export const statusOSService = {
                     const local = getStoredStatusOS();
                     return (labId === 'all' ? local : local.filter(d => d.lab_id === labId)) as StatusOS[];
                 }
-            } catch (_) { /* ignora falha de leitura do timestamp */ }
+            } catch { /* ignora falha de leitura do timestamp */ }
 
             try {
                 const PAGE_SIZE = 5000; // Supabase suporta até 5000 por request
@@ -163,7 +164,7 @@ export const statusOSService = {
 
                 const results = await Promise.all(pageRequests);
 
-                let allData: any[] = [];
+                let allData: StatusOS[] = [];
                 for (const res of results) {
                     if (res.error) throw res.error;
                     if (res.data) allData = allData.concat(res.data);
@@ -171,8 +172,8 @@ export const statusOSService = {
 
                 // 3. Merge: Supabase é fonte de verdade.
                 // Adiciona apenas itens offline do localStorage que não existem no Supabase.
-                const local = getStoredStatusOS() as any[];
-                const supabaseNums = new Set(allData.map((d: any) => `${d.os_numero}|${d.lab_id}`));
+                const local = getStoredStatusOS();
+                const supabaseNums = new Set(allData.map((d: StatusOS) => `${d.os_numero}|${d.lab_id}`));
                 local.forEach(localItem => {
                     const key = `${localItem.os_numero}|${localItem.lab_id}`;
                     const belongsToScope = labId === 'all' || localItem.lab_id === labId;
@@ -200,7 +201,7 @@ export const statusOSService = {
     },
 
     async getStats(labId: string) {
-        let allData: any[] = [];
+        let allData: Partial<StatusOS>[] = [];
 
         if (isSupabaseEnabled()) {
             try {
@@ -226,17 +227,18 @@ export const statusOSService = {
                     if (res.data) allData = allData.concat(res.data);
                 }
 
-                // Merge itens offline pendentes
-                const local = getStoredStatusOS();
-                const offlineValid = local.filter(d => (labId === 'all' || d.lab_id === labId));
-                offlineValid.forEach(item => {
-                    if (!allData.find(d => d.os_numero === item.os_numero)) {
-                        allData.push(item);
-                    }
-                });
             } catch (e) {
                 console.warn("Stats fetch failed", e);
             }
+
+            // Merge itens offline pendentes
+            const local = getStoredStatusOS();
+            const offlineValid = local.filter(d => (labId === 'all' || d.lab_id === labId));
+            offlineValid.forEach(item => {
+                if (!allData.find(d => d.os_numero === item.os_numero)) {
+                    allData.push(item);
+                }
+            });
         } else {
             const local = getStoredStatusOS();
             allData = local.filter(d => (labId === 'all' || d.lab_id === labId));
@@ -252,23 +254,32 @@ export const statusOSService = {
     },
 
     async clearData(labId: string) {
-        if (isSupabaseEnabled()) {
-            try {
-                const { error } = await supabase
-                    .from('status_os_hvi')
-                    .delete()
-                    .eq('lab_id', labId);
-
-                if (error) throw error;
-            } catch (err) {
-                console.warn("Supabase clear failed:", err);
-            }
-        }
-        const local = getStoredStatusOS().filter(d => d.lab_id !== labId);
-        if (local.length === 0) {
+        if (!labId || labId === 'all') {
             localStorage.removeItem(STORAGE_KEY);
         } else {
-            saveStoredStatusOS(local);
+            const local = getStoredStatusOS().filter(d => d.lab_id !== labId);
+            if (local.length === 0) {
+                localStorage.removeItem(STORAGE_KEY);
+            } else {
+                saveStoredStatusOS(local);
+            }
+        }
+
+        if (isSupabaseEnabled()) {
+            (async () => {
+                try {
+                    let query = supabase.from('status_os_hvi').delete();
+                    if (labId !== 'all' && labId) {
+                        query = query.eq('lab_id', labId);
+                    } else {
+                        query = query.not('os_numero', 'is', null);
+                    }
+                    const { error } = await query;
+                    if (error) console.error("Erro deletando supabase statosOS", error);
+                } catch (err) {
+                    console.warn("Supabase clear failed no background:", err);
+                }
+            })();
         }
     },
 

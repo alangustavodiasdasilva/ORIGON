@@ -67,7 +67,7 @@ export default function ChatAssistant() {
         }
     }, [isOpen, isMinimized]);
 
-    const playNotificationSound = () => {
+    function playNotificationSound() {
         try {
             // Som profissional de notificação
             const audio = new Audio("https://assets.mixkit.co/active_storage/sfx/2354/2354-preview.mp3");
@@ -76,7 +76,7 @@ export default function ChatAssistant() {
         } catch (error) {
             console.error("Falha ao reproduzir som:", error);
         }
-    };
+    }
 
     const handleSend = () => {
         if (!input.trim() || !user) return;

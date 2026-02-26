@@ -7,64 +7,21 @@ import { producaoService } from "@/services/producao.service";
 import type { ProducaoData } from "@/services/producao.service";
 import { LabService, type Lab } from "@/entities/Lab";
 import { Button } from "@/components/ui/button";
-import { Upload, RefreshCw, Trash2, Loader2, Printer, Users, LayoutGrid, ClipboardList, Database, Activity, Clock, Star, PlusSquare, MinusSquare, Inbox, TrendingUp, TrendingDown, AlertCircle, BarChart3 } from "lucide-react";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
+import { Upload, RefreshCw, Trash2, Loader2, Users, LayoutGrid, ClipboardList, Database, Activity } from "lucide-react";
 import { format, differenceInHours } from "date-fns";
-import { ptBR } from "date-fns/locale";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 import { useToast } from "@/contexts/ToastContext";
 import { supabase } from "@/lib/supabase"; // Ensure supabase is imported
 
-const CustomTooltip = ({ active, payload, label }: any) => {
-    if (active && payload && payload.length) {
-        const sortedPayload = [...payload].sort((a: any, b: any) => {
-            if (a.name === 'Total Recebido') return -1;
-            if (b.name === 'Total Recebido') return 1;
-            return b.value - a.value;
-        });
-        return (
-            <div className="bg-white/95 backdrop-blur-sm border border-neutral-200 p-4 shadow-2xl rounded-xl animate-in fade-in zoom-in duration-200">
-                <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-400 mb-2 border-b border-neutral-100 pb-1">{label}</p>
-                <div className="space-y-1.5">
-                    {sortedPayload.map((entry: any) => (
-                        <div key={entry.name} className="flex items-center justify-between gap-8">
-                            <div className="flex items-center gap-2">
-                                <div className="h-2 w-2 rounded-full bg-dynamic" style={{ '--bg-color': entry.color } as React.CSSProperties} />
-                                <span className={cn("text-[11px] font-medium", entry.name === 'Total Recebido' ? "text-black font-black" : "text-neutral-600")}>{entry.name}</span>
-                            </div>
-                            <span className={cn("text-[11px] font-mono", entry.name === 'Total Recebido' ? "text-black font-black" : "font-bold text-black")}>{entry.value.toLocaleString('pt-BR')}</span>
-                        </div>
-                    ))}
-                </div>
-            </div>
-        );
-    }
-    return null;
-};
-
-interface IProducaoVinculo {
-    data_producao: string;
-    peso: number;
-    lab_id?: string;
-}
-
-interface OSItem {
-    id: string;
-    os_numero: string;
-    tomador?: string;
-    cliente: string;
-    fazenda: string;
-    revisor: string;
-    status: string;
-    data_recepcao: string;
-    data_finalizacao?: string;
-    data_acondicionamento?: string;
-    total_amostras: number;
-    horas?: number;
-    nota_fiscal: string;
-    lab_id?: string;
-}
+import { GeneralStatsGrid } from "@/components/monitoramento/GeneralStatsGrid";
+import { ConsolidatedCharts } from "@/components/monitoramento/ConsolidatedCharts";
+import { ReviewerPerformanceSection } from "@/components/monitoramento/ReviewerPerformanceSection";
+import { ReviewersTable } from "@/components/monitoramento/ReviewersTable";
+import { IntelligenceAnalytics } from "@/components/monitoramento/IntelligenceAnalytics";
+import { ClientsTabSection } from "@/components/monitoramento/ClientsTabSection";
+import { DailyBalanceTabSection } from "@/components/monitoramento/DailyBalanceTabSection";
+import { type IProducaoVinculo, type OSItem } from "@/components/monitoramento/types";
 
 export default function MonitoramentoOS() {
     const { currentLab, user, selectLab } = useAuth();
@@ -82,7 +39,9 @@ export default function MonitoramentoOS() {
     const matrixTableRef = useRef<HTMLDivElement>(null);
     const analiticoSectionRef = useRef<HTMLDivElement>(null);
     const [collapsedClients, setCollapsedClients] = React.useState<string[]>([]);
-    const [analysisPeriod, setAnalysisPeriod] = React.useState<7 | 15 | 30>(7);
+    const [analysisPeriod, setAnalysisPeriod] = React.useState<7 | 14 | 21 | 30>(14);
+    const [isClearConfirmOpen, setIsClearConfirmOpen] = useState(false);
+    const [analyticsLabId, setAnalyticsLabId] = useState<string>('all');
 
     const [selectedChartClients, setSelectedChartClients] = useState<string[]>([]);
     const [selectedReviewers, setSelectedReviewers] = useState<string[]>([]);
@@ -275,7 +234,7 @@ export default function MonitoramentoOS() {
 
         osList.forEach((os: OSItem) => {
             if (!os.cliente) return;
-            let dateStr = os.data_recepcao;
+            const dateStr = os.data_recepcao;
 
             try {
                 const dateObj = new Date(dateStr);
@@ -578,11 +537,12 @@ export default function MonitoramentoOS() {
         prevCutoff.setDate(prevCutoff.getDate() - days * 2);
         prevCutoff.setHours(0, 0, 0, 0);
 
-        // Filtro dinâmico por lab (quando em modo 'all' com filtro de labs ativo)
-        const activeLabIds = labId === 'all'
-            ? labs.filter(l => selectedConsolidatedKeys.includes(l.nome + ' (Recebido)')).map(l => l.id)
-            : [];
-        const isFilteringLabs = labId === 'all' && activeLabIds.length > 0;
+        // Filtro dinâmico por lab (quando em modo 'all' + seleção no dropdown da sessão analítica)
+        const applyLabFilter = (testLabId?: string) => {
+            if (labId !== 'all') return true; // Confia no filtro global se não for todos
+            if (analyticsLabId === 'all') return true; // Se estiver 'todos' localmente
+            return testLabId === analyticsLabId;
+        };
 
         const inWindow = (os: OSItem, from: Date, to: Date) => {
             if (!os.data_recepcao) return false;
@@ -592,11 +552,11 @@ export default function MonitoramentoOS() {
 
         // O.S. do período atual e período anterior
         const currentOS = osList.filter(os => {
-            if (isFilteringLabs && (!os.lab_id || !activeLabIds.includes(os.lab_id))) return false;
+            if (!applyLabFilter(os.lab_id)) return false;
             return inWindow(os, cutoff, new Date(cutoff.getTime() + days * 86400000));
         });
         const prevOS = osList.filter(os => {
-            if (isFilteringLabs && (!os.lab_id || !activeLabIds.includes(os.lab_id))) return false;
+            if (!applyLabFilter(os.lab_id)) return false;
             return inWindow(os, prevCutoff, cutoff);
         });
 
@@ -614,13 +574,13 @@ export default function MonitoramentoOS() {
         const now = new Date();
         const revisedOS = osList.filter(os => {
             if (!os.data_finalizacao) return false;
-            if (isFilteringLabs && (!os.lab_id || !activeLabIds.includes(os.lab_id))) return false;
+            if (!applyLabFilter(os.lab_id)) return false;
             const d = new Date(os.data_finalizacao);
             return d >= cutoff && d <= now;
         });
         const prevRevisedOS = osList.filter(os => {
             if (!os.data_finalizacao) return false;
-            if (isFilteringLabs && (!os.lab_id || !activeLabIds.includes(os.lab_id))) return false;
+            if (!applyLabFilter(os.lab_id)) return false;
             const d = new Date(os.data_finalizacao);
             return d >= prevCutoff && d < cutoff;
         });
@@ -631,13 +591,13 @@ export default function MonitoramentoOS() {
         const prodWindowStart = cutoff.toISOString().split('T')[0];
         const filteredProd = productionData.filter(p => {
             if (!p.data_producao) return false;
-            if (isFilteringLabs && (!p.lab_id || !activeLabIds.includes(p.lab_id))) return false;
+            if (!applyLabFilter(p.lab_id)) return false;
             return p.data_producao >= prodWindowStart;
         });
         const prevProdWindowStart = prevCutoff.toISOString().split('T')[0];
         const prevFilteredProd = productionData.filter(p => {
             if (!p.data_producao) return false;
-            if (isFilteringLabs && (!p.lab_id || !activeLabIds.includes(p.lab_id))) return false;
+            if (!applyLabFilter(p.lab_id)) return false;
             return p.data_producao >= prevProdWindowStart && p.data_producao < prodWindowStart;
         });
         const currentProduced = filteredProd.reduce((acc, p) => acc + (p.peso || 0), 0);
@@ -715,27 +675,61 @@ export default function MonitoramentoOS() {
             });
         }
 
-        // ─── Dados suavizados para o gráfico (MA7 sobre a série histórica) ────
-        const dataArr = revisorDailyStats.data;
-        const sumMetric = (arr: any[], key: string) => arr.reduce((acc, curr) => acc + (curr[key] || 0), 0);
-        const smoothedData = dataArr.map((point: any, idx: number) => {
-            const window = dataArr.slice(Math.max(0, idx - 6), idx + 1);
-            return {
-                ...point,
-                MA7_Produzido: sumMetric(window, 'Volume Produzido (Análise)') / window.length,
-                MA7_Revisado: sumMetric(window, 'Total Revisado (Analistas)') / window.length,
-                MA7_Recebido: sumMetric(window, 'Volume Recebido') / window.length,
-            };
+        // ─── Encontrar a última data disponível (evitando gaps com o "NOW" se a base for antiga) ───
+        let maxDateStr = "";
+
+        osList.forEach(os => {
+            if (!applyLabFilter(os.lab_id)) return;
+            if (os.data_recepcao && os.data_recepcao.substring(0, 10) > maxDateStr) maxDateStr = os.data_recepcao.substring(0, 10);
+            if (os.data_finalizacao && os.data_finalizacao.substring(0, 10) > maxDateStr) maxDateStr = os.data_finalizacao.substring(0, 10);
         });
+        productionData.forEach(prod => {
+            if (!applyLabFilter(prod.lab_id)) return;
+            if (prod.data_producao && prod.data_producao.substring(0, 10) > maxDateStr) maxDateStr = prod.data_producao.substring(0, 10);
+        });
+
+        const baseEndDate = maxDateStr ? new Date(maxDateStr + 'T12:00:00') : new Date(now);
+
+        // ─── Dados suavizados para o gráfico (Geração de 14 dias contíguos até a data base) ────
+        const daysMap = new Map();
+        for (let i = 13; i >= 0; i--) {
+            const d = new Date(baseEndDate);
+            d.setDate(d.getDate() - i);
+            const dateKey = format(d, 'yyyy-MM-dd');
+            const displayDate = format(d, 'dd/MM');
+            daysMap.set(dateKey, { name: displayDate, 'Volume Produzido (Análise)': 0, 'Volume Recebido': 0, 'Total Revisado (Analistas)': 0 });
+        }
+
+        osList.forEach(os => {
+            if (!applyLabFilter(os.lab_id)) return;
+            if (os.data_recepcao) {
+                const pk = os.data_recepcao.substring(0, 10);
+                if (daysMap.has(pk)) daysMap.get(pk)['Volume Recebido'] += (os.total_amostras || 0);
+            }
+            if (os.data_finalizacao) {
+                const pk = os.data_finalizacao.substring(0, 10);
+                if (daysMap.has(pk)) daysMap.get(pk)['Total Revisado (Analistas)'] += (os.total_amostras || 0);
+            }
+        });
+
+        productionData.forEach(prod => {
+            if (!applyLabFilter(prod.lab_id)) return;
+            if (prod.data_producao) {
+                const pk = prod.data_producao.substring(0, 10);
+                if (daysMap.has(pk)) daysMap.get(pk)['Volume Produzido (Análise)'] += (prod.peso || 0);
+            }
+        });
+
+        const smoothedData = Array.from(daysMap.values());
 
         return {
             currentProduced, currentRevised, currentReceived,
             prodTrend, revTrend, recepTrend,
             revisionRate, absorptionRate, weightedEfficiencyIndex,
             projectedProduction, alerts,
-            smoothedData: smoothedData.slice(-30)
+            smoothedData
         };
-    }, [revisorDailyStats.data, analysisPeriod, osList, productionData, selectedConsolidatedKeys, labs, labId]);
+    }, [analysisPeriod, osList, productionData, labs, labId, analyticsLabId]);
 
 
     const processOSData = useCallback((rawData: OSItem[]) => {
@@ -828,7 +822,15 @@ export default function MonitoramentoOS() {
             let totalRecords = 0;
             await parseStatusOSFileInChunks(file, async (batch: StatusOSParsed[]) => {
                 if (batch.length > 0) {
-                    await statusOSService.uploadData(batch, labId);
+                    const safeDate = (d: Date | null) => d ? d.toISOString() : undefined;
+                    const parsedBatch: any[] = batch.map(b => ({
+                        ...b,
+                        data_registro: safeDate(b.data_registro),
+                        data_recepcao: safeDate(b.data_recepcao),
+                        data_acondicionamento: safeDate(b.data_acondicionamento),
+                        data_finalizacao: safeDate(b.data_finalizacao)
+                    }));
+                    await statusOSService.uploadData(parsedBatch, labId);
                     totalRecords += batch.length;
                 }
             }, 2000);
@@ -845,7 +847,8 @@ export default function MonitoramentoOS() {
     };
 
     const handleClearData = async () => {
-        if (!labId || !window.confirm("ATENÇÃO: Tem certeza?")) return;
+        if (!labId) return;
+        setIsClearConfirmOpen(false);
         setIsLoading(true);
         try {
             await statusOSService.clearData(labId);
@@ -965,7 +968,7 @@ export default function MonitoramentoOS() {
                                 {isLoading ? "Atualizando..." : "Sincronizar"}
                             </span>
                         </Button>
-                        <Button variant="ghost" size="sm" onClick={handleClearData} disabled={isLoading || osList.length === 0} className="h-9 px-4 text-[10px] font-black uppercase tracking-widest text-red-500 hover:bg-red-50">
+                        <Button variant="ghost" size="sm" onClick={() => setIsClearConfirmOpen(true)} disabled={isLoading} className="h-9 px-4 text-[10px] font-black uppercase tracking-widest text-red-500 hover:bg-red-50">
                             <Trash2 className="h-3.5 w-3.5 mr-2" /> Limpar
                         </Button>
                     </div>
@@ -1041,811 +1044,115 @@ export default function MonitoramentoOS() {
                     </div>
 
                     {/* Dois gráficos empilhados */}
-                    <div className="flex flex-col gap-6">
-
-                        {/* Gráfico 1 — Volume Recebido por Dia */}
-                        <div className="bg-white border border-neutral-200 rounded-3xl p-8 shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
-                            <div className="flex items-center gap-3 mb-2">
-                                <div className="h-3 w-3 rounded-full bg-black" />
-                                <h3 className="text-lg font-serif text-black leading-tight tracking-tight">Volume Recebido por Dia</h3>
-                            </div>
-                            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400 mb-6">O.S. recebidas em cada laboratório ao longo do tempo</p>
-
-                            {consolidatedDailyStats.data.length === 0 ? (
-                                <div className="h-[300px] flex items-center justify-center text-neutral-300">
-                                    <div className="text-center">
-                                        <Activity className="h-10 w-10 mx-auto mb-2 opacity-20" />
-                                        <p className="text-xs font-bold uppercase tracking-widest">Sem dados disponíveis</p>
-                                    </div>
-                                </div>
-                            ) : (
-                                <div className="h-[300px] w-full bg-neutral-50/30 rounded-2xl p-3">
-                                    <ResponsiveContainer width="100%" height="100%">
-                                        <LineChart data={consolidatedDailyStats.data} margin={{ top: 10, right: 15, left: 0, bottom: 0 }}>
-                                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-                                            <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#9ca3af', fontSize: 10, fontWeight: 700 }} dy={10} />
-                                            <YAxis axisLine={false} tickLine={false} tick={{ fill: '#9ca3af', fontSize: 10, fontWeight: 700 }} />
-                                            <RechartsTooltip content={<CustomTooltip />} />
-                                            {labs
-                                                .filter(lab => selectedConsolidatedKeys.includes(lab.nome + ' (Recebido)'))
-                                                .map(lab => (
-                                                    <Line
-                                                        key={lab.nome + '-rec'}
-                                                        type="monotone"
-                                                        dataKey={lab.nome + ' (Recebido)'}
-                                                        name={lab.nome}
-                                                        stroke={consolidatedDailyStats.keyColors[lab.nome + ' (Recebido)']}
-                                                        strokeWidth={2}
-                                                        dot={{ r: 3, strokeWidth: 0, fill: consolidatedDailyStats.keyColors[lab.nome + ' (Recebido)'] }}
-                                                        activeDot={{ r: 6, strokeWidth: 0 }}
-                                                        connectNulls={true}
-                                                    />
-                                                ))
-                                            }
-                                        </LineChart>
-                                    </ResponsiveContainer>
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Gráfico 2 — Volume Produzido por Dia */}
-                        <div className="bg-white border border-neutral-200 rounded-3xl p-8 shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
-                            <div className="flex items-center gap-3 mb-2">
-                                <div className="h-3 w-3 rounded-full bg-emerald-500" />
-                                <h3 className="text-lg font-serif text-black leading-tight tracking-tight">Volume Produzido por Dia</h3>
-                            </div>
-                            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400 mb-6">Amostras analisadas em cada laboratório ao longo do tempo</p>
-
-                            {consolidatedDailyStats.data.length === 0 ? (
-                                <div className="h-[300px] flex items-center justify-center text-neutral-300">
-                                    <div className="text-center">
-                                        <Activity className="h-10 w-10 mx-auto mb-2 opacity-20" />
-                                        <p className="text-xs font-bold uppercase tracking-widest">Sem dados disponíveis</p>
-                                    </div>
-                                </div>
-                            ) : (
-                                <div className="h-[300px] w-full bg-neutral-50/30 rounded-2xl p-3">
-                                    <ResponsiveContainer width="100%" height="100%">
-                                        <LineChart data={consolidatedDailyStats.data} margin={{ top: 10, right: 15, left: 0, bottom: 0 }}>
-                                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-                                            <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#9ca3af', fontSize: 10, fontWeight: 700 }} dy={10} />
-                                            <YAxis axisLine={false} tickLine={false} tick={{ fill: '#9ca3af', fontSize: 10, fontWeight: 700 }} />
-                                            <RechartsTooltip content={<CustomTooltip />} />
-                                            {labs
-                                                .filter(lab => selectedConsolidatedKeys.includes(lab.nome + ' (Produzido)'))
-                                                .map(lab => (
-                                                    <Line
-                                                        key={lab.nome + '-prod'}
-                                                        type="monotone"
-                                                        dataKey={lab.nome + ' (Produzido)'}
-                                                        name={lab.nome}
-                                                        stroke={consolidatedDailyStats.keyColors[lab.nome + ' (Produzido)']}
-                                                        strokeWidth={2}
-                                                        dot={{ r: 3, strokeWidth: 0, fill: consolidatedDailyStats.keyColors[lab.nome + ' (Produzido)'] }}
-                                                        activeDot={{ r: 6, strokeWidth: 0 }}
-                                                        connectNulls={true}
-                                                    />
-                                                ))
-                                            }
-                                        </LineChart>
-                                    </ResponsiveContainer>
-                                </div>
-                            )}
-                        </div>
-
-                    </div>
+                    <ConsolidatedCharts
+                        data={consolidatedDailyStats.data}
+                        keys={consolidatedDailyStats.keys}
+                        keyColors={consolidatedDailyStats.keyColors}
+                        selectedKeys={selectedConsolidatedKeys}
+                        labs={labs}
+                    />
                 </div>
             )}
 
             {activeTab === 'geral' && labId !== 'all' && (
                 <div key="tab-geral-stats" className="animate-in fade-in duration-300">
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 mb-12 animate-in fade-in duration-1000">
-                        <div className="group bg-white border border-neutral-200 p-8 rounded-[2rem] shadow-[0_10px_30px_rgba(0,0,0,0.02)] hover:shadow-[0_20px_50px_rgba(0,0,0,0.05)] transition-all duration-500">
-                            <div className="flex items-center justify-between mb-6">
-                                <span className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Registros Ativos</span>
-                                <div className="h-8 w-8 rounded-full bg-blue-50 flex items-center justify-center"><Activity className="h-4 w-4 text-blue-500" /></div>
-                            </div>
-                            <div className="text-4xl font-serif text-black mb-1">{stats.total.toLocaleString('pt-BR')}</div>
-                            <div className="text-[10px] font-bold text-neutral-400 uppercase tracking-tight">Obras de Serviço Catalogadas</div>
-                        </div>
-
-                        <div className="group bg-black p-8 rounded-[2rem] shadow-[0_10px_30px_rgba(0,0,0,0.15)] relative overflow-hidden transition-all duration-500 hover:-translate-y-1">
-                            <div className="absolute -right-8 -bottom-8 opacity-10">
-                                <Activity className="h-40 w-40 text-white" />
-                            </div>
-                            <div className="flex items-center justify-between mb-6 relative z-10">
-                                <span className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Saldo de Análise</span>
-                                <div className="h-8 w-8 rounded-full bg-white/10 flex items-center justify-center"><ClipboardList className="h-4 w-4 text-white" /></div>
-                            </div>
-                            <div className="text-4xl font-serif text-white mb-1 relative z-10">{stats.saldoAmostras.toLocaleString('pt-BR')}</div>
-                            <div className="text-[10px] font-bold text-neutral-500 uppercase tracking-tight relative z-10">Amostras Pendentes de Finalização</div>
-                        </div>
-
-                        <div className="group bg-white border border-neutral-200 p-8 rounded-[2rem] shadow-[0_10px_30px_rgba(0,0,0,0.02)] transition-all duration-500">
-                            <div className="flex items-center justify-between mb-6">
-                                <span className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Total Amostras</span>
-                                <div className="h-8 w-8 rounded-full bg-amber-50 flex items-center justify-center"><Database className="h-4 w-4 text-amber-500" /></div>
-                            </div>
-                            <div className="text-4xl font-serif text-black mb-1">{stats.totalAmostras.toLocaleString('pt-BR')}</div>
-                            <div className="text-[10px] font-bold text-neutral-400 uppercase tracking-tight">Carga total histórica no sistema</div>
-                        </div>
-
-                        <div className="group bg-white border border-neutral-200 p-8 rounded-[2rem] shadow-[0_10px_30px_rgba(0,0,0,0.02)] transition-all duration-500">
-                            <div className="flex items-center justify-between mb-6">
-                                <span className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Ciclo Médio</span>
-                                <div className="h-8 w-8 rounded-full bg-emerald-50 flex items-center justify-center"><RefreshCw className="h-4 w-4 text-emerald-500" /></div>
-                            </div>
-                            <div className="text-4xl font-serif text-black mb-1">{(stats.total > 0 ? (stats.totalAmostras / stats.total).toFixed(1) : "0")}</div>
-                            <div className="text-[10px] font-bold text-neutral-400 uppercase tracking-tight">Amostras por Ordem de Serviço</div>
-                        </div>
-                    </div>
+                    <GeneralStatsGrid stats={stats} />
 
                 </div>
             )}
 
             {(activeTab === 'geral' || activeTab === 'revisores') && labId !== 'all' && (
                 <div key={`content-${activeTab}`} className="space-y-8 animate-in fade-in duration-300">
-                    <div className="bg-white border border-neutral-200 rounded-3xl p-8 shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
-                        <div className="flex flex-col gap-6 mb-8">
-                            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 pb-6 border-b border-neutral-100">
-                                <div>
-                                    <h3 className="text-2xl font-serif text-black leading-tight tracking-tight flex items-center gap-2">
-                                        <div key={`tab-icon-${activeTab}`} className="shrink-0 flex items-center">
-                                            {activeTab === 'geral' ? <Activity className="h-6 w-6 text-neutral-400" /> : <Users className="h-6 w-6 text-neutral-400" />}
-                                        </div>
-                                        {activeTab === 'geral' ? 'Produção Geral' : 'Performance por Revisor'}
-                                    </h3>
-                                    <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400 mt-1">
-                                        {activeTab === 'geral' ? 'Visão global de entrada e saída' : 'Produtividade diária dos analistas e volume total'}
-                                    </p>
-                                </div>
-
-                                <div className="flex flex-wrap items-center gap-3">
-                                    <button
-                                        type="button"
-                                        onClick={(e) => {
-                                            e.preventDefault();
-                                            toggleReviewerSelection('Volume Produzido (Análise)');
-                                        }}
-                                        className={cn(
-                                            "flex items-center gap-3 px-4 py-2 rounded-xl border-2 transition-all cursor-pointer hover:shadow-sm",
-                                            selectedReviewers.includes('Volume Produzido (Análise)')
-                                                ? "bg-black text-white border-black"
-                                                : "bg-white text-neutral-400 border-neutral-100 hover:border-black hover:text-black"
-                                        )}
-                                    >
-                                        <div key="icon-prod-btn" className="shrink-0 flex items-center"><Activity className="h-3.5 w-3.5" /></div>
-                                        <span className="text-[10px] font-black uppercase tracking-widest">Volume Produzido</span>
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={(e) => {
-                                            e.preventDefault();
-                                            toggleReviewerSelection('Total Revisado (Analistas)');
-                                        }}
-                                        className={cn(
-                                            "flex items-center gap-3 px-4 py-2 rounded-xl border-2 transition-all cursor-pointer hover:shadow-sm",
-                                            selectedReviewers.includes('Total Revisado (Analistas)')
-                                                ? "bg-red-600 text-white border-red-600"
-                                                : "bg-white text-neutral-400 border-neutral-100 hover:border-red-600 hover:text-red-600"
-                                        )}
-                                    >
-                                        <div key="icon-rev-btn" className="shrink-0 flex items-center"><Users className="h-3.5 w-3.5" /></div>
-                                        <span className="text-[10px] font-black uppercase tracking-widest">Total Revisado</span>
-                                    </button>
-                                    {activeTab === 'geral' && (
-                                        <button
-                                            type="button"
-                                            onClick={(e) => {
-                                                e.preventDefault();
-                                                toggleReviewerSelection('Volume Recebido');
-                                            }}
-                                            className={cn(
-                                                "flex items-center gap-3 px-4 py-2 rounded-xl border-2 transition-all cursor-pointer hover:shadow-sm",
-                                                selectedReviewers.includes('Volume Recebido')
-                                                    ? "bg-blue-600 text-white border-blue-600"
-                                                    : "bg-white text-neutral-400 border-neutral-100 hover:border-blue-600 hover:text-blue-600"
-                                            )}
-                                        >
-                                            <div className="shrink-0 flex items-center"><Inbox className="h-3.5 w-3.5" /></div>
-                                            <span className="text-[10px] font-black uppercase tracking-widest">Volume Recebido</span>
-                                        </button>
-                                    )}
-                                </div>
-                            </div>
-
-                            {activeTab === 'revisores' && (
-                                <div className="flex flex-col gap-3">
-                                    <div className="flex items-center justify-between">
-                                        <span className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Analistas:</span>
-                                        <span className="text-[8px] font-bold text-neutral-300 uppercase italic">Arraste para ver a lista completa →</span>
-                                    </div>
-                                    <div className="flex items-center gap-2 overflow-x-auto pb-4 no-scrollbar -mx-2 px-2">
-                                        {revisorDailyStats.keys.map((rev: string) => {
-                                            const totalRev = osList.filter(o => o.revisor === rev).reduce((sum, o) => sum + (o.total_amostras || 0), 0);
-                                            return (
-                                                <button
-                                                    key={rev}
-                                                    onClick={() => toggleReviewerSelection(rev)}
-                                                    className={cn(
-                                                        "flex items-center gap-3 px-4 py-2.5 rounded-xl border-2 transition-all shrink-0 min-w-fit",
-                                                        selectedReviewers.includes(rev)
-                                                            ? "text-white border-transparent bg-dynamic shadow-dynamic"
-                                                            : "bg-neutral-50/50 text-neutral-400 border-transparent hover:bg-white hover:border-neutral-200"
-                                                    )}
-                                                    style={selectedReviewers.includes(rev) ? {
-                                                        '--bg-color': revisorDailyStats.keyColors[rev],
-                                                        '--dynamic-shadow': `0 4px 12px ${revisorDailyStats.keyColors[rev]}33`
-                                                    } as React.CSSProperties : {}}
-                                                >
-                                                    <div
-                                                        className="h-1.5 w-1.5 rounded-full bg-dynamic"
-                                                        style={{
-                                                            '--bg-color': selectedReviewers.includes(rev) ? 'white' : (revisorDailyStats.keyColors[rev] || '#e5e5e5')
-                                                        } as React.CSSProperties}
-                                                    />
-                                                    <span className="text-[9px] font-black uppercase tracking-wider">{rev}</span>
-                                                    <span className="text-[10px] font-mono font-bold opacity-80 pl-2 border-l border-white/20">{totalRev.toLocaleString('pt-BR')}</span>
-                                                </button>
-                                            );
-                                        })}
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-
-                        <div className="h-[450px] w-full bg-neutral-50/30 rounded-2xl p-4">
-                            <ResponsiveContainer key={`reviewer-chart-${activeTab}-${labId}`} width="100%" height="100%">
-                                <LineChart data={revisorDailyStats.data} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-                                    <XAxis
-                                        dataKey="name"
-                                        axisLine={false} tickLine={false}
-                                        tick={{ fill: '#9ca3af', fontSize: 10, fontWeight: 700 }}
-                                        dy={10}
-                                    />
-                                    <YAxis
-                                        axisLine={false} tickLine={false}
-                                        tick={{ fill: '#9ca3af', fontSize: 10, fontWeight: 700 }}
-                                    />
-                                    <RechartsTooltip content={<CustomTooltip />} />
-                                    {selectedReviewers.includes('Volume Produzido (Análise)') && (
-                                        <Line type="monotone" name="Volume Produzido" dataKey="Volume Produzido (Análise)" stroke="#000" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
-                                    )}
-                                    {selectedReviewers.includes('Total Revisado (Analistas)') && (
-                                        <Line type="monotone" name="Total Revisado" dataKey="Total Revisado (Analistas)" stroke="#dc2626" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
-                                    )}
-                                    {(activeTab === 'geral' && selectedReviewers.includes('Volume Recebido')) && (
-                                        <Line type="monotone" name="Volume Recebido" dataKey="Volume Recebido" stroke="#2563eb" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
-                                    )}
-                                    {activeTab === 'revisores' && revisorDailyStats.keys.filter((k: string) => selectedReviewers.includes(k)).map((rev: string) => (
-                                        <Line key={rev} type="monotone" dataKey={rev} stroke={revisorDailyStats.keyColors[rev]} strokeWidth={2} dot={false} />
-                                    ))}
-                                </LineChart>
-                            </ResponsiveContainer>
-                        </div>
-                    </div>
+                    <ReviewerPerformanceSection
+                        activeTab={activeTab}
+                        toggleReviewerSelection={toggleReviewerSelection}
+                        selectedReviewers={selectedReviewers}
+                        revisorDailyStats={revisorDailyStats}
+                        osList={osList}
+                        labId={labId}
+                    />
 
                     {activeTab === 'revisores' && (
-                        <div className="bg-white border border-neutral-200 rounded-3xl p-8 shadow-[0_8px_30px_rgb(0,0,0,0.04)] text-black mt-8">
-                            <div className="flex items-center justify-between mb-8 border-b border-neutral-100 pb-4">
-                                <h3 className="text-xl font-serif text-black leading-tight flex items-center gap-2">
-                                    <Star className="h-5 w-5 text-amber-400 fill-amber-400" />
-                                    Tabela Geral Analistas
-                                </h3>
-                                <span className="text-[10px] uppercase font-bold text-neutral-400">Total Histórico</span>
-                            </div>
-                            <div className="overflow-x-auto no-scrollbar">
-                                <table className="w-full text-sm text-left">
-                                    <thead className="bg-neutral-50 text-[10px] uppercase font-bold text-neutral-500 tracking-wider">
-                                        <tr>
-                                            <th className="p-4 rounded-l-xl">Revisor</th>
-                                            <th className="p-4 text-right">Total Amostras</th>
-                                            <th className="p-4 rounded-r-xl w-full">Impacto (%)</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-neutral-100">
-                                        {revisorStats.map((stat, i) => (
-                                            <tr key={stat.name} className="hover:bg-neutral-50/50 transition-colors group cursor-pointer" onClick={() => toggleReviewerSelection(stat.name)}>
-                                                <td className="p-4">
-                                                    <div className="flex items-center gap-3">
-                                                        <span className="text-[10px] font-bold text-neutral-300 w-4">#{i + 1}</span>
-                                                        <div className={cn("h-4 w-4 rounded border flex items-center justify-center transition-all", selectedReviewers.includes(stat.name) ? "bg-black border-black text-white" : "border-neutral-300 bg-white group-hover:border-neutral-500")}>
-                                                            <div key={selectedReviewers.includes(stat.name) ? "selected" : "unselected"} className="flex items-center justify-center">
-                                                                {selectedReviewers.includes(stat.name) && <Star className="h-2 w-2 fill-white" />}
-                                                            </div>
-                                                        </div>
-                                                        <span className="font-bold text-neutral-800 tracking-wider text-[11px]">{stat.name}</span>
-                                                    </div>
-                                                </td>
-                                                <td className="p-4 text-right font-mono font-bold">{stat.total.toLocaleString('pt-BR')}</td>
-                                                <td className="p-4">
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="h-1.5 bg-neutral-100 rounded-full flex-1 overflow-hidden">
-                                                            <div className="h-full bg-black rounded-full transition-all w-dynamic" style={{ '--dynamic-width': `${(stat.total / (revisorStats[0]?.total || 1)) * 100}%` } as React.CSSProperties} />
-                                                        </div>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
+                        <ReviewersTable
+                            revisorStats={revisorStats}
+                            selectedReviewers={selectedReviewers}
+                            toggleReviewerSelection={toggleReviewerSelection}
+                        />
                     )}
                 </div>
             )
             }
-
             {activeTab === 'geral' && analysisMetrics && (
-                <div ref={analiticoSectionRef} className="space-y-6 mb-12 animate-fade-in transition-all duration-700 bg-white/50 p-6 rounded-[3rem] border border-neutral-100 mt-8">
-                    <div className="flex flex-col lg:flex-row items-stretch gap-6">
-                        {/* KPI Cards Secundários - Análise Analítica */}
-                        <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-4">
-                            <div className="bg-white border border-neutral-100 p-6 rounded-3xl shadow-sm hover:shadow-md transition-all">
-                                <div className="flex items-center justify-between mb-4">
-                                    <span className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Eficiência de Absorção</span>
-                                    <div className={cn(
-                                        "px-2 py-1 rounded-full text-[9px] font-bold flex items-center gap-1",
-                                        analysisMetrics.absorptionRate >= 1 ? "bg-emerald-50 text-emerald-600" : "bg-amber-50 text-amber-600"
-                                    )}>
-                                        <div key={analysisMetrics.absorptionRate >= 1 ? "up" : "down"} className="shrink-0 flex items-center">
-                                            {analysisMetrics.absorptionRate >= 1 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-                                        </div>
-                                        <span>{(analysisMetrics.absorptionRate * 100).toFixed(1)}%</span>
-                                    </div>
-                                </div>
-                                <div className="text-2xl font-serif text-black">{analysisMetrics.currentProduced.toLocaleString('pt-BR')}</div>
-                                <div className="text-[10px] font-bold text-neutral-400 mt-1">Produzido nos últimos {analysisPeriod}d</div>
-                            </div>
+                <IntelligenceAnalytics
+                    innerRef={analiticoSectionRef}
+                    analysisMetrics={analysisMetrics}
+                    analysisPeriod={analysisPeriod}
+                    setAnalysisPeriod={setAnalysisPeriod as any}
+                    handleExportAnaliticoPDF={handleExportAnaliticoPDF}
+                    isGeneratingPDF={isGeneratingPDF}
+                    labs={labs}
+                    globalLabId={labId}
+                    analyticsLabId={analyticsLabId}
+                    setAnalyticsLabId={setAnalyticsLabId}
+                />
+            )}
 
-                            <div className="bg-white border border-neutral-100 p-6 rounded-3xl shadow-sm hover:shadow-md transition-all">
-                                <div className="flex items-center justify-between mb-4">
-                                    <span className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Eficiência Ponderada</span>
-                                    <div className={cn(
-                                        "h-2 w-16 bg-neutral-100 rounded-full overflow-hidden"
-                                    )}>
-                                        <div
-                                            className={cn("h-full transition-all duration-1000", analysisMetrics.weightedEfficiencyIndex > 0.9 ? "bg-emerald-500" : analysisMetrics.weightedEfficiencyIndex > 0.65 ? "bg-amber-400" : "bg-red-400")}
-                                            style={{ width: `${Math.min(100, analysisMetrics.weightedEfficiencyIndex * 100)}%` }}
-                                        />
-                                    </div>
-                                </div>
-                                <div className="text-2xl font-serif text-black">{(analysisMetrics.weightedEfficiencyIndex * 100).toFixed(1)}%</div>
-                                <div className="text-[10px] font-bold text-neutral-400 mt-1">Índice Ponderado de O.S. Finalizadas</div>
-                            </div>
+            {activeTab === 'clientes' && (
+                <ClientsTabSection
+                    clienteDailyStats={clienteDailyStats}
+                    clienteStats={clienteStats}
+                    selectedChartClients={selectedChartClients}
+                    toggleClientSelection={toggleClientSelection}
+                    setSelectedChartClients={setSelectedChartClients}
+                    carteiraClientesPivotStats={carteiraClientesPivotStats}
+                    collapsedClients={collapsedClients}
+                    toggleClientCollapse={toggleClientCollapse}
+                    labId={labId}
+                />
+            )}
 
-                            <div className="bg-white border border-neutral-100 p-6 rounded-3xl shadow-sm hover:shadow-md transition-all">
-                                <div className="flex items-center justify-between mb-4">
-                                    <span className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Taxa de Revisão</span>
-                                    <div className={cn(
-                                        "px-2 py-1 rounded-full text-[9px] font-bold flex items-center gap-1",
-                                        analysisMetrics.revisionRate >= 0.85 ? "bg-emerald-50 text-emerald-600" : "bg-amber-50 text-amber-600"
-                                    )}>
-                                        <span>{(analysisMetrics.revisionRate * 100).toFixed(1)}%</span>
-                                    </div>
-                                </div>
-                                <div className="text-2xl font-serif text-black">{analysisMetrics.currentReceived.toLocaleString('pt-BR')}</div>
-                                <div className="text-[10px] font-bold text-neutral-400 mt-1">Amostras Recebidas · {(analysisMetrics.revisionRate * 100).toFixed(1)}% revisadas</div>
-                            </div>
+            {activeTab === 'saldo_diario' && (
+                <DailyBalanceTabSection
+                    saldoDiarioPivotStats={saldoDiarioPivotStats}
+                    handleExportPDF={handleExportPDF}
+                    isGeneratingPDF={isGeneratingPDF}
+                    matrixTableRef={matrixTableRef}
+                    collapsedClients={collapsedClients}
+                    toggleClientCollapse={toggleClientCollapse}
+                    pinnedCells={pinnedCells}
+                    togglePinCell={togglePinCell}
+                />
+            )}
+
+            {isClearConfirmOpen && (
+                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+                    <div className="bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl animate-fade-in flex flex-col items-center text-center">
+                        <div className="h-16 w-16 bg-red-100 text-red-500 rounded-full flex items-center justify-center mb-6">
+                            <Trash2 className="h-8 w-8" />
                         </div>
-
-                        {/* Alertas e Insights */}
-                        {analysisMetrics.alerts.length > 0 && (
-                            <div className="lg:w-1/3 bg-neutral-900 rounded-[2rem] p-6 shadow-xl relative overflow-hidden">
-                                <div className="relative z-10">
-                                    <div className="flex items-center gap-2 mb-4">
-                                        <AlertCircle className="h-4 w-4 text-amber-400" />
-                                        <span className="text-[10px] font-black uppercase tracking-widest text-white/50">Insights e Alertas</span>
-                                    </div>
-                                    <div className="space-y-3">
-                                        {analysisMetrics.alerts.map((alert: any) => (
-                                            <div key={alert.message} className="flex items-start gap-3 bg-white/5 border border-white/10 p-3 rounded-xl">
-                                                <div className={cn("h-2 w-2 rounded-full mt-1.5 shrink-0", alert.type === 'warning' ? "bg-amber-500" : "bg-blue-500")} />
-                                                <p className="text-[10px] leading-relaxed text-neutral-300 font-bold">{alert.message}</p>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Gráfico de Média Ponderada/Móvel */}
-                    <div className="bg-white border border-neutral-200 rounded-[2.5rem] p-8 shadow-sm">
-                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
-                            <div>
-                                <h3 className="text-xl font-serif text-black leading-tight flex items-center gap-2">
-                                    <BarChart3 className="h-5 w-5 text-neutral-400" />
-                                    Balanço Operacional: Produção vs Recebimento
-                                </h3>
-                                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400 mt-1">Comportamento suavizado (Médias Temporais) de entrada e saída</p>
-                            </div>
-                            <div className="flex items-center gap-3">
-                                <div className="flex bg-neutral-100 p-1 rounded-xl mr-4">
-                                    {[7, 15, 30].map((p) => (
-                                        <button
-                                            key={p}
-                                            onClick={() => setAnalysisPeriod(p as any)}
-                                            className={cn(
-                                                "px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all",
-                                                analysisPeriod === p ? "bg-white text-black shadow-sm" : "text-neutral-400 hover:text-neutral-600"
-                                            )}
-                                        >
-                                            {p} Dias
-                                        </button>
-                                    ))}
-                                </div>
-                                <button
-                                    onClick={handleExportAnaliticoPDF}
-                                    disabled={isGeneratingPDF}
-                                    className="flex items-center gap-2 bg-black text-white px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-neutral-800 transition-all shadow-lg"
-                                >
-                                    <div key={isGeneratingPDF ? "generating" : "idle"} className="shrink-0 flex items-center">
-                                        {isGeneratingPDF ? <Loader2 className="h-3 w-3 animate-spin" /> : <Printer className="h-3 w-3" />}
-                                    </div>
-                                    Gerar Relatório Analítico
-                                </button>
-                            </div>
-                        </div>
-
-                        <div className="h-[300px] w-full bg-neutral-50/50 rounded-2xl p-4">
-                            <ResponsiveContainer key={`analytics-${analysisPeriod}-${labId}`} width="100%" height="100%">
-                                <LineChart data={analysisMetrics.smoothedData}>
-                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e5e5" />
-                                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#9ca3af', fontSize: 10, fontWeight: 700 }} />
-                                    <YAxis axisLine={false} tickLine={false} tick={{ fill: '#9ca3af', fontSize: 10, fontWeight: 700 }} />
-                                    <RechartsTooltip content={<CustomTooltip />} />
-                                    <Line type="monotone" name="Média Produção" dataKey="MA7_Produzido" stroke="#000" strokeWidth={3} dot={false} strokeDasharray="5 5" />
-                                    <Line type="monotone" name="Média Revisão" dataKey="MA7_Revisado" stroke="#10b981" strokeWidth={3} dot={false} />
-                                    <Line type="monotone" name="Média Recebimento" dataKey="MA7_Recebido" stroke="#3b82f6" strokeWidth={2} dot={false} strokeDasharray="2 2" />
-                                </LineChart>
-                            </ResponsiveContainer>
+                        <h2 className="text-2xl font-black uppercase tracking-tight text-neutral-900 mb-2">ATENÇÃO</h2>
+                        <p className="text-sm font-medium text-neutral-500 mb-8">
+                            Tem certeza que deseja apagar os registros deste laboratório? Essa ação limpará a tela imediatamente.
+                        </p>
+                        <div className="flex gap-4 w-full">
+                            <Button
+                                variant="outline"
+                                className="flex-1 rounded-xl uppercase font-black text-[10px] tracking-widest h-12"
+                                onClick={() => setIsClearConfirmOpen(false)}
+                            >
+                                Cancelar
+                            </Button>
+                            <Button
+                                variant="destructive"
+                                className="flex-1 rounded-xl uppercase font-black text-[10px] tracking-widest h-12 bg-red-600 hover:bg-red-700"
+                                onClick={handleClearData}
+                            >
+                                Apagar Tudo
+                            </Button>
                         </div>
                     </div>
                 </div>
-            )
-            }
-
-            {
-                activeTab === 'clientes' && (
-                    <div key="content-clientes" className="space-y-8 animate-fade-in">
-                        <div className="bg-white border border-neutral-200 rounded-3xl p-8 shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
-                            <div className="flex flex-col gap-6 mb-8">
-                                <div>
-                                    <h3 className="text-2xl font-serif text-black leading-tight tracking-tight flex items-center gap-2">
-                                        <LayoutGrid className="h-6 w-6 text-neutral-400" />
-                                        Distribuição por Cliente
-                                    </h3>
-                                    <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400 mt-1">Volume de amostras recebidas por cliente no tempo</p>
-                                </div>
-
-                                <div className="flex flex-col gap-3">
-                                    <div className="flex items-center justify-between">
-                                        <span className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Clientes Ativos:</span>
-                                        <div className="flex items-center gap-4">
-                                            <button
-                                                onClick={() => setSelectedChartClients([])}
-                                                className="text-[9px] font-bold text-neutral-400 uppercase tracking-widest hover:text-red-500 transition-colors flex items-center gap-1.5 px-2 py-1 bg-neutral-50 hover:bg-red-50 rounded-lg cursor-pointer"
-                                            >
-                                                <Trash2 className="h-3 w-3" /> Limpar Filtros
-                                            </button>
-                                            <span className="text-[8px] font-bold text-neutral-300 uppercase italic">Arraste para ver mais clientes →</span>
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center gap-2 overflow-x-auto pb-4 -mx-2 px-2">
-                                        {clienteDailyStats.keys.includes('Total Recebido') && (
-                                            <button
-                                                onClick={() => toggleClientSelection('Total Recebido')}
-                                                className={cn(
-                                                    "flex items-center gap-3 px-5 py-3 rounded-xl border-2 transition-all shrink-0 min-w-fit shadow-sm",
-                                                    selectedChartClients.includes('Total Recebido')
-                                                        ? "bg-black text-white border-black"
-                                                        : "bg-neutral-100 text-neutral-500 border-transparent hover:bg-neutral-200 hover:text-black"
-                                                )}
-                                            >
-                                                <div className={cn("h-2 w-2 rounded-full", selectedChartClients.includes('Total Recebido') ? "bg-white" : "bg-black")} />
-                                                <div className="flex flex-col items-start">
-                                                    <span className="text-[11px] font-black uppercase tracking-widest">Total Recebido</span>
-                                                </div>
-                                            </button>
-                                        )}
-                                        <div className="w-px h-8 bg-neutral-200 mx-2 flex-shrink-0" />
-                                        {clienteDailyStats.keys.filter(k => k !== 'Total Recebido').slice(0, 30).map((cName: string) => {
-                                            const cInfo = clienteStats.find((item: any) => item.name === cName) || { avgTime: '-', total: 0 };
-                                            return (
-                                                <button
-                                                    key={cName}
-                                                    onClick={() => toggleClientSelection(cName)}
-                                                    className={cn(
-                                                        "flex items-center gap-3 px-4 py-2.5 rounded-xl border-2 transition-all shrink-0 min-w-fit",
-                                                        selectedChartClients.includes(cName)
-                                                            ? "text-white border-transparent bg-dynamic shadow-dynamic"
-                                                            : "bg-neutral-50/50 text-neutral-400 border-transparent hover:bg-white hover:border-neutral-200"
-                                                    )}
-                                                    style={selectedChartClients.includes(cName) ? {
-                                                        '--bg-color': clienteDailyStats.keyColors[cName],
-                                                        '--dynamic-shadow': `0 4px 12px ${clienteDailyStats.keyColors[cName]}33`
-                                                    } as React.CSSProperties : {}}
-                                                >
-                                                    <div
-                                                        className="h-1.5 w-1.5 rounded-full bg-dynamic"
-                                                        style={{
-                                                            '--bg-color': selectedChartClients.includes(cName)
-                                                                ? 'white'
-                                                                : (clienteDailyStats.keyColors[cName] || '#e5e5e5')
-                                                        } as React.CSSProperties}
-                                                    />
-                                                    <div className="flex flex-col items-start">
-                                                        <span className="text-[9px] font-black uppercase tracking-wider">{cName}</span>
-                                                        <div className="flex items-center gap-2 mt-0.5">
-                                                            <span className="text-[7px] font-mono opacity-60">Avg: {cInfo.avgTime}h</span>
-                                                            <span className="text-[8px] font-mono font-bold opacity-80 pl-2 border-l border-current/20">{cInfo.total.toLocaleString('pt-BR')}</span>
-                                                        </div>
-                                                    </div>
-                                                </button>
-                                            );
-                                        })}
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="h-[450px] w-full bg-neutral-50/30 rounded-2xl p-4">
-                                <ResponsiveContainer key={`client-chart-${labId}`} width="100%" height="100%">
-                                    <LineChart data={clienteDailyStats.data} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-                                        <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#9ca3af', fontSize: 10, fontWeight: 700 }} dy={10} />
-                                        <YAxis axisLine={false} tickLine={false} tick={{ fill: '#9ca3af', fontSize: 10, fontWeight: 700 }} />
-                                        <RechartsTooltip content={<CustomTooltip />} />
-                                        {clienteDailyStats.keys.filter(key => selectedChartClients.includes(key)).map((key: string) => (
-                                            <Line
-                                                key={key}
-                                                type="monotone"
-                                                connectNulls={true}
-                                                dataKey={key}
-                                                stroke={clienteDailyStats.keyColors[key]}
-                                                strokeWidth={3}
-                                                dot={{ r: 4, strokeWidth: 0, fill: clienteDailyStats.keyColors[key] }}
-                                                activeDot={{ r: 7, strokeWidth: 0, fill: clienteDailyStats.keyColors[key] }}
-                                                strokeDasharray={key === 'Outros' ? "5 5" : "0"}
-                                            />
-                                        ))}
-                                    </LineChart>
-                                </ResponsiveContainer>
-                            </div>
-                        </div>
-
-                        {/* New Pivot Table */}
-                        <div className="bg-white border border-neutral-200 rounded-[2rem] overflow-hidden shadow-[0_8px_30px_rgb(0,0,0,0.04)] mt-12 w-full">
-                            <div className="p-8 pb-4 border-b border-neutral-100 flex items-center gap-4">
-                                <div className="h-10 w-10 bg-neutral-100 text-neutral-500 rounded-xl flex items-center justify-center">
-                                    <Database className="h-5 w-5" />
-                                </div>
-                                <div>
-                                    <h3 className="text-xl font-serif text-black leading-tight tracking-tight">Recebimento Diário (Detalhado)</h3>
-                                    <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400 mt-0.5">Amostras recebidas por cliente agrupadas por data</p>
-                                </div>
-                            </div>
-                            <div className="overflow-x-auto no-scrollbar max-h-[600px] overflow-y-auto w-full relative">
-                                <table className="w-full text-[11px] text-left border-collapse">
-                                    <thead className="sticky top-0 bg-white shadow-sm z-30 border-b-2 border-neutral-200">
-                                        <tr className="bg-neutral-50/50">
-                                            <th className="p-3 text-left border-b border-r border-neutral-200 bg-neutral-50 sticky left-0 z-40 w-64 shadow-[2px_0_5px_rgba(0,0,0,0.02)]">
-                                                <span className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Rótulos de Linha</span>
-                                            </th>
-                                            {carteiraClientesPivotStats.sortedDates.map((d: string) => (
-                                                <th key={d} className="p-3 text-center border-b border-r border-neutral-100 min-w-[85px] whitespace-nowrap bg-neutral-50/50">
-                                                    <div className="text-[11px] font-serif text-black">{format(new Date(d + 'T12:00:00'), 'dd/MMM', { locale: ptBR })}</div>
-                                                </th>
-                                            ))}
-                                            <th className="p-3 text-right border-b border-neutral-200 bg-neutral-100/50 sticky right-0 z-30 w-28 shadow-[-2px_0_5px_rgba(0,0,0,0.02)]">
-                                                <span className="text-[10px] font-black uppercase tracking-widest text-neutral-500">Total Geral</span>
-                                            </th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-neutral-100 font-mono">
-                                        {carteiraClientesPivotStats.sortedClients.map((client: any) => (
-                                            <React.Fragment key={client.clientName}>
-                                                <tr className="bg-white hover:bg-neutral-50 transition-colors group cursor-pointer" onClick={() => toggleClientCollapse(client.clientName)}>
-                                                    <td className="p-3 flex items-center gap-2 font-bold text-black border-l-4 border-l-black border-r border-neutral-200 sticky left-0 z-10 bg-white group-hover:bg-neutral-50 transition-colors shadow-[2px_0_5px_rgba(0,0,0,0.02)]">
-                                                        <div key={collapsedClients.includes(client.clientName) ? "plus" : "minus"} className="shrink-0 flex items-center">
-                                                            {collapsedClients.includes(client.clientName) ? <PlusSquare className="h-3.5 w-3.5 text-black" /> : <MinusSquare className="h-3.5 w-3.5 text-black" />}
-                                                        </div>
-                                                        <span className="truncate" title={client.clientName}>{client.clientName}</span>
-                                                    </td>
-                                                    {carteiraClientesPivotStats.sortedDates.map((date: string) => {
-                                                        const total = client.dates[date]?.total || 0;
-                                                        return (
-                                                            <td key={date} className="p-1.5 text-center border-r border-neutral-100 transition-colors relative overflow-hidden text-black font-bold group-hover:bg-neutral-50">
-                                                                {total > 0 ? total : ""}
-                                                            </td>
-                                                        );
-                                                    })}
-                                                    <td className="p-3 text-right font-black text-base text-black border-neutral-200 sticky right-0 z-10 bg-white group-hover:bg-neutral-50 transition-colors shadow-[-2px_0_5px_rgba(0,0,0,0.02)]">
-                                                        {client.total.toLocaleString('pt-BR')}
-                                                    </td>
-                                                </tr>
-                                                {!collapsedClients.includes(client.clientName) && client.sortedClientes.map((clienteNode: any, idx: number) => (
-                                                    <tr key={`${client.clientName}-${clienteNode.name}`} className={cn("bg-neutral-50/30 hover:bg-neutral-50/80 transition-colors", idx === client.sortedClientes.length - 1 ? "border-b-2 border-b-neutral-200" : "")}>
-                                                        <td className="p-3 pl-10 text-[10px] font-bold text-neutral-600 truncate border-r border-neutral-200 sticky left-0 z-10 bg-neutral-50/90 shadow-[2px_0_5px_rgba(0,0,0,0.02)]" title={clienteNode.name}>
-                                                            {clienteNode.name}
-                                                        </td>
-                                                        {carteiraClientesPivotStats.sortedDates.map((date: string) => {
-                                                            const total = clienteNode.dates[date]?.total || 0;
-                                                            return (
-                                                                <td key={date} className="p-1.5 text-center border-r border-neutral-100/50 text-neutral-500 font-bold">
-                                                                    {total > 0 ? total : ""}
-                                                                </td>
-                                                            );
-                                                        })}
-                                                        <td className="p-3 text-right font-black text-sm text-neutral-600 border-neutral-200 sticky right-0 z-10 bg-neutral-50/90 shadow-[-2px_0_5px_rgba(0,0,0,0.02)]">
-                                                            {clienteNode.total.toLocaleString('pt-BR')}
-                                                        </td>
-                                                    </tr>
-                                                ))}
-                                            </React.Fragment>
-                                        ))}
-                                    </tbody>
-                                    <tfoot className="sticky bottom-0 bg-black text-white font-bold border-t-2 border-black z-20">
-                                        <tr>
-                                            <td className="p-3 uppercase tracking-widest text-left font-serif sticky left-0 bg-black z-30 shadow-[2px_0_5px_rgb(0,0,0)]">Total Geral</td>
-                                            {carteiraClientesPivotStats.sortedDates.map((date: string) => {
-                                                const totalCol = carteiraClientesPivotStats.sortedClients.reduce((acc, client) => acc + (client.dates[date]?.total || 0), 0);
-                                                return <td key={date} className="p-3 text-center font-mono text-sm">{totalCol > 0 ? totalCol.toLocaleString('pt-BR') : ''}</td>
-                                            })}
-                                            <td className="p-3 text-right font-mono text-sm sticky right-0 bg-black z-30 shadow-[-2px_0_5px_rgb(0,0,0)]">{carteiraClientesPivotStats.totalGeral.toLocaleString('pt-BR')}</td>
-                                        </tr>
-                                    </tfoot>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-                )
-            }
-
-            {
-                activeTab === 'saldo_diario' && (
-                    <div className="space-y-8 animate-fade-in pb-20">
-                        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 bg-white border border-neutral-200 rounded-3xl p-8 shadow-sm">
-                            <div>
-                                <h3 className="text-2xl font-serif text-black leading-tight tracking-tight flex items-center gap-2">
-                                    <Clock className="h-6 w-6 text-neutral-400" />
-                                    Matriz de Envelhecimento
-                                </h3>
-                                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400 mt-1">Status de pendências por cliente e tempo de recepção</p>
-                            </div>
-                            <div className="flex flex-col sm:flex-row items-center gap-6">
-                                <div className="flex gap-4 sm:border-r border-neutral-100 sm:pr-6 sm:mr-6">
-                                    <div className="text-center">
-                                        <div className="text-xl font-serif text-amber-500">{saldoDiarioPivotStats.totalPendingAmostras.toLocaleString('pt-BR')}</div>
-                                        <div className="text-[9px] font-bold uppercase text-neutral-400">Total Pendente</div>
-                                    </div>
-                                    <div className="text-center">
-                                        <div className="text-xl font-serif text-red-500">{saldoDiarioPivotStats.criticalCount}</div>
-                                        <div className="text-[9px] font-bold uppercase text-neutral-400">Críticos (+48h)</div>
-                                    </div>
-                                </div>
-                                <Button variant="outline" size="sm" onClick={handleExportPDF} disabled={isGeneratingPDF} className="h-10 px-6 rounded-xl border-neutral-200 font-bold text-[10px] uppercase tracking-widest hover:bg-black hover:text-white transition-all">
-                                    {isGeneratingPDF ? <Loader2 className="h-4 w-4 animate-spin" /> : <Printer className="h-4 w-4 mr-2" />} Exportar PDF
-                                </Button>
-                            </div>
-                        </div>
-
-                        <div ref={matrixTableRef} className="bg-white border border-neutral-200 rounded-[2rem] overflow-hidden shadow-[0_8px_30px_rgb(0,0,0,0.04)] mt-8">
-                            <div className="overflow-x-auto no-scrollbar max-h-[600px] overflow-y-auto w-full relative">
-                                <table className="w-full text-[11px] text-left border-collapse">
-                                    <thead className="sticky top-0 bg-white shadow-sm z-30 border-b-2 border-neutral-200">
-                                        <tr className="bg-neutral-50/50">
-                                            <th className="p-3 text-left border-b border-r border-neutral-200 bg-neutral-50 sticky left-0 z-40 w-64 shadow-[2px_0_5px_rgba(0,0,0,0.02)]">
-                                                <span className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Tomador e Cliente</span>
-                                            </th>
-                                            {saldoDiarioPivotStats.sortedDates.map((d: string) => (
-                                                <th key={d} className="p-3 text-center border-b border-r border-neutral-100 min-w-[85px] whitespace-nowrap bg-neutral-50/50">
-                                                    <div className="text-[11px] font-serif text-black">{format(new Date(d + 'T12:00:00'), 'dd/MM')}</div>
-                                                    <div className="text-[8px] font-black uppercase text-neutral-400 tracking-tighter">{format(new Date(d + 'T12:00:00'), 'iii', { locale: ptBR })}</div>
-                                                </th>
-                                            ))}
-                                            <th className="p-3 text-right border-b border-neutral-200 bg-neutral-100/50 sticky right-0 z-30 w-28 shadow-[-2px_0_5px_rgba(0,0,0,0.02)]">
-                                                <span className="text-[10px] font-black uppercase tracking-widest text-neutral-500">Global</span>
-                                            </th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-neutral-100 font-mono">
-                                        {saldoDiarioPivotStats.sortedClients.map((client: any) => (
-                                            <React.Fragment key={client.clientName}>
-                                                <tr className="bg-white hover:bg-neutral-50 transition-colors group cursor-pointer" onClick={() => toggleClientCollapse(client.clientName)}>
-                                                    <td className="p-3 flex items-center gap-2 font-bold text-black border-l-4 border-l-black border-r border-neutral-200 sticky left-0 z-10 bg-white group-hover:bg-neutral-50 transition-colors shadow-[2px_0_5px_rgba(0,0,0,0.02)]">
-                                                        <div key={collapsedClients.includes(client.clientName) ? "plus-saldo" : "minus-saldo"} className="shrink-0 flex items-center">
-                                                            {collapsedClients.includes(client.clientName) ? <PlusSquare className="h-3.5 w-3.5 text-black" /> : <MinusSquare className="h-3.5 w-3.5 text-black" />}
-                                                        </div>
-                                                        <span className="truncate">{client.clientName}</span>
-                                                    </td>
-                                                    {saldoDiarioPivotStats.sortedDates.map((date: string) => {
-                                                        const cell = client.dates[date];
-                                                        const total = cell?.total || 0;
-                                                        const pin = pinnedCells[`${client.clientName}|${date}`];
-
-                                                        let cellStyle = "text-neutral-200";
-                                                        if (pin === 1) cellStyle = "bg-red-500/90 text-white border-red-600 shadow-inner";
-                                                        else if (pin === 2) cellStyle = "bg-amber-400/90 text-amber-950 border-amber-500 shadow-inner font-bolder";
-                                                        else if (pin === 3) cellStyle = "bg-emerald-500/90 text-white border-emerald-600 shadow-inner";
-                                                        else if (total > 0 && cell?.maxDelay >= 48) cellStyle = "bg-white text-black"; // Auto-Red removed, leaving dot? Clean as requested
-                                                        else if (total > 0 && cell?.maxDelay >= 24) cellStyle = "bg-white text-black"; // Auto-Yellow removed, using plain text
-                                                        else if (total > 0) cellStyle = "bg-white text-black";
-
-                                                        return (
-                                                            <td key={date}
-                                                                onClick={(e) => { e.stopPropagation(); togglePinCell(client.clientName, date); }}
-                                                                className={cn("p-1.5 text-center border-r border-neutral-100 transition-colors relative overflow-hidden", cellStyle)}
-                                                            >
-                                                                {total > 0 ? (
-                                                                    <div className="flex flex-col items-center justify-center h-full py-1">
-                                                                        <span className="font-mono font-black text-sm relative z-10 leading-none">{total}</span>
-                                                                        {cell.maxDelay > 0 && (
-                                                                            <span className={cn("text-[10px] font-black mt-0.5 leading-none", pin ? (pin === 2 ? "text-amber-900" : "text-white") : "text-neutral-400")}>{cell.maxDelay}h</span>
-                                                                        )}
-                                                                        {cell.maxDelay >= 48 && !pin && (
-                                                                            <div className="absolute top-1 right-1">
-                                                                                <div className="h-1.5 w-1.5 rounded-full bg-red-400 animate-pulse" />
-                                                                            </div>
-                                                                        )}
-                                                                    </div>
-                                                                ) : ""}
-                                                            </td>
-                                                        );
-                                                    })}
-                                                    <td className="p-3 text-right font-black text-base text-black border-neutral-200 sticky right-0 z-10 bg-white group-hover:bg-neutral-50 transition-colors shadow-[-2px_0_5px_rgba(0,0,0,0.02)]">
-                                                        {client.total.toLocaleString('pt-BR')}
-                                                    </td>
-                                                </tr>
-                                                {!collapsedClients.includes(client.clientName) && client.sortedClientes.map((clienteNode: any, idx: number) => (
-                                                    <tr key={`${client.clientName}-${clienteNode.name}`} className={cn("bg-neutral-50/30 hover:bg-neutral-50/80 transition-colors", idx === client.sortedClientes.length - 1 ? "border-b-2 border-b-neutral-200" : "")}>
-                                                        <td className="p-3 pl-10 text-[10px] font-bold text-neutral-600 truncate border-r border-neutral-200 sticky left-0 z-10 bg-neutral-50/90 shadow-[2px_0_5px_rgba(0,0,0,0.02)]">
-                                                            {clienteNode.name}
-                                                        </td>
-                                                        {saldoDiarioPivotStats.sortedDates.map((date: string) => {
-                                                            const cell = clienteNode.dates[date];
-                                                            const total = cell?.total || 0;
-                                                            return (
-                                                                <td key={date} className="p-1.5 text-center border-r border-neutral-100/50">
-                                                                    {total > 0 ? (
-                                                                        <div className="flex flex-col items-center text-neutral-600 py-1 relative">
-                                                                            <span className="font-mono font-bold text-xs leading-none">{total}</span>
-                                                                            {cell.maxDelay > 0 && <span className="text-[9px] font-black text-neutral-400 mt-0.5 leading-none">{cell.maxDelay}h</span>}
-                                                                            {cell.maxDelay >= 48 && (
-                                                                                <div className="absolute top-0 right-0">
-                                                                                    <div className="h-1 w-1 rounded-full bg-red-400/50" />
-                                                                                </div>
-                                                                            )}
-                                                                        </div>
-                                                                    ) : ""}
-                                                                </td>
-                                                            );
-                                                        })}
-                                                        <td className="p-3 text-right font-black text-sm text-neutral-600 border-neutral-200 sticky right-0 z-10 bg-neutral-50/90 shadow-[-2px_0_5px_rgba(0,0,0,0.02)]">
-                                                            {clienteNode.total.toLocaleString('pt-BR')}
-                                                        </td>
-                                                    </tr>
-                                                ))}
-                                            </React.Fragment>
-                                        ))}
-                                    </tbody>
-                                    <tfoot className="sticky bottom-0 bg-black text-white font-bold border-t-2 border-black z-20">
-                                        <tr>
-                                            <td className="p-3 uppercase tracking-widest text-left font-serif sticky left-0 bg-black z-30 shadow-[2px_0_5px_rgb(0,0,0)]">Total Geral</td>
-                                            {saldoDiarioPivotStats.sortedDates.map((date: string) => {
-                                                const totalCol = saldoDiarioPivotStats.sortedClients.reduce((acc, client) => acc + (client.dates[date]?.total || 0), 0);
-                                                return <td key={date} className="p-3 text-center font-mono text-sm">{totalCol > 0 ? totalCol.toLocaleString('pt-BR') : ''}</td>
-                                            })}
-                                            <td className="p-3 text-right font-mono text-sm sticky right-0 bg-black z-30 shadow-[-2px_0_5px_rgb(0,0,0)]">{saldoDiarioPivotStats.totalGeral.toLocaleString('pt-BR')}</td>
-                                        </tr>
-                                    </tfoot>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-                )
-            }
+            )}
         </div>
     );
 }

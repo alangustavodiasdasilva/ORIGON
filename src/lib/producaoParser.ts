@@ -48,7 +48,7 @@ export const parseProducaoFileInChunks = async (
                 for (let i = 0; i < Math.min(rows.length, 50); i++) {
                     const row = rows[i];
                     let foundNumbers = 0;
-                    let tempMap: Record<number, number> = {};
+                    const tempMap: Record<number, number> = {};
 
                     row.forEach((cell, colIdx) => {
                         const val = parseInt(String(cell));

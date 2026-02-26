@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/contexts/ToastContext";
-import { Upload, BarChart3, Loader2, X, Sun, Moon, Sunset, ArrowRight, Save, Calendar, Copy, FileSpreadsheet } from "lucide-react";
+import { Upload, BarChart3, Loader2, X, Sun, Moon, Sunset, ArrowRight, Save, Calendar, Copy, FileSpreadsheet, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import Tesseract from 'tesseract.js';
@@ -61,6 +61,7 @@ export default function Operacao() {
     const [isLoading, setIsLoading] = useState(false);
     const [pastedImage, setPastedImage] = useState<string | null>(null);
     const [ocrData, setOcrData] = useState<OCRResult | null>(null);
+    const [isClearConfirmOpen, setIsClearConfirmOpen] = useState(false);
     const [chartData, setChartData] = useState<IOperacaoItem[]>([]);
     const [totalProduzido, setTotalProduzido] = useState(0);
 
@@ -181,7 +182,7 @@ export default function Operacao() {
             const result = (await worker.recognize(processedImageUrl)) as any;
             await worker.terminate();
             const rawText = result.data.text || "";
-            let debugLog = `--- LEITURA BRUTA ---\n${rawText}\n-------------------\n\n`;
+            const debugLog = `--- LEITURA BRUTA ---\n${rawText}\n-------------------\n\n`;
             let lines = result.data.lines || [];
             if (lines.length === 0 && rawText.trim().length > 0) {
                 lines = rawText.split('\n').map((txt: string) => ({ text: txt, words: txt.split(/\s+/).filter(Boolean).map(w => ({ text: w, bbox: { x0: 0, x1: 0, y0: 0, y1: 0 }, confidence: 100 })) }));
@@ -317,7 +318,8 @@ export default function Operacao() {
 
     const handleClearAllData = async () => {
         const targetLabId = currentLab?.id || user?.lab_id;
-        if (!confirm("LIMPAR TUDO?") || !targetLabId) return;
+        if (!targetLabId) return;
+        setIsClearConfirmOpen(false);
         try { await producaoService.deleteAll(targetLabId); loadStats(); addToast({ title: "Histórico Limpo", type: "success" }); } catch (error) { addToast({ title: "Erro ao limpar", type: "error" }); }
     };
 
@@ -387,10 +389,13 @@ export default function Operacao() {
                             {labs.map(l => <option key={l.id} value={l.id}>{l.nome}</option>)}
                         </select>
                     )}
-                    <Button variant="outline" onClick={handleClearAllData} className="text-red-600 border-red-100 hover:bg-red-50">Limpar Histórico</Button>
+                    <Button variant="outline" onClick={() => setIsClearConfirmOpen(true)} className="text-red-600 border-red-100 hover:bg-red-50">Limpar Histórico</Button>
                     <div className="relative">
-                        <input type="file" accept=".xlsx,.xls" onChange={handleFileUpload} disabled={isUploading} className="absolute inset-0 opacity-0 cursor-pointer" title="Importar Excel" aria-label="Importar Excel" />
-                        <Button className="bg-emerald-600 text-white">{isUploading ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : <Upload className="h-4 w-4 mr-2" />} Importar Excel</Button>
+                        <input type="file" accept=".xlsx,.xls" onChange={handleFileUpload} disabled={isUploading} className="absolute inset-0 opacity-0 cursor-pointer z-10" title="Importar Excel" aria-label="Importar Excel" />
+                        <Button className="bg-emerald-600 text-white relative z-0">
+                            {isUploading ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : <Upload className="h-4 w-4 mr-2" />}
+                            <span>Importar Excel</span>
+                        </Button>
                     </div>
                 </div>
             </div>
@@ -511,6 +516,37 @@ export default function Operacao() {
                         <div className="mt-12 p-6 bg-neutral-900 rounded-xl text-white">
                             <div className="flex items-center gap-2 mb-4"><div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" /> <span className="font-bold text-xs uppercase tracking-widest">Logs do Motor de Inteligência</span></div>
                             <pre className="text-[10px] font-mono leading-relaxed opacity-50 overflow-x-auto whitespace-pre-wrap">{ocrDebugText}</pre>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+
+            {isClearConfirmOpen && (
+                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+                    <div className="bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl animate-fade-in flex flex-col items-center text-center">
+                        <div className="h-16 w-16 bg-red-100 text-red-500 rounded-full flex items-center justify-center mb-6">
+                            <Trash2 className="h-8 w-8" />
+                        </div>
+                        <h2 className="text-2xl font-black uppercase tracking-tight text-neutral-900 mb-2">ATENÇÃO</h2>
+                        <p className="text-sm font-medium text-neutral-500 mb-8">
+                            Tem certeza que deseja apagar os registros deste laboratório? Essa ação limpará o histórico imediatamente.
+                        </p>
+                        <div className="flex gap-4 w-full">
+                            <Button
+                                variant="outline"
+                                className="flex-1 rounded-xl uppercase font-black text-[10px] tracking-widest h-12"
+                                onClick={() => setIsClearConfirmOpen(false)}
+                            >
+                                Cancelar
+                            </Button>
+                            <Button
+                                variant="destructive"
+                                className="flex-1 rounded-xl uppercase font-black text-[10px] tracking-widest h-12 bg-red-600 hover:bg-red-700"
+                                onClick={handleClearAllData}
+                            >
+                                Apagar Tudo
+                            </Button>
                         </div>
                     </div>
                 </div>

@@ -71,8 +71,10 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
             if (localProducaoStr && currentLab) {
                 const data = JSON.parse(localProducaoStr);
                 if (data.length > 0) {
-                    await producaoService.uploadData(data, currentLab.id);
-                    localStorage.removeItem('fibertech_producao_data');
+                    const success = await producaoService.uploadData(data);
+                    if (success) {
+                        localStorage.removeItem('fibertech_producao_data');
+                    }
                 }
             }
 
@@ -97,7 +99,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
                 type: "error"
             });
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+
     }, [isAuthenticated, currentLab, addToast]);
 
     useEffect(() => {

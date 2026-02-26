@@ -269,7 +269,7 @@ export default function PatternAnalysisModal({ isOpen, onClose, samples, onApply
                                             className="h-10 px-6 uppercase text-xs font-bold tracking-widest border-black text-black hover:bg-black hover:text-white transition-colors"
                                         >
                                             {isAiLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Bot className="w-4 h-4 mr-2" />}
-                                            {isAiLoading ? "Gerando..." : "Gerar Relatório"}
+                                            <span>{isAiLoading ? "Gerando..." : "Gerar Relatório"}</span>
                                         </Button>
                                     )}
                                 </div>

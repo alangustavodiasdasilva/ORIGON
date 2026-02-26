@@ -155,7 +155,7 @@ const parseHVIData = (text: string): ExtractionResult => {
     for (const line of lines) {
         // Procura por linha que contém "Média" ou "2- Média" seguida de valores numéricos
         const mediaMatch = line.match(
-            /[2-]?\s*M[eé]dia[:\s]*([\d,\.]+)\s+([\d,\.]+)\s+([\d,\.]+)\s+([\d,\.]+)\s+([\d,\.]+)\s+([\d,\.]+)/i
+            /[2-]?\s*M[eé]dia[:\s]*([\d,.]+)\s+([\d,.]+)\s+([\d,.]+)\s+([\d,.]+)\s+([\d,.]+)\s+([\d,.]+)/i
         );
 
         if (mediaMatch) {
@@ -166,7 +166,7 @@ const parseHVIData = (text: string): ExtractionResult => {
             // 2. Procura nas linhas da tabela (padrão: Num HVI Data ...)
             let hviNumber = '1';
 
-            const labelMatch = text.match(/HVI\s*[:#]?\s*(\d+)/i) || text.match(/Inst\s*[:\.]?\s*(\d+)/i);
+            const labelMatch = text.match(/HVI\s*[:#]?\s*(\d+)/i) || text.match(/Inst\s*[:.]?\s*(\d+)/i);
             if (labelMatch) {
                 hviNumber = labelMatch[1];
             } else {
@@ -200,7 +200,7 @@ const parseHVIData = (text: string): ExtractionResult => {
         for (const line of lines) {
             // Procura por linha que começa com número e contém padrão de data
             const rowMatch = line.match(
-                /^\s*(\d+)\s+(\d+)\s+(\d{2}\/\d{2}\/\d{4})\s*(\d{2}:\d{2}:\d{2})\s+([\d,\.]+)\s+([\d,\.]+)\s+([\d,\.]+)\s+([\d,\.]+)\s+([\d,\.]+)\s+([\d,\.]+)/
+                /^\s*(\d+)\s+(\d+)\s+(\d{2}\/\d{2}\/\d{4})\s*(\d{2}:\d{2}:\d{2})\s+([\d,.]+)\s+([\d,.]+)\s+([\d,.]+)\s+([\d,.]+)\s+([\d,.]+)\s+([\d,.]+)/
             );
 
             if (rowMatch) {
@@ -222,7 +222,7 @@ const parseHVIData = (text: string): ExtractionResult => {
 
     // PRIORIDADE 3: Se ainda não encontrou, tenta padrão mais flexível
     if (result.rows.length === 0) {
-        const numberPattern = /(\d+[,\.]\d+)/g;
+        const numberPattern = /(\d+[,.]\d+)/g;
 
         for (const line of lines) {
             const numbers = line.match(numberPattern);
@@ -252,55 +252,53 @@ const parseHVIData = (text: string): ExtractionResult => {
 
 export const OCRExtractionService = {
     async extractFromImage(file: File, onProgress?: (progress: number) => void): Promise<ExtractionResult> {
-        return new Promise(async (resolve, reject) => {
-            try {
-                const imageUrl = URL.createObjectURL(file);
+        try {
+            const imageUrl = URL.createObjectURL(file);
 
-                const result = await Tesseract.recognize(
-                    imageUrl,
-                    'por', // Português
-                    {
-                        logger: (m) => {
-                            if (m.status === 'recognizing text' && onProgress) {
-                                onProgress(Math.round(m.progress * 100));
-                            }
+            const result = await Tesseract.recognize(
+                imageUrl,
+                'por', // Português
+                {
+                    logger: (m) => {
+                        if (m.status === 'recognizing text' && onProgress) {
+                            onProgress(Math.round(m.progress * 100));
                         }
                     }
-                );
-
-                URL.revokeObjectURL(imageUrl);
-
-                const extractedData = parseHVIData(result.data.text);
-
-                // Se não conseguiu extrair dados, retorna erro
-                if (extractedData.rows.length === 0 && !extractedData.mala && !extractedData.etiqueta) {
-                    // Tenta extrair com um parsing mais agressivo
-                    console.log('OCR Raw Text:', result.data.text);
-
-                    // Fallback: extrai valores numéricos encontrados
-                    const allNumbers = result.data.text.match(/\d+[,\.]\d+/g) || [];
-                    if (allNumbers.length >= 6) {
-                        extractedData.rows.push({
-                            numero: '1',
-                            hvi: '1',
-                            data_analise: new Date().toLocaleDateString('pt-BR'),
-                            hora_analise: new Date().toLocaleTimeString('pt-BR'),
-                            mic: extractDecimal(allNumbers[0] ?? '0'),
-                            len: extractDecimal(allNumbers[1] ?? '0'),
-                            unf: extractDecimal(allNumbers[2] ?? '0'),
-                            str: extractDecimal(allNumbers[3] ?? '0'),
-                            rd: extractDecimal(allNumbers[4] ?? '0'),
-                            b: extractDecimal(allNumbers[5] ?? '0')
-                        });
-                    }
                 }
+            );
 
-                resolve(extractedData);
-            } catch (error) {
-                console.error('OCR Error:', error);
-                reject(error);
+            URL.revokeObjectURL(imageUrl);
+
+            const extractedData = parseHVIData(result.data.text);
+
+            // Se não conseguiu extrair dados, retorna erro
+            if (extractedData.rows.length === 0 && !extractedData.mala && !extractedData.etiqueta) {
+                // Tenta extrair com um parsing mais agressivo
+                console.log('OCR Raw Text:', result.data.text);
+
+                // Fallback: extrai valores numéricos encontrados
+                const allNumbers = result.data.text.match(/\d+[,.]\d+/g) || [];
+                if (allNumbers.length >= 6) {
+                    extractedData.rows.push({
+                        numero: '1',
+                        hvi: '1',
+                        data_analise: new Date().toLocaleDateString('pt-BR'),
+                        hora_analise: new Date().toLocaleTimeString('pt-BR'),
+                        mic: extractDecimal(allNumbers[0] ?? '0'),
+                        len: extractDecimal(allNumbers[1] ?? '0'),
+                        unf: extractDecimal(allNumbers[2] ?? '0'),
+                        str: extractDecimal(allNumbers[3] ?? '0'),
+                        rd: extractDecimal(allNumbers[4] ?? '0'),
+                        b: extractDecimal(allNumbers[5] ?? '0')
+                    });
+                }
             }
-        });
+
+            return extractedData;
+        } catch (error) {
+            console.error('OCR Error:', error);
+            throw error;
+        }
     },
 
     // Converte uma linha de dados para o formato SingleSampleData
