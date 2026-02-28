@@ -155,10 +155,10 @@ export const parseStatusOSFileInChunks = async (
                         usina: String(getVal(["Usina", "unidade", "usina"]) || ""),
                         variedade: String(getVal(["Variedade", "Var", "variedade"]) || ""),
 
-                        data_registro: parseExcelDate(getVal(["Registrado", "Data Registro", "Registro", "registrado"])),
-                        data_recepcao: parseExcelDate(getVal(["Recepção", "Data Recepção", "Recepcao", "recepcao"])),
-                        data_acondicionamento: parseExcelDate(getVal(["Acondicionado", "Data Acondicionamento", "acondicionado"])),
-                        data_finalizacao: parseExcelDate(getVal(["Finalizado", "Data Finalização", "Finalização", "finalizado"])),
+                        data_registro: parseExcelDate(getVal(["Registrado", "Data Registro", "Registro", "registrado", "Dt. Registro", "Dt Registro"])),
+                        data_recepcao: parseExcelDate(getVal(["Recepção", "Data Recepção", "Recepcao", "recepcao", "Dt. Recepção", "Dt Recepção", "Dt. Recepcão", "Dt Recepcão"])),
+                        data_acondicionamento: parseExcelDate(getVal(["Acondicionado", "Data Acondicionamento", "acondicionado", "Dt. Acondicionado"])),
+                        data_finalizacao: parseExcelDate(getVal(["Finalizado", "Data Finalização", "Finalização", "finalizado", "Dt. Finalização", "Dt Finalização"])),
 
                         revisor: String(getVal(["Revisor", "Analista", "revisor"]) || ""),
                         status: String(getVal(["Status", "Situação", "status"]) || ""),

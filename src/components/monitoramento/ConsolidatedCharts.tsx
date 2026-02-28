@@ -1,6 +1,6 @@
 import React from "react";
 import { Activity } from "lucide-react";
-import { ResponsiveContainer, LineChart, CartesianGrid, XAxis, YAxis, Tooltip as RechartsTooltip, Line } from "recharts";
+import { ResponsiveContainer, LineChart, CartesianGrid, XAxis, YAxis, Tooltip as RechartsTooltip, Line, Brush } from "recharts";
 import { CustomTooltip } from "@/components/monitoramento/CustomTooltip";
 
 interface ConsolidatedChartsProps {
@@ -53,6 +53,7 @@ export const ConsolidatedCharts: React.FC<ConsolidatedChartsProps> = ({ data, ke
                                         />
                                     ))
                                 }
+                                {data.length > 20 && <Brush dataKey="name" height={30} stroke="#e5e5e5" />}
                             </LineChart>
                         </ResponsiveContainer>
                     </div>
@@ -98,6 +99,7 @@ export const ConsolidatedCharts: React.FC<ConsolidatedChartsProps> = ({ data, ke
                                         />
                                     ))
                                 }
+                                {data.length > 20 && <Brush dataKey="name" height={30} stroke="#e5e5e5" />}
                             </LineChart>
                         </ResponsiveContainer>
                     </div>

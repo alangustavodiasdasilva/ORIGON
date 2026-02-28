@@ -136,6 +136,7 @@ export const statusOSService = {
 
                     const { data, error } = await query
                         .order('data_recepcao', { ascending: false })
+                        .order('os_numero', { ascending: false }) // Estabiliza a ordenação
                         .range(from, from + limit - 1);
 
                     if (error) throw error;

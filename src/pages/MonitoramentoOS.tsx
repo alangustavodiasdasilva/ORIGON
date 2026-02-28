@@ -39,7 +39,7 @@ export default function MonitoramentoOS() {
     const matrixTableRef = useRef<HTMLDivElement>(null);
     const analiticoSectionRef = useRef<HTMLDivElement>(null);
     const [collapsedClients, setCollapsedClients] = React.useState<string[]>([]);
-    const [analysisPeriod, setAnalysisPeriod] = React.useState<7 | 14 | 21 | 30>(14);
+    const [analysisPeriod, setAnalysisPeriod] = React.useState<7 | 14 | 30 | 90 | 180 | 365>(30);
     const [isClearConfirmOpen, setIsClearConfirmOpen] = useState(false);
     const [analyticsLabId, setAnalyticsLabId] = useState<string>('all');
 
@@ -1093,7 +1093,7 @@ export default function MonitoramentoOS() {
                     innerRef={analiticoSectionRef}
                     analysisMetrics={analysisMetrics}
                     analysisPeriod={analysisPeriod}
-                    setAnalysisPeriod={setAnalysisPeriod as any}
+                    setAnalysisPeriod={(p: any) => setAnalysisPeriod(p)}
                     handleExportAnaliticoPDF={handleExportAnaliticoPDF}
                     isGeneratingPDF={isGeneratingPDF}
                     labs={labs}

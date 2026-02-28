@@ -109,6 +109,7 @@ export const IntelligenceAnalytics: React.FC<IntelligenceAnalyticsProps> = ({
     innerRef,
     analysisMetrics,
     analysisPeriod,
+    setAnalysisPeriod,
     handleExportAnaliticoPDF,
     isGeneratingPDF,
     labs,
@@ -199,10 +200,28 @@ export const IntelligenceAnalytics: React.FC<IntelligenceAnalyticsProps> = ({
                     <div>
                         <h3 className="text-xl font-serif text-black leading-tight flex items-center gap-2">
                             <BarChart3 className="h-5 w-5 text-neutral-400" />
-                            Balanço Operacional Dinâmico (Últimos 7 Dias)
+                            Balanço Operacional Dinâmico (Últimos {analysisPeriod} Dias)
                         </h3>
                         <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400 mt-1">Comparação de volumes com média diária ponderada</p>
                     </div>
+
+                    <div className="flex flex-wrap items-center gap-2 bg-neutral-100/50 p-1.5 rounded-2xl border border-neutral-200">
+                        {[7, 14, 30, 90, 180, 365].map((period) => (
+                            <button
+                                key={period}
+                                onClick={() => setAnalysisPeriod(period)}
+                                className={cn(
+                                    "px-4 py-2 rounded-xl text-[10px] font-black tracking-widest transition-all",
+                                    analysisPeriod === period
+                                        ? "bg-black text-white shadow-lg scale-105"
+                                        : "text-neutral-400 hover:text-black hover:bg-white"
+                                )}
+                            >
+                                {period === 365 ? '1 ANO' : period === 180 ? 'SAFRA' : `${period}D`}
+                            </button>
+                        ))}
+                    </div>
+
                     <div className="flex items-center gap-3">
                         {globalLabId === 'all' && labs && (
                             <select

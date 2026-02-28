@@ -1,6 +1,6 @@
 import React from "react";
 import { Activity, Inbox, Users } from "lucide-react";
-import { ResponsiveContainer, LineChart, CartesianGrid, XAxis, YAxis, Tooltip as RechartsTooltip, Line } from "recharts";
+import { ResponsiveContainer, LineChart, CartesianGrid, XAxis, YAxis, Tooltip as RechartsTooltip, Line, Brush } from "recharts";
 import { CustomTooltip } from "@/components/monitoramento/CustomTooltip";
 import { cn } from "@/lib/utils";
 import type { OSItem } from "@/components/monitoramento/types";
@@ -159,6 +159,9 @@ export const ReviewerPerformanceSection: React.FC<ReviewerPerformanceSectionProp
                         {activeTab === 'revisores' && revisorDailyStats.keys.filter((k: string) => selectedReviewers.includes(k)).map((rev: string) => (
                             <Line key={rev} type="monotone" dataKey={rev} stroke={revisorDailyStats.keyColors[rev]} strokeWidth={2} dot={false} />
                         ))}
+                        {revisorDailyStats.data.length > 15 && (
+                            <Brush dataKey="name" height={30} stroke="#e5e5e5" />
+                        )}
                     </LineChart>
                 </ResponsiveContainer>
             </div>
