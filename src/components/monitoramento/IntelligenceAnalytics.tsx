@@ -15,48 +15,19 @@ interface IntelligenceAnalyticsProps {
     setAnalyticsLabId: (labId: string) => void;
 }
 
-const GanttMovingAverage = ({
+const SimpleWeekAverage = ({
     title,
     data,
     dataKey,
-    windowSize = 7,
 }: {
     title: string;
     data: any[];
     dataKey: string;
-    windowSize?: number;
 }) => {
-    // Only create windows if we have enough data
-    const windows: any[] = [];
-    if (data.length >= windowSize) {
-        for (let i = 0; i <= data.length - windowSize; i++) {
-            const slice = data.slice(i, i + windowSize);
-            const sum = slice.reduce((acc, d) => acc + (Number(d[dataKey]) || 0), 0);
-            const avg = sum / slice.length;
-            windows.push({
-                startIndex: i,
-                endIndex: i + windowSize - 1,
-                avg,
-            });
-        }
-    }
+    if (!data || data.length === 0) return null;
 
-    if (windows.length === 0) {
-        return <div className="p-4 border border-dashed rounded text-center text-sm font-bold text-neutral-400">Dados históricos insuficientes para {windowSize} dias de média móvel na categoria {title}.</div>
-    }
-
-    const COLORS = [
-        "#fdf036", // Yellow
-        "#ef4444", // Red
-        "#65a30d", // Green
-        "#d97706", // Orange
-        "#3b82f6", // Blue
-        "#9ca3af", // Gray
-        "#374151", // Dark Gray
-        "#7c3aed", // Purple
-        "#ec4899", // Pink
-        "#14b8a6", // Teal
-    ];
+    const sum = data.reduce((acc, d) => acc + (Number(d[dataKey]) || 0), 0);
+    const avg = data.length > 0 ? sum / data.length : 0;
 
     return (
         <div className="flex flex-col mb-10 overflow-hidden w-full border border-neutral-200 rounded-3xl bg-white shadow-sm font-sans animate-fade-in group/container">
@@ -69,65 +40,64 @@ const GanttMovingAverage = ({
                 <table className="w-full border-collapse text-[11px] min-w-max">
                     <thead>
                         <tr>
-                            <th className="border-b-2 border-r-2 border-black bg-white p-0 w-[180px] min-w-[180px] h-[50px] align-middle sticky left-0 z-30 shadow-[4px_0_10px_rgba(0,0,0,0.03)]">
+                            <th className="border-b-2 border-r-2 border-black bg-white p-0 w-[180px] min-w-[180px] h-[50px] align-middle sticky left-0 z-30 shadow-[4px_0_10px_rgba(0,0,0,0.03)] focus:outline-none">
                                 <div className="flex items-center justify-center w-full h-full text-center font-bold tracking-widest uppercase text-[10px] text-black">
-                                    Médias {windowSize} Dias
+                                    Últimos {data.length} Dias
                                 </div>
                             </th>
                             {data.map((d, i) => (
-                                <th key={i} className="border-b-2 border-r border-black/10 bg-white p-0 w-[60px] min-w-[60px] h-[50px] align-top z-10 transition-colors hover:bg-neutral-50">
+                                <th key={i} className="border-b-2 border-r border-black/10 bg-white p-0 w-[60px] min-w-[60px] h-[50px] align-top z-10 transition-colors hover:bg-neutral-50 focus:outline-none">
                                     <div className="flex flex-col h-full w-full">
-                                        <div className="h-1/2 flex items-center justify-center border-b border-black/10 text-black font-bold bg-neutral-100/30">
-                                            Dia {i + 1}
-                                        </div>
-                                        <div className="h-1/2 flex items-center justify-center font-mono font-bold text-[10px] text-neutral-600 px-1 truncate" title={d.name}>
-                                            {(Number(d[dataKey]) || 0).toLocaleString('pt-BR')}
+                                        <div className="h-1/2 flex items-center justify-center border-b border-black/10 text-black font-bold bg-neutral-100/30 text-[10px]">
+                                            {d.name}
                                         </div>
                                     </div>
                                 </th>
                             ))}
+                            <th className="border-b-2 border-l-2 border-black bg-neutral-900 p-0 w-[100px] min-w-[100px] h-[50px] align-middle sticky right-0 z-30 shadow-[-4px_0_10px_rgba(0,0,0,0.1)] focus:outline-none">
+                                <div className="flex items-center justify-center w-full h-full text-center font-bold tracking-widest uppercase text-[10px] text-white">
+                                    Média Diária
+                                </div>
+                            </th>
                         </tr>
                     </thead>
                     <tbody>
-                        {windows.map((win, idx) => {
-                            const bg = COLORS[idx % COLORS.length];
-                            const isYellow = bg === "#fdf036";
+                        <tr className="hover:bg-neutral-50/50 transition-colors group">
+                            <td className="border-b border-r-2 border-black/10 border-r-black bg-white p-0 h-[40px] sticky left-0 z-20 shadow-[4px_0_10px_rgba(0,0,0,0.03)]">
+                                <div className="flex h-full w-full relative">
+                                    <div className="w-[105px] flex items-center justify-center font-bold px-1 text-[9px] relative z-10 border-r border-black/10 shadow-sm"
+                                        style={{ backgroundColor: '#fdf036', color: 'black' }}>
+                                        {data[0]?.name} a {data[data.length - 1]?.name}
+                                        <div className="absolute right-[-4px] top-1/2 -translate-y-1/2 w-0 h-0 border-y-[4px] border-y-transparent border-l-[4px]" style={{ borderLeftColor: '#fdf036' }}></div>
+                                    </div>
+                                    <div className="flex-1 flex items-center justify-end pr-4 pl-2 font-mono font-black text-[12px] text-black bg-white">
+                                        Total: {sum.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
+                                    </div>
+                                </div>
+                            </td>
 
-                            return (
-                                <tr key={idx} className="hover:bg-neutral-50/50 transition-colors group">
-                                    <td className="border-b border-r-2 border-black/10 border-r-black bg-white p-0 h-[30px] sticky left-0 z-20 shadow-[4px_0_10px_rgba(0,0,0,0.03)] group-last:border-b-0">
-                                        <div className="flex h-full w-full relative">
-                                            <div className="w-[85px] flex items-center justify-center font-bold px-1 text-[9px] relative z-10 border-r border-black/10 shadow-sm"
-                                                style={{ backgroundColor: bg, color: isYellow ? 'black' : 'white' }}>
-                                                Dia {win.startIndex + 1} a {win.endIndex + 1}
-                                                <div className="absolute right-[-4px] top-1/2 -translate-y-1/2 w-0 h-0 border-y-[4px] border-y-transparent border-l-[4px]" style={{ borderLeftColor: bg }}></div>
-                                            </div>
-                                            <div className="flex-1 flex items-center justify-end pr-4 pl-2 font-mono font-black text-[12px] text-black bg-white">
-                                                {win.avg.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
-                                            </div>
-                                        </div>
-                                    </td>
+                            {data.map((d, i) => (
+                                <td key={i} className="p-0 h-[40px] relative border-b border-r border-black/5 align-middle">
+                                    <div
+                                        className={cn(
+                                            "absolute inset-0 z-10 transition-colors border-y border-black/20 group-hover:brightness-105 shadow-sm",
+                                            i === 0 && "border-l border-black/20",
+                                            i === data.length - 1 && "border-r border-black/20"
+                                        )}
+                                        style={{ backgroundColor: '#fdf036' }}
+                                    />
+                                    <div className="relative z-20 flex items-center justify-center h-full w-full font-mono font-black text-[11px] text-black">
+                                        {(Number(d[dataKey]) || 0).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}
+                                    </div>
+                                </td>
+                            ))}
 
-                                    {data.map((_, i) => {
-                                        const inWindow = i >= win.startIndex && i <= win.endIndex;
-                                        return (
-                                            <td key={i} className="p-0 h-[30px] relative border-b border-r border-black/5 group-last:border-b-0">
-                                                {inWindow && (
-                                                    <div
-                                                        className={cn(
-                                                            "absolute inset-0 z-10 transition-colors border-y border-black/20 group-hover:brightness-105 shadow-sm",
-                                                            i === win.startIndex && "border-l border-black/20",
-                                                            i === win.endIndex && "border-r border-black/20"
-                                                        )}
-                                                        style={{ backgroundColor: bg }}
-                                                    />
-                                                )}
-                                            </td>
-                                        );
-                                    })}
-                                </tr>
-                            );
-                        })}
+                            <td className="border-b border-l-2 border-black bg-black p-0 h-[40px] sticky right-0 z-20 shadow-[-4px_0_10px_rgba(0,0,0,0.1)]">
+                                <div className="flex items-center justify-center w-full h-full font-mono font-black text-[14px] text-white">
+                                    {avg.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
+                                </div>
+                            </td>
+                        </tr>
                     </tbody>
                 </table>
             </div>
@@ -147,7 +117,7 @@ export const IntelligenceAnalytics: React.FC<IntelligenceAnalyticsProps> = ({
     setAnalyticsLabId
 }) => {
 
-    const chartData = [...analysisMetrics.smoothedData].reverse();
+    const chartData = [...analysisMetrics.smoothedData];
 
     return (
         <div ref={innerRef} className="space-y-6 mb-12 animate-fade-in transition-all duration-700 bg-white/50 p-6 rounded-[3rem] border border-neutral-100 mt-8">
@@ -229,9 +199,9 @@ export const IntelligenceAnalytics: React.FC<IntelligenceAnalyticsProps> = ({
                     <div>
                         <h3 className="text-xl font-serif text-black leading-tight flex items-center gap-2">
                             <BarChart3 className="h-5 w-5 text-neutral-400" />
-                            Balanço Operacional: Movimentos em Cascata Diários (14 Dias)
+                            Balanço Operacional Dinâmico (Últimos 7 Dias)
                         </h3>
-                        <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400 mt-1">Comparação de médias móveis de 7 dias com janelas deslizantes sobrepostas</p>
+                        <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400 mt-1">Comparação de volumes com média diária ponderada</p>
                     </div>
                     <div className="flex items-center gap-3">
                         {globalLabId === 'all' && labs && (
@@ -261,9 +231,9 @@ export const IntelligenceAnalytics: React.FC<IntelligenceAnalyticsProps> = ({
                 </div>
 
                 <div className="w-full bg-neutral-50/50 rounded-2xl p-6 border border-neutral-100 overflow-hidden">
-                    <GanttMovingAverage title="PRODUÇÃO HVI" data={chartData} dataKey="Volume Produzido (Análise)" windowSize={7} />
-                    <GanttMovingAverage title="RECEBIMENTO (VIA STATUS O.S)" data={chartData} dataKey="Volume Recebido" windowSize={7} />
-                    <GanttMovingAverage title="REVISÃO ANALISTAS" data={chartData} dataKey="Total Revisado (Analistas)" windowSize={7} />
+                    <SimpleWeekAverage title="PRODUÇÃO HVI" data={chartData} dataKey="Volume Produzido (Análise)" />
+                    <SimpleWeekAverage title="RECEBIMENTO (VIA STATUS O.S)" data={chartData} dataKey="Volume Recebido" />
+                    <SimpleWeekAverage title="REVISÃO ANALISTAS" data={chartData} dataKey="Total Revisado (Analistas)" />
                 </div>
             </div>
         </div>

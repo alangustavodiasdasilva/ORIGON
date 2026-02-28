@@ -126,20 +126,18 @@ export const producaoService = {
 
         // 2. Tenta apagar no Supabase como background task sem travar o UI
         if (isSupabaseEnabled()) {
-            (async () => {
-                try {
-                    let query = supabase.from('operacao_producao').delete();
-                    if (labId !== 'all' && labId) {
-                        query = query.eq('lab_id', labId);
-                    } else {
-                        query = query.not('identificador_unico', 'is', null);
-                    }
-                    const { error } = await query;
-                    if (error) console.error("Erro deletando base supabase background", error);
-                } catch (err) {
-                    console.warn("Supabase delete failed background:", err);
+            try {
+                let query = supabase.from('operacao_producao').delete();
+                if (labId !== 'all' && labId) {
+                    query = query.eq('lab_id', labId);
+                } else {
+                    query = query.not('identificador_unico', 'is', null);
                 }
-            })();
+                const { error } = await query;
+                if (error) console.error("Erro deletando base supabase", error);
+            } catch (err) {
+                console.warn("Supabase delete failed:", err);
+            }
         }
 
         return true;

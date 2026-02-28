@@ -88,6 +88,7 @@ export default function Layout() {
         { href: "/lotes", label: t('nav.batches'), icon: Package, public: true },
         { href: "/icac", label: t('nav.icac'), icon: Microscope, public: true },
         { href: "/interlaboratorial", label: t('nav.interlab'), icon: Network, public: true },
+        { href: "/verificacao", label: "Verificação", icon: CheckCircle2, allowedRoles: ['admin_global', 'admin_lab', 'quality_admin'] },
         { href: "/operacao", label: "Operação", icon: Zap, allowedRoles: ['admin_global', 'admin_lab', 'quality_admin'] },
         { href: "/monitoramento-os", label: "Monitoramento O.S.", icon: FileSpreadsheet, allowedRoles: ['admin_global', 'admin_lab', 'quality_admin'] },
         { href: "/quality", label: t('nav.quality'), icon: Award, allowedRoles: ['admin_global', 'admin_lab', 'quality_admin'] },

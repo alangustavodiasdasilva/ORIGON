@@ -54,30 +54,38 @@ const saveStoredStatusOS = (data: StatusOS[]) => {
 export const statusOSService = {
     async uploadData(data: Partial<StatusOS>[], labId: string) {
         const now = new Date().toISOString();
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
         // Formata os dados para o banco
-        const formattedData = data.map(item => ({
-            id: item.id || Math.random().toString(36).substring(2, 9),
-            lab_id: labId,
-            os_numero: item.os_numero || "",
-            romaneio: item.romaneio || "",
-            cliente: item.cliente || "",
-            fazenda: item.fazenda || "",
-            usina: item.usina || "",
-            variedade: item.variedade || "",
-            data_registro: item.data_registro || "",
-            data_recepcao: item.data_recepcao || "",
-            data_acondicionamento: item.data_acondicionamento || "",
-            data_finalizacao: item.data_finalizacao || "",
-            revisor: item.revisor || "",
-            status: item.status || "",
-            total_amostras: item.total_amostras || 0,
-            peso_mala: item.peso_mala || 0,
-            peso_medio: item.peso_medio || 0,
-            horas: item.horas || 0,
-            nota_fiscal: item.nota_fiscal || "",
-            fatura: item.fatura || "",
-            created_at: now
-        }));
+        const formattedData = data.map(item => {
+            let itemId = item.id;
+            if (!itemId || !uuidRegex.test(itemId)) {
+                itemId = crypto.randomUUID();
+            }
+            return {
+                id: itemId,
+                lab_id: labId,
+                os_numero: item.os_numero || "",
+                romaneio: item.romaneio || "",
+                cliente: item.cliente || "",
+                fazenda: item.fazenda || "",
+                usina: item.usina || "",
+                variedade: item.variedade || "",
+                data_registro: item.data_registro || "",
+                data_recepcao: item.data_recepcao || "",
+                data_acondicionamento: item.data_acondicionamento || "",
+                data_finalizacao: item.data_finalizacao || "",
+                revisor: item.revisor || "",
+                status: item.status || "",
+                total_amostras: item.total_amostras || 0,
+                peso_mala: item.peso_mala || 0,
+                peso_medio: item.peso_medio || 0,
+                horas: item.horas || 0,
+                nota_fiscal: item.nota_fiscal || "",
+                fatura: item.fatura || "",
+                created_at: now
+            };
+        });
 
         if (isSupabaseEnabled()) {
             try {
@@ -266,20 +274,18 @@ export const statusOSService = {
         }
 
         if (isSupabaseEnabled()) {
-            (async () => {
-                try {
-                    let query = supabase.from('status_os_hvi').delete();
-                    if (labId !== 'all' && labId) {
-                        query = query.eq('lab_id', labId);
-                    } else {
-                        query = query.not('os_numero', 'is', null);
-                    }
-                    const { error } = await query;
-                    if (error) console.error("Erro deletando supabase statosOS", error);
-                } catch (err) {
-                    console.warn("Supabase clear failed no background:", err);
+            try {
+                let query = supabase.from('status_os_hvi').delete();
+                if (labId !== 'all' && labId) {
+                    query = query.eq('lab_id', labId);
+                } else {
+                    query = query.not('os_numero', 'is', null);
                 }
-            })();
+                const { error } = await query;
+                if (error) console.error("Erro deletando supabase statosOS", error);
+            } catch (err) {
+                console.warn("Supabase clear failed:", err);
+            }
         }
     },
 

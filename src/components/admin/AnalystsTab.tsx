@@ -104,9 +104,20 @@ export default function AnalystsTab() {
         }
 
         try {
+            let senhaAEnviar = senha;
+
+            // Se uma senha foi informada, ela precisa ser hasheada para não quebrar o login
+            if (senha) {
+                const encoder = new TextEncoder();
+                const data = encoder.encode(senha);
+                const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+                const hashArray = Array.from(new Uint8Array(hashBuffer));
+                senhaAEnviar = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+            }
+
             const payload = {
                 nome, email, cargo, acesso, foto,
-                ...(senha ? { senha } : {}),
+                ...(senha ? { senha: senhaAEnviar } : {}),
                 lab_id: labId
             };
 

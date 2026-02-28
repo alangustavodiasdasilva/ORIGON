@@ -690,9 +690,9 @@ export default function MonitoramentoOS() {
 
         const baseEndDate = maxDateStr ? new Date(maxDateStr + 'T12:00:00') : new Date(now);
 
-        // ─── Dados suavizados para o gráfico (Geração de 14 dias contíguos até a data base) ────
+        // ─── Dados suavizados para o gráfico (Geração de 7 dias contíguos até a data base) ────
         const daysMap = new Map();
-        for (let i = 13; i >= 0; i--) {
+        for (let i = 6; i >= 0; i--) {
             const d = new Date(baseEndDate);
             d.setDate(d.getDate() - i);
             const dateKey = format(d, 'yyyy-MM-dd');
@@ -819,6 +819,8 @@ export default function MonitoramentoOS() {
         }
         setIsUploading(true);
         try {
+            await statusOSService.clearData(labId); // Limpa a tabela para substituir pela nova
+
             let totalRecords = 0;
             await parseStatusOSFileInChunks(file, async (batch: StatusOSParsed[]) => {
                 if (batch.length > 0) {

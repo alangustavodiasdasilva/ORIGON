@@ -98,16 +98,20 @@ export default function ProductionTrendChart({ data }: ProductionTrendChartProps
 
     useEffect(() => {
         const loadTarget = async () => {
-            if (!labId) return;
-            const { data: config } = await supabase
-                .from('operacao_producao_config')
-                .select('meta_producao')
-                .eq('lab_id', labId)
-                .maybeSingle();
+            if (!labId || labId === 'all') return;
+            try {
+                const { data: config, error } = await supabase
+                    .from('operacao_producao_config')
+                    .select('meta_producao')
+                    .eq('lab_id', labId)
+                    .maybeSingle();
 
-            if (config?.meta_producao) {
-                setTargetValue(config.meta_producao);
-                setShowTargetLine(true);
+                if (!error && config?.meta_producao) {
+                    setTargetValue(config.meta_producao);
+                    setShowTargetLine(true);
+                }
+            } catch (e) {
+                // Ignore silent errors if table doesn't exist yet
             }
         };
         loadTarget();

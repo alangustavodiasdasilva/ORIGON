@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/contexts/ToastContext";
-import { Upload, BarChart3, Loader2, X, Sun, Moon, Sunset, ArrowRight, Save, Calendar, Copy, FileSpreadsheet, Trash2 } from "lucide-react";
+import { Upload, BarChart3, Loader2, X, Sun, Moon, Sunset, ArrowRight, Save, Calendar, Copy, FileSpreadsheet, Trash2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import Tesseract from 'tesseract.js';
@@ -336,8 +336,10 @@ export default function Operacao() {
         }
         setIsUploading(true);
         try {
+            await producaoService.deleteAll(targetLabId); // Limpa a tabela de produção para substituir
+
             let total = 0; await parseProducaoFileInChunks(file, targetLabId, async (batch: any[]) => { await producaoService.uploadData(batch); total += batch.length; }, 2000);
-            addToast({ title: "Upload concluído", description: `${total} registros.`, type: "success" }); loadStats();
+            addToast({ title: "Upload concluído", description: `${total} registros substituídos.`, type: "success" }); loadStats();
         } catch (error) {
             console.error("Upload producao error:", error);
             addToast({ title: "Erro no processamento", type: "error" });
@@ -389,6 +391,10 @@ export default function Operacao() {
                             {labs.map(l => <option key={l.id} value={l.id}>{l.nome}</option>)}
                         </select>
                     )}
+                    <Button variant="outline" onClick={loadStats} disabled={isLoading} className="text-black border-neutral-200 hover:bg-neutral-50 px-4">
+                        <RefreshCw className={cn("h-4 w-4 mr-2", isLoading && "animate-spin")} />
+                        Sincronizar
+                    </Button>
                     <Button variant="outline" onClick={() => setIsClearConfirmOpen(true)} className="text-red-600 border-red-100 hover:bg-red-50">Limpar Histórico</Button>
                     <div className="relative">
                         <input type="file" accept=".xlsx,.xls" onChange={handleFileUpload} disabled={isUploading} className="absolute inset-0 opacity-0 cursor-pointer z-10" title="Importar Excel" aria-label="Importar Excel" />
