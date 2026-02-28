@@ -25,8 +25,6 @@ export interface StatusOS {
 }
 
 const STORAGE_KEY = 'fibertech_status_os_data';
-const CACHE_TS_KEY = 'fibertech_status_os_ts'; // timestamp da última busca ao Supabase
-const CACHE_TTL_MS = 60_000; // 60 segundos de validade do cache
 
 const isSupabaseEnabled = () => {
     const url = import.meta.env.VITE_SUPABASE_URL;
@@ -56,7 +54,6 @@ export const statusOSService = {
         const now = new Date().toISOString();
         const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-        // Formata os dados para o banco
         const formattedData = data.map(item => {
             let itemId = item.id;
             if (!itemId || !uuidRegex.test(itemId)) {
@@ -89,7 +86,6 @@ export const statusOSService = {
 
         if (isSupabaseEnabled()) {
             try {
-                // Chunking upload (batches of 1000)
                 const BATCH_SIZE = 1000;
                 for (let i = 0; i < formattedData.length; i += BATCH_SIZE) {
                     const chunk = formattedData.slice(i, i + BATCH_SIZE);
@@ -97,164 +93,46 @@ export const statusOSService = {
                         .from('status_os_hvi')
                         .upsert(chunk, { onConflict: 'os_numero,lab_id' });
 
-                    if (error) {
-                        // Fallback to older onConflict if lab_id is not part of it
-                        const { error: fallbackError } = await supabase
-                            .from('status_os_hvi')
-                            .upsert(chunk, { onConflict: 'os_numero' });
-                        if (fallbackError) throw fallbackError;
-                    }
+                    if (error) throw error;
                 }
-
-                // SUCESSO NO SUPABASE: Atualizar o localStorage à imagem do Supabase
-                // para evitar duplicação no próximo merge
-                const local = getStoredStatusOS();
-                const updated = [...local];
-                formattedData.forEach(item => {
-                    const idx = updated.findIndex(u => u.os_numero === item.os_numero && u.lab_id === item.lab_id);
-                    if (idx >= 0) updated[idx] = { ...updated[idx], ...item };
-                    else updated.push(item);
-                });
-                saveStoredStatusOS(updated);
-                return; // Upload para Supabase concluído, não precisa do bloco offline
+                return true;
             } catch (err) {
-                console.warn("Supabase upload failed, falling back primarily to local:", err);
+                console.warn("Supabase upload failed, falling back to local:", err);
             }
         }
 
-        // FALLBACK OFFLINE: salvar apenas no localStorage
         const local = getStoredStatusOS();
         const updated = [...local];
         formattedData.forEach(item => {
-            const idx = updated.findIndex(u => u.os_numero === item.os_numero && u.lab_id === item.lab_id);
+            const idx = updated.findIndex(u => u.os_numero === item.os_numero && (u.lab_id === item.lab_id || labId === 'all'));
             if (idx >= 0) updated[idx] = { ...updated[idx], ...item };
-            else updated.push(item);
+            else updated.push(item as StatusOS);
         });
         saveStoredStatusOS(updated);
+        return false;
     },
 
-    async getAll(labId: string, force = false) {
+    async getAll(labId: string): Promise<StatusOS[]> {
         if (isSupabaseEnabled()) {
-            // ── TTL: se dados foram buscados há menos de 60s, retorna cache local (a menos que seja force) ────────
             try {
-                if (!force) {
-                    const lastFetch = parseInt(localStorage.getItem(CACHE_TS_KEY) || '0', 10);
-                    const isRecent = (Date.now() - lastFetch) < CACHE_TTL_MS;
-                    if (isRecent && getStoredStatusOS().length > 0) {
-                        const local = getStoredStatusOS();
-                        return (labId === 'all' ? local : local.filter(d => d.lab_id === labId)) as StatusOS[];
-                    }
+                let query = supabase.from('status_os_hvi').select('*');
+                if (labId !== 'all') {
+                    query = query.eq('lab_id', labId);
                 }
-            } catch { /* ignora falha de leitura do timestamp */ }
-
-            try {
-                const PAGE_SIZE = 5000; // Supabase suporta até 5000 por request
-
-                // 1. Obtém o total de registros com uma query leve (count only)
-                let countQuery = supabase
-                    .from('status_os_hvi')
-                    .select('*', { count: 'exact', head: true });
-                if (labId !== 'all') countQuery = countQuery.eq('lab_id', labId);
-
-                const { count, error: countError } = await countQuery;
-                if (countError) throw countError;
-
-                const total = count || 0;
-                const totalPages = Math.ceil(total / PAGE_SIZE);
-
-                // 2. Busca todas as páginas EM PARALELO com Promise.all
-                const pageRequests = Array.from({ length: totalPages }, (_, i) => {
-                    let q = supabase
-                        .from('status_os_hvi')
-                        .select('*')
-                        .range(i * PAGE_SIZE, (i + 1) * PAGE_SIZE - 1);
-                    if (labId !== 'all') q = q.eq('lab_id', labId);
-                    return q;
-                });
-
-                const results = await Promise.all(pageRequests);
-
-                let allData: StatusOS[] = [];
-                for (const res of results) {
-                    if (res.error) throw res.error;
-                    if (res.data) allData = allData.concat(res.data);
-                }
-
-                // 3. Merge: Supabase é fonte de verdade.
-                // Adiciona apenas itens offline do localStorage que não existem no Supabase.
-                const local = getStoredStatusOS();
-                const supabaseNums = new Set(allData.map((d: StatusOS) => `${d.os_numero}|${d.lab_id}`));
-                local.forEach(localItem => {
-                    const key = `${localItem.os_numero}|${localItem.lab_id}`;
-                    const belongsToScope = labId === 'all' || localItem.lab_id === labId;
-                    if (!supabaseNums.has(key) && belongsToScope) {
-                        allData.push(localItem);
-                    }
-                });
-
-                // 4. Atualiza localStorage como cache + registra timestamp
-                if (allData.length > 0) {
-                    saveStoredStatusOS(allData.slice(0, 10000)); // Cache dos 10k mais recentes
-                    localStorage.setItem(CACHE_TS_KEY, String(Date.now())); // marca hora da busca
-                }
-
-                return allData as StatusOS[];
+                const { data, error } = await query.order('data_recepcao', { ascending: false });
+                if (error) throw error;
+                return data || [];
             } catch (err) {
-                console.warn("Supabase getAll failed, falling back strictly to local:", err);
+                console.warn("Supabase getAll failed, falling back to local:", err);
             }
         }
-        // Fallback: dados do localStorage
-        const local = getStoredStatusOS();
-        const validLocal = local; // No more 24h cut-off for legacy data here based on user complaint
 
-        return labId === 'all' ? validLocal : validLocal.filter(d => d.lab_id === labId);
+        const local = getStoredStatusOS();
+        return labId === 'all' ? local : local.filter(d => d.lab_id === labId);
     },
 
     async getStats(labId: string) {
-        let allData: Partial<StatusOS>[] = [];
-
-        if (isSupabaseEnabled()) {
-            try {
-                const PAGE_SIZE = 5000;
-                let countQ = supabase
-                    .from('status_os_hvi')
-                    .select('status, data_recepcao, data_finalizacao, total_amostras, created_at, lab_id', { count: 'exact', head: true });
-                if (labId !== 'all') countQ = countQ.eq('lab_id', labId);
-                const { count } = await countQ;
-                const totalPages = Math.ceil((count || 0) / PAGE_SIZE);
-
-                const reqs = Array.from({ length: totalPages }, (_, i) => {
-                    let q = supabase
-                        .from('status_os_hvi')
-                        .select('status, data_recepcao, data_finalizacao, total_amostras, created_at, lab_id')
-                        .range(i * PAGE_SIZE, (i + 1) * PAGE_SIZE - 1);
-                    if (labId !== 'all') q = q.eq('lab_id', labId);
-                    return q;
-                });
-
-                const results = await Promise.all(reqs);
-                for (const res of results) {
-                    if (res.data) allData = allData.concat(res.data);
-                }
-
-            } catch (e) {
-                console.warn("Stats fetch failed", e);
-            }
-
-            // Merge itens offline pendentes
-            const local = getStoredStatusOS();
-            const offlineValid = local.filter(d => (labId === 'all' || d.lab_id === labId));
-            offlineValid.forEach(item => {
-                if (!allData.find(d => d.os_numero === item.os_numero)) {
-                    allData.push(item);
-                }
-            });
-        } else {
-            const local = getStoredStatusOS();
-            allData = local.filter(d => (labId === 'all' || d.lab_id === labId));
-        }
-
-        const data = allData;
+        const data = await this.getAll(labId);
         const total = data.length;
         const faturados = data.filter(d => d.status?.toLowerCase().includes('faturado')).length;
         const emAberto = total - faturados;
@@ -268,11 +146,7 @@ export const statusOSService = {
             localStorage.removeItem(STORAGE_KEY);
         } else {
             const local = getStoredStatusOS().filter(d => d.lab_id !== labId);
-            if (local.length === 0) {
-                localStorage.removeItem(STORAGE_KEY);
-            } else {
-                saveStoredStatusOS(local);
-            }
+            saveStoredStatusOS(local);
         }
 
         if (isSupabaseEnabled()) {
@@ -291,10 +165,6 @@ export const statusOSService = {
         }
     },
 
-    /**
-     * Retorna dados em cache (localStorage) filtrados por labId.
-     * Usado para renderização imediata (stale-while-revalidate).
-     */
     getCached(labId: string): StatusOS[] {
         const local = getStoredStatusOS();
         if (labId === 'all') return local;

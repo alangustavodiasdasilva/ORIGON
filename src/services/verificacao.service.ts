@@ -14,60 +14,67 @@ const isSupabaseEnabled = () => {
 
 export const verificacaoService = {
     async save(labId: string, state: VerificacaoState): Promise<void> {
-        if (!isSupabaseEnabled()) return;
+        // Envia para o Supabase se habilitado
+        if (isSupabaseEnabled()) {
+            try {
+                const { error } = await supabase
+                    .from('verificacao_interna')
+                    .upsert({
+                        lab_id: labId,
+                        date: state.date,
+                        data_json: {
+                            amostras: state.amostras,
+                            analises: state.analises
+                        },
+                        updated_at: new Date().toISOString()
+                    }, {
+                        onConflict: 'lab_id,date'
+                    });
 
-        try {
-            const { error } = await supabase
-                .from('verificacao_interna')
-                .upsert({
-                    lab_id: labId,
-                    date: state.date,
-                    data_json: {
-                        amostras: state.amostras,
-                        analises: state.analises
-                    },
-                    updated_at: new Date().toISOString()
-                }, {
-                    onConflict: 'lab_id,date'
-                });
-
-            if (error) {
-                console.error("Error saving verification to Supabase:", error);
-                throw error;
+                if (error) throw error;
+                return; // Sucesso na nuvem
+            } catch (err) {
+                console.error("Failed to save verification to Supabase:", err);
             }
-        } catch (err) {
-            console.error("Failed to save verification:", err);
-            throw err;
         }
+
+        // Fallback Local (já é tratado no componente, mas mantemos aqui por consistência)
+        const storeKey = `fibertech_verificacao_${labId}`;
+        localStorage.setItem(storeKey, JSON.stringify(state));
     },
 
     async get(labId: string, date: string): Promise<VerificacaoState | null> {
-        if (!isSupabaseEnabled()) return null;
+        if (isSupabaseEnabled()) {
+            try {
+                const { data, error } = await supabase
+                    .from('verificacao_interna')
+                    .select('data_json')
+                    .eq('lab_id', labId)
+                    .eq('date', date)
+                    .maybeSingle();
 
-        try {
-            const { data, error } = await supabase
-                .from('verificacao_interna')
-                .select('data_json')
-                .eq('lab_id', labId)
-                .eq('date', date)
-                .maybeSingle();
+                if (error) throw error;
 
-            if (error) {
-                console.error("Error fetching verification from Supabase:", error);
-                throw error;
+                if (data && data.data_json) {
+                    return {
+                        amostras: data.data_json.amostras || [],
+                        analises: data.data_json.analises || [],
+                        date: date
+                    };
+                }
+            } catch (err) {
+                console.error("Failed to fetch verification from Supabase:", err);
             }
-
-            if (data && data.data_json) {
-                return {
-                    amostras: data.data_json.amostras || [],
-                    analises: data.data_json.analises || [],
-                    date: date
-                };
-            }
-            return null;
-        } catch (err) {
-            console.error("Failed to fetch verification:", err);
-            return null;
         }
+
+        // Fallback Local
+        const storeKey = `fibertech_verificacao_${labId}`;
+        const stored = localStorage.getItem(storeKey);
+        if (stored) {
+            const parsed = JSON.parse(stored);
+            if (parsed.date === date) return parsed;
+        }
+
+        return null;
     }
 };

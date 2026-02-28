@@ -119,79 +119,42 @@ export default function Verificacao() {
         setDataFim("");
     };
 
-    // Load do localStorage e Supabase (Sincronização Online)
-    const loadLocalData = async (forceCloud = false) => {
+    // Load do Supabase com Fallback Local (Padrão Operação)
+    const loadData = async () => {
         if (!labId || labId === 'all') return;
 
+        setIsLoading(true);
         const today = new Date().toDateString();
 
-        // 1. Tenta buscar do Supabase primeiro se for força ou se não houver local
-        if (forceCloud) {
-            try {
-                const cloudState = await verificacaoService.get(labId, today);
-                if (cloudState) {
-                    setAmostras(cloudState.amostras);
-                    setAnalises(cloudState.analises);
-                    if (cloudState.amostras.length > 0) {
-                        setAmostraSelecionada(cloudState.amostras[0].id);
-                    }
-                    // Atualiza local também
-                    const storeKey = `fibertech_verificacao_${labId}`;
-                    localStorage.setItem(storeKey, JSON.stringify({
-                        date: today,
-                        amostras: cloudState.amostras,
-                        analises: cloudState.analises
-                    }));
-                    return;
+        try {
+            const cloudState = await verificacaoService.get(labId, today);
+            if (cloudState) {
+                setAmostras(cloudState.amostras);
+                setAnalises(cloudState.analises);
+                if (cloudState.amostras.length > 0) {
+                    setAmostraSelecionada(cloudState.amostras[0].id);
                 }
-            } catch (e) {
-                console.error("Erro ao sincronizar com nuvem:", e);
+                setIsLoading(false);
+                return;
             }
+        } catch (e) {
+            console.error("Erro ao carregar dados da nuvem:", e);
         }
 
-        // 2. Fallback para localStorage
-        const storeKey = `fibertech_verificacao_${labId}`;
-        const stored = localStorage.getItem(storeKey);
-
-        if (stored) {
-            try {
-                const parsed = JSON.parse(stored);
-                if (parsed.date === today && Array.isArray(parsed.amostras)) {
-                    setAmostras(parsed.amostras);
-                    setAnalises(parsed.analises);
-                    if (parsed.amostras.length > 0) {
-                        setAmostraSelecionada(parsed.amostras[0].id);
-                    }
-                } else {
-                    localStorage.removeItem(storeKey);
-                    setAmostras([]);
-                    setAnalises([]);
-                }
-            } catch (e) {
-                console.error("Erro ao ler verificacao do localStorage:", e);
-                localStorage.removeItem(storeKey);
-                setAmostras([]);
-                setAnalises([]);
-            }
-        } else if (!forceCloud) {
-            // Se não tem local, tenta buscar da nuvem automaticamente no primeiro load
-            loadLocalData(true);
-        } else {
-            setAmostras([]);
-            setAnalises([]);
-        }
+        // Caso não tenha na nuvem ou falhe, as amostras ficam vazias (padrão dia novo)
+        setAmostras([]);
+        setAnalises([]);
+        setIsLoading(false);
     };
 
     useEffect(() => {
-        loadLocalData();
+        loadData();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [labId]);
 
     const handleSync = async () => {
-        setIsLoading(true);
         addToast({ title: "Sincronizando...", description: "Buscando dados na nuvem para " + (currentLab?.nome || "laboratório"), type: "info" });
-        await loadLocalData(true);
-        setIsLoading(false);
+        await loadData();
         addToast({ title: "Sincronizado", description: "Dados atualizados com sucesso.", type: "success" });
     };
 
