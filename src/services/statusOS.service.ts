@@ -127,6 +127,19 @@ export const statusOSService = {
                 }
                 const { data, error } = await query.order('data_recepcao', { ascending: false });
                 if (error) throw error;
+
+                // Sincroniza o cache local com os dados frescos da nuvem
+                if (data && data.length > 0) {
+                    const local = getStoredStatusOS();
+                    // Remove registros antigos deste lab no local e insere os novos da nuvem
+                    const otherLabsData = local.filter(d => d.lab_id !== labId);
+                    saveStoredStatusOS([...otherLabsData, ...data]);
+                } else if (labId !== 'all') {
+                    // Se a nuvem retornou vazio para este lab, limpa o cache local deste lab também
+                    const otherLabsData = getStoredStatusOS().filter(d => d.lab_id !== labId);
+                    saveStoredStatusOS(otherLabsData);
+                }
+
                 return data || [];
             } catch (err) {
                 console.warn("Supabase getAll failed, falling back to local:", err);

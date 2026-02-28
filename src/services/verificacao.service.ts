@@ -32,13 +32,12 @@ export const verificacaoService = {
                     });
 
                 if (error) throw error;
-                return; // Sucesso na nuvem
             } catch (err) {
                 console.error("Failed to save verification to Supabase:", err);
             }
         }
 
-        // Fallback Local (já é tratado no componente, mas mantemos aqui por consistência)
+        // Always update local storage as well for immediate feedback and local persistence
         const storeKey = `fibertech_verificacao_${labId}`;
         localStorage.setItem(storeKey, JSON.stringify(state));
     },
@@ -48,7 +47,7 @@ export const verificacaoService = {
             try {
                 const { data, error } = await supabase
                     .from('verificacao_interna')
-                    .select('data_json')
+                    .select('*')
                     .eq('lab_id', labId)
                     .eq('date', date)
                     .maybeSingle();
@@ -56,23 +55,33 @@ export const verificacaoService = {
                 if (error) throw error;
 
                 if (data && data.data_json) {
-                    return {
+                    const state = {
                         amostras: data.data_json.amostras || [],
                         analises: data.data_json.analises || [],
                         date: date
                     };
+
+                    // Sincroniza o cache local com os dados frescos da nuvem
+                    const storeKey = `fibertech_verificacao_${labId}`;
+                    localStorage.setItem(storeKey, JSON.stringify(state));
+
+                    return state;
                 }
             } catch (err) {
                 console.error("Failed to fetch verification from Supabase:", err);
             }
         }
 
-        // Fallback Local
+        // Fallback Local se a nuvem falhar ou não tiver dados
         const storeKey = `fibertech_verificacao_${labId}`;
         const stored = localStorage.getItem(storeKey);
         if (stored) {
-            const parsed = JSON.parse(stored);
-            if (parsed.date === date) return parsed;
+            try {
+                const parsed = JSON.parse(stored);
+                if (parsed.date === date) return parsed;
+            } catch (e) {
+                console.warn("Error parsing local verification state:", e);
+            }
         }
 
         return null;
