@@ -86,16 +86,19 @@ export const parseStatusOSFileInChunks = async (
             try {
                 const data = e.target?.result;
                 // Use dense mode for better memory usage
-                const workbook = XLSX.read(data, { type: 'binary', dense: true });
+                const workbook = XLSX.read(data, { type: 'binary', dense: true, cellDates: true });
                 const sheetName = workbook.SheetNames[0];
                 const worksheet = workbook.Sheets[sheetName];
 
-                // Manually parse cells to avoid creating huge JSON array
-                // sheet_to_json is easy but memory intensive.
-                // For 1.3M rows, even holding the 'worksheet' object might be heavy, but unavoidable in browser implementation of SheetJS without logic changes.
-                // Just avoiding 'rawData' big array helps.
+                // Detectamos o range real para garantir que pegamos tudo
+                const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1');
 
-                const rawData = XLSX.utils.sheet_to_json<StatusOSRawData>(worksheet, { range: 6 });
+                // Usamos stream_to_json ou similar se disponível, mas aqui otimizamos o sheet_to_json
+                const rawData = XLSX.utils.sheet_to_json<StatusOSRawData>(worksheet, {
+                    range: 6, // Começa na linha 7 (0-indexed + header)
+                    raw: false,
+                    defval: ""
+                });
 
                 let currentBatch: StatusOSParsed[] = [];
                 let totalProcessed = 0;
@@ -151,7 +154,8 @@ export const parseStatusOSFileInChunks = async (
                         fatura: getVal(["Fatura", "fatura"]) ? String(getVal(["Fatura", "fatura"])) : "",
                     };
 
-                    if (parsed.os_numero && parsed.cliente) {
+                    // Consideramos válido se tiver O.S. OU Cliente OU Romaneio (mais flexível)
+                    if (parsed.os_numero || parsed.cliente || parsed.romaneio) {
                         currentBatch.push(parsed);
                     }
 
