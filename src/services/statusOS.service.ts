@@ -121,26 +121,46 @@ export const statusOSService = {
     async getAll(labId: string): Promise<StatusOS[]> {
         if (isSupabaseEnabled()) {
             try {
-                let query = supabase.from('status_os_hvi').select('*');
-                if (labId && labId !== 'all') {
-                    query = query.eq('lab_id', labId);
+                let allData: StatusOS[] = [];
+                let from = 0;
+                const limit = 1000;
+                let hasMore = true;
+
+                while (hasMore) {
+                    let query = supabase.from('status_os_hvi').select('*');
+                    if (labId && labId !== 'all') {
+                        query = query.eq('lab_id', labId);
+                    }
+
+                    const { data, error } = await query
+                        .order('data_recepcao', { ascending: false })
+                        .range(from, from + limit - 1);
+
+                    if (error) throw error;
+
+                    if (data && data.length > 0) {
+                        allData = [...allData, ...data];
+                        if (data.length < limit) {
+                            hasMore = false;
+                        } else {
+                            from += limit;
+                        }
+                    } else {
+                        hasMore = false;
+                    }
                 }
-                const { data, error } = await query.order('data_recepcao', { ascending: false });
-                if (error) throw error;
 
                 // Sincroniza o cache local com os dados frescos da nuvem
-                if (data && data.length > 0) {
+                if (allData.length > 0) {
                     const local = getStoredStatusOS();
-                    // Remove registros antigos deste lab no local e insere os novos da nuvem
                     const otherLabsData = local.filter(d => d.lab_id !== labId);
-                    saveStoredStatusOS([...otherLabsData, ...data]);
+                    saveStoredStatusOS([...otherLabsData, ...allData]);
                 } else if (labId !== 'all') {
-                    // Se a nuvem retornou vazio para este lab, limpa o cache local deste lab também
                     const otherLabsData = getStoredStatusOS().filter(d => d.lab_id !== labId);
                     saveStoredStatusOS(otherLabsData);
                 }
 
-                return data || [];
+                return allData;
             } catch (err) {
                 console.warn("Supabase getAll failed, falling back to local:", err);
             }
