@@ -104,15 +104,42 @@ export const parseStatusOSFileInChunks = async (
                 let totalProcessed = 0;
 
                 for (const row of rawData) {
-                    const getVal = (keys: string[]) => {
-                        for (const key of keys) {
-                            if (row[key as keyof StatusOSRawData] !== undefined) return row[key as keyof StatusOSRawData];
+                    const getVal = (possibleKeys: string[]) => {
+                        const rowKeys = Object.keys(row);
+                        for (const pk of possibleKeys) {
+                            const match = rowKeys.find(k => k.trim().toLowerCase() === pk.trim().toLowerCase());
+                            if (match && row[match as keyof StatusOSRawData] !== undefined) return row[match as keyof StatusOSRawData];
                         }
                         return undefined;
                     };
 
-                    const tomadorVal = String(getVal(["Tomador", "tomador"]) || "").trim();
-                    const clienteVal = String(getVal(["Cliente", "cliente"]) || "").trim();
+                    const parseExcelDate = (val: any): Date | null => {
+                        if (!val) return null;
+                        if (val instanceof Date) return val;
+                        if (typeof val === 'number') return excelDateToJSDate(val);
+                        if (typeof val === 'string') {
+                            const d = new Date(val);
+                            if (!isNaN(d.getTime())) return d;
+                            // Tenta formato DD/MM/YYYY
+                            const parts = val.split(/[/-]/);
+                            if (parts.length === 3) {
+                                if (parts[2].length === 4) return new Date(Number(parts[2]), Number(parts[1]) - 1, Number(parts[0]));
+                                if (parts[0].length === 4) return new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+                            }
+                        }
+                        return null;
+                    };
+
+                    const parseNum = (val: any): number => {
+                        if (typeof val === 'number') return val;
+                        if (!val) return 0;
+                        const str = String(val).replace(/\./g, '').replace(',', '.').trim();
+                        const n = parseFloat(str);
+                        return isNaN(n) ? 0 : n;
+                    };
+
+                    const tomadorVal = String(getVal(["Tomador", "Contratante", "tomador"]) || "").trim();
+                    const clienteVal = String(getVal(["Cliente", "Beneficiário", "cliente"]) || "").trim();
                     let finalCliente = clienteVal;
                     if (tomadorVal && clienteVal && tomadorVal !== clienteVal) {
                         finalCliente = `${tomadorVal}|||${clienteVal}`;
@@ -120,41 +147,31 @@ export const parseStatusOSFileInChunks = async (
                         finalCliente = tomadorVal;
                     }
 
-                    const rawRegistrado = getVal(["Registrado", "Registro", "registrado"]);
-                    const rawRecepcao = getVal(["Recepção", "Recepcao", "recepção", "recepcao"]);
-                    const rawAcondicionado = getVal(["Acondicionado", "acondicionado"]);
-                    const rawFinalizado = getVal(["Finalizado", "finalizado"]);
-                    const rawAmostras = getVal(["Amostras", "amostras", "Total Amostras"]);
-                    const rawPesoMala = getVal(["Peso  Mala", "Peso Mala", "peso mala"]);
-                    const rawPesoMedio = getVal(["Peso Médio Amostra", "Peso Medio Amostra", "Peso Médio", "Peso Medio"]);
-                    const rawHoras = getVal(["Horas", "horas"]);
-
                     const parsed: StatusOSParsed = {
-                        os_numero: String(getVal(["O.S.", "OS", "o.s."]) || ""),
-                        romaneio: String(getVal(["Romaneio", "romaneio"]) || ""),
+                        os_numero: String(getVal(["O.S.", "OS", "Ordem de Serviço", "os"]) || ""),
+                        romaneio: String(getVal(["Romaneio", "Rom", "romaneio"]) || ""),
                         cliente: finalCliente,
-                        fazenda: String(getVal(["Fazenda", "fazenda"]) || ""),
-                        usina: String(getVal(["Usina", "usina"]) || ""),
-                        variedade: String(getVal(["Variedade", "variedade"]) || ""),
+                        fazenda: String(getVal(["Fazenda", "Faz", "fazenda"]) || ""),
+                        usina: String(getVal(["Usina", "unidade", "usina"]) || ""),
+                        variedade: String(getVal(["Variedade", "Var", "variedade"]) || ""),
 
-                        data_registro: excelDateToJSDate(Number(rawRegistrado)),
-                        data_recepcao: excelDateToJSDate(Number(rawRecepcao)),
-                        data_acondicionamento: excelDateToJSDate(Number(rawAcondicionado)),
-                        data_finalizacao: excelDateToJSDate(Number(rawFinalizado)),
+                        data_registro: parseExcelDate(getVal(["Registrado", "Data Registro", "Registro", "registrado"])),
+                        data_recepcao: parseExcelDate(getVal(["Recepção", "Data Recepção", "Recepcao", "recepcao"])),
+                        data_acondicionamento: parseExcelDate(getVal(["Acondicionado", "Data Acondicionamento", "acondicionado"])),
+                        data_finalizacao: parseExcelDate(getVal(["Finalizado", "Data Finalização", "Finalização", "finalizado"])),
 
-                        revisor: String(getVal(["Revisor", "revisor"]) || ""),
-                        status: String(getVal(["Status", "status"]) || ""),
+                        revisor: String(getVal(["Revisor", "Analista", "revisor"]) || ""),
+                        status: String(getVal(["Status", "Situação", "status"]) || ""),
 
-                        total_amostras: Number(rawAmostras || 0),
-                        peso_mala: Number(rawPesoMala || 0),
-                        peso_medio: Number(rawPesoMedio || 0),
-                        horas: Number(rawHoras || 0),
+                        total_amostras: parseNum(getVal(["Amostras", "Qtde", "Quantidade", "Total Amostras", "amostras"])),
+                        peso_mala: parseNum(getVal(["Peso Mala", "Peso  Mala", "peso_mala"])),
+                        peso_medio: parseNum(getVal(["Peso Médio Amostra", "Peso Médio", "Peso Medio", "peso_medio"])),
+                        horas: parseNum(getVal(["Horas", "Duração", "horas"])),
 
-                        nota_fiscal: getVal(["Nota Fiscal", "nota fiscal"]) ? String(getVal(["Nota Fiscal", "nota fiscal"])) : "",
-                        fatura: getVal(["Fatura", "fatura"]) ? String(getVal(["Fatura", "fatura"])) : "",
+                        nota_fiscal: String(getVal(["Nota Fiscal", "NF", "nota_fiscal"]) || ""),
+                        fatura: String(getVal(["Fatura", "Fat", "fatura"]) || ""),
                     };
 
-                    // Consideramos válido se tiver O.S. OU Cliente OU Romaneio (mais flexível)
                     if (parsed.os_numero || parsed.cliente || parsed.romaneio) {
                         currentBatch.push(parsed);
                     }
