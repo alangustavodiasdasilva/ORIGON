@@ -91,7 +91,7 @@ export const parseStatusOSFileInChunks = async (
                 const worksheet = workbook.Sheets[sheetName];
 
                 // Detectamos o range real para garantir que pegamos tudo
-                const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1');
+                XLSX.utils.decode_range(worksheet['!ref'] || 'A1');
 
                 // Usamos stream_to_json ou similar se disponível, mas aqui otimizamos o sheet_to_json
                 const rawData = XLSX.utils.sheet_to_json<StatusOSRawData>(worksheet, {
