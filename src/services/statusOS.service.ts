@@ -133,15 +133,17 @@ export const statusOSService = {
         saveStoredStatusOS(updated);
     },
 
-    async getAll(labId: string) {
+    async getAll(labId: string, force = false) {
         if (isSupabaseEnabled()) {
-            // ── TTL: se dados foram buscados há menos de 60s, retorna cache local ────────
+            // ── TTL: se dados foram buscados há menos de 60s, retorna cache local (a menos que seja force) ────────
             try {
-                const lastFetch = parseInt(localStorage.getItem(CACHE_TS_KEY) || '0', 10);
-                const isRecent = (Date.now() - lastFetch) < CACHE_TTL_MS;
-                if (isRecent && getStoredStatusOS().length > 0) {
-                    const local = getStoredStatusOS();
-                    return (labId === 'all' ? local : local.filter(d => d.lab_id === labId)) as StatusOS[];
+                if (!force) {
+                    const lastFetch = parseInt(localStorage.getItem(CACHE_TS_KEY) || '0', 10);
+                    const isRecent = (Date.now() - lastFetch) < CACHE_TTL_MS;
+                    if (isRecent && getStoredStatusOS().length > 0) {
+                        const local = getStoredStatusOS();
+                        return (labId === 'all' ? local : local.filter(d => d.lab_id === labId)) as StatusOS[];
+                    }
                 }
             } catch { /* ignora falha de leitura do timestamp */ }
 

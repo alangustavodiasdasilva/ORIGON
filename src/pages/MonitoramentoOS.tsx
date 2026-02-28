@@ -105,7 +105,7 @@ export default function MonitoramentoOS() {
             console.log("REALTIME ACTIVITY DETECTED:", payload);
             clearTimeout(debounceTimer);
             debounceTimer = setTimeout(() => {
-                loadData();
+                loadData(true);
             }, 5000); // 5s debounce — evita queries em rajada durante atualizações em massa
         };
 
@@ -774,7 +774,7 @@ export default function MonitoramentoOS() {
         return mappedData;
     }, []);
 
-    const loadData = useCallback(async () => {
+    const loadData = useCallback(async (force = false) => {
         if (!labId) return;
 
         // ── STALE-WHILE-REVALIDATE ──────────────────────────────────────────
@@ -788,7 +788,7 @@ export default function MonitoramentoOS() {
         // 2. Busca dados frescos do Supabase em background
         setIsLoading(true);
         try {
-            const rawData = (await statusOSService.getAll(labId)) as OSItem[];
+            const rawData = (await statusOSService.getAll(labId, force)) as OSItem[];
             processOSData(rawData);
 
             try {
@@ -958,7 +958,7 @@ export default function MonitoramentoOS() {
                         <Button
                             variant="ghost"
                             size="sm"
-                            onClick={loadData}
+                            onClick={() => loadData(true)}
                             disabled={isLoading}
                             className="h-9 px-4 text-[10px] font-black uppercase tracking-widest hover:bg-white hover:shadow-sm transition-all"
                         >
