@@ -14,8 +14,8 @@ const isSupabaseEnabled = () => {
 
 export const verificacaoService = {
     async save(labId: string, state: VerificacaoState): Promise<void> {
-        // Envia para o Supabase se habilitado
-        if (isSupabaseEnabled()) {
+        // Envia para o Supabase se habilitado e labId for válido (UUID)
+        if (isSupabaseEnabled() && labId && labId !== 'all') {
             try {
                 const { error } = await supabase
                     .from('verificacao_interna')
@@ -44,7 +44,7 @@ export const verificacaoService = {
     },
 
     async get(labId: string, date: string): Promise<VerificacaoState | null> {
-        if (isSupabaseEnabled()) {
+        if (isSupabaseEnabled() && labId && labId !== 'all') {
             try {
                 const { data, error } = await supabase
                     .from('verificacao_interna')

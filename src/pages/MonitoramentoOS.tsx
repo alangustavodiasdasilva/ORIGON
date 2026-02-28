@@ -812,8 +812,12 @@ export default function MonitoramentoOS() {
     const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
         if (!file) return;
-        if (!labId) {
-            addToast({ title: "Laboratório Inválido", description: "Selecione um laboratório antes de importar a planilha.", type: "error" });
+        if (!labId || labId === 'all') {
+            addToast({
+                title: "Laboratório Inválido",
+                description: "Por favor, selecione um laboratório específico (não use 'GERAL') antes de importar a planilha.",
+                type: "warning"
+            });
             event.target.value = "";
             return;
         }

@@ -53,6 +53,12 @@ export const statusOSService = {
     async uploadData(data: Partial<StatusOS>[], labId: string) {
         const now = new Date().toISOString();
         const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        // Formata os dados para o banco
+        // Se labId for 'all', não permite upload pois requer um UUID real
+        if (!labId || labId === 'all') {
+            console.error("Tentativa de upload de Status OS com labId inválido:", labId);
+            return false;
+        }
 
         const formattedData = data.map(item => {
             let itemId = item.id;
@@ -116,7 +122,7 @@ export const statusOSService = {
         if (isSupabaseEnabled()) {
             try {
                 let query = supabase.from('status_os_hvi').select('*');
-                if (labId !== 'all') {
+                if (labId && labId !== 'all') {
                     query = query.eq('lab_id', labId);
                 }
                 const { data, error } = await query.order('data_recepcao', { ascending: false });

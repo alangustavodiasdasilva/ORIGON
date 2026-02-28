@@ -159,9 +159,18 @@ export default function Verificacao() {
     };
 
     // Função Real para Ler o Excel importado pelo usuário
-    const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
         if (!file) return;
+
+        if (!labId || labId === 'all') {
+            addToast({
+                title: "Laboratório Requerido",
+                description: "Por favor, selecione um laboratório específico antes de importar dados.",
+                type: "warning"
+            });
+            return;
+        }
 
         setIsLoading(true);
 
