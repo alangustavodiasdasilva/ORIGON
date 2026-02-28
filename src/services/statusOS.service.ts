@@ -43,9 +43,11 @@ const getStoredStatusOS = (): StatusOS[] => {
 
 const saveStoredStatusOS = (data: StatusOS[]) => {
     try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(data.slice(-5000))); // Keep last 5000
+        // Removemos o limite de .slice(-5000) para permitir grandes volumes (50k+)
+        // O limite agora será apenas o espaço físico do navegador (aprox 5MB-10MB)
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
     } catch (e) {
-        console.warn("Storage full, could not save all StatusOS data:", e);
+        console.warn("Storage local cheio ou erro ao salvar. Os dados serão mantidos apenas na nuvem:", e);
     }
 };
 
