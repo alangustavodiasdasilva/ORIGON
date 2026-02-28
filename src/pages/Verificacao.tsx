@@ -17,6 +17,7 @@ import * as xlsx from "xlsx";
 import { useToast } from "@/contexts/ToastContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { LabService } from "@/entities/Lab";
+import { verificacaoService } from "@/services/verificacao.service";
 import {
     LineChart,
     Line,
@@ -118,18 +119,43 @@ export default function Verificacao() {
         setDataFim("");
     };
 
-    // Load do localStorage (Separação por Laboratório + Limpeza meia-noite)
-    const loadLocalData = () => {
+    // Load do localStorage e Supabase (Sincronização Online)
+    const loadLocalData = async (forceCloud = false) => {
         if (!labId || labId === 'all') return;
 
+        const today = new Date().toDateString();
+
+        // 1. Tenta buscar do Supabase primeiro se for força ou se não houver local
+        if (forceCloud) {
+            try {
+                const cloudState = await verificacaoService.get(labId, today);
+                if (cloudState) {
+                    setAmostras(cloudState.amostras);
+                    setAnalises(cloudState.analises);
+                    if (cloudState.amostras.length > 0) {
+                        setAmostraSelecionada(cloudState.amostras[0].id);
+                    }
+                    // Atualiza local também
+                    const storeKey = `fibertech_verificacao_${labId}`;
+                    localStorage.setItem(storeKey, JSON.stringify({
+                        date: today,
+                        amostras: cloudState.amostras,
+                        analises: cloudState.analises
+                    }));
+                    return;
+                }
+            } catch (e) {
+                console.error("Erro ao sincronizar com nuvem:", e);
+            }
+        }
+
+        // 2. Fallback para localStorage
         const storeKey = `fibertech_verificacao_${labId}`;
         const stored = localStorage.getItem(storeKey);
 
         if (stored) {
             try {
                 const parsed = JSON.parse(stored);
-                // Valida a data, a chave se expira e se limpa no próximo dia (meia-noite)
-                const today = new Date().toDateString();
                 if (parsed.date === today && Array.isArray(parsed.amostras)) {
                     setAmostras(parsed.amostras);
                     setAnalises(parsed.analises);
@@ -137,7 +163,6 @@ export default function Verificacao() {
                         setAmostraSelecionada(parsed.amostras[0].id);
                     }
                 } else {
-                    // É de um dia anterior, limpa
                     localStorage.removeItem(storeKey);
                     setAmostras([]);
                     setAnalises([]);
@@ -148,6 +173,9 @@ export default function Verificacao() {
                 setAmostras([]);
                 setAnalises([]);
             }
+        } else if (!forceCloud) {
+            // Se não tem local, tenta buscar da nuvem automaticamente no primeiro load
+            loadLocalData(true);
         } else {
             setAmostras([]);
             setAnalises([]);
@@ -159,13 +187,12 @@ export default function Verificacao() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [labId]);
 
-    const handleSync = () => {
+    const handleSync = async () => {
         setIsLoading(true);
-        setTimeout(() => {
-            loadLocalData();
-            setIsLoading(false);
-            addToast({ title: "Sincronizado", description: "Dados atualizados com sucesso.", type: "success" });
-        }, 500);
+        addToast({ title: "Sincronizando...", description: "Buscando dados na nuvem para " + (currentLab?.nome || "laboratório"), type: "info" });
+        await loadLocalData(true);
+        setIsLoading(false);
+        addToast({ title: "Sincronizado", description: "Dados atualizados com sucesso.", type: "success" });
     };
 
     // Função Real para Ler o Excel importado pelo usuário
@@ -341,11 +368,23 @@ export default function Verificacao() {
                     if (labId && labId !== 'all') {
                         const today = new Date().toDateString();
                         const storeKey = `fibertech_verificacao_${labId}`;
-                        localStorage.setItem(storeKey, JSON.stringify({
+                        const state = {
                             date: today,
                             amostras: parsedAmostras,
                             analises: parsedAnalises
-                        }));
+                        };
+
+                        localStorage.setItem(storeKey, JSON.stringify(state));
+
+                        // Envia para o Supabase (Nuvem)
+                        verificacaoService.save(labId, state).catch(err => {
+                            console.error("Erro ao salvar no Supabase:", err);
+                            addToast({
+                                title: "Alerta de Sincronização",
+                                description: "Dados salvos localmente, mas não puderam ser enviados para a nuvem. Verifique o banco de dados.",
+                                type: "warning"
+                            });
+                        });
                     }
 
                     addToast({ title: "Arquivo Carregado", description: `Encontradas ${parsedAmostras.length} amostras e ${parsedAnalises.length} análises no arquivo.`, type: "success" });
