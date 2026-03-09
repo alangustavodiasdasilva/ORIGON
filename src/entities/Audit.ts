@@ -17,8 +17,13 @@ export interface AuditDocument {
     uploadDate: string;
     category: string;
     analystName: string;
-    status: 'pending' | 'verified';
+    status: 'pending' | 'verified' | 'completed';
     labId?: string;
+    // Novos campos para formato de "Tarefa/Afazer"
+    isTask?: boolean;
+    deadline?: string;
+    assignedTo?: string;
+    observation?: string;
 }
 
 const DOCS_KEY = 'fibertech_audit_docs';
@@ -142,7 +147,11 @@ export const AuditService = {
                             analystName: d.analystName || d.analystname || d.analyst_name || 'Desconhecido',
                             status: d.status || 'verified',
                             labId: d.labId || d.labid || d.lab_id,
-                            data: d.data
+                            data: d.data,
+                            isTask: d.isTask || d.istask || d.is_task || false,
+                            deadline: d.deadline,
+                            assignedTo: d.assignedTo || d.assignedto || d.assigned_to,
+                            observation: d.observation
                         };
                     } catch (err) {
                         console.error("Mapping error for doc:", d, err);
@@ -262,13 +271,14 @@ export const AuditService = {
             }
 
             // Define possible schemas to retry automatically
-            const strategies = [
+            const strategies: Array<{ name: string, map: Record<string, string> }> = [
                 {
                     name: 'lowercase',
                     map: {
                         name: 'name', fileName: 'filename', fileSize: 'filesize', fileType: 'filetype',
                         category: 'category', analystName: 'analystname', labId: 'labid',
-                        status: 'status', data: 'data', uploadDate: 'uploaddate'
+                        status: 'status', data: 'data', uploadDate: 'uploaddate',
+                        isTask: 'istask', deadline: 'deadline', assignedTo: 'assignedto', observation: 'observation'
                     }
                 },
                 {
@@ -276,7 +286,8 @@ export const AuditService = {
                     map: {
                         name: 'name', fileName: 'file_name', fileSize: 'file_size', fileType: 'file_type',
                         category: 'category', analystName: 'analyst_name', labId: 'lab_id',
-                        status: 'status', data: 'data', uploadDate: 'created_at'
+                        status: 'status', data: 'data', uploadDate: 'created_at',
+                        isTask: 'is_task', deadline: 'deadline', assignedTo: 'assigned_to', observation: 'observation'
                     }
                 },
                 {
@@ -284,7 +295,8 @@ export const AuditService = {
                     map: {
                         name: 'name', fileName: 'fileName', fileSize: 'fileSize', fileType: 'fileType',
                         category: 'category', analystName: 'analystName', labId: 'labId',
-                        status: 'status', data: 'data', uploadDate: 'uploadDate'
+                        status: 'status', data: 'data', uploadDate: 'uploadDate',
+                        isTask: 'isTask', deadline: 'deadline', assignedTo: 'assignedTo', observation: 'observation'
                     }
                 }
             ];
@@ -305,6 +317,11 @@ export const AuditService = {
                     payload[strategy.map.status] = 'verified';
                     payload[strategy.map.data] = finalData;
                     payload[strategy.map.uploadDate] = new Date().toISOString();
+
+                    if (doc.isTask !== undefined) payload[strategy.map.isTask] = doc.isTask;
+                    if (doc.deadline) payload[strategy.map.deadline] = doc.deadline;
+                    if (doc.assignedTo) payload[strategy.map.assignedTo] = doc.assignedTo;
+                    if (doc.observation) payload[strategy.map.observation] = doc.observation;
 
                     Object.keys(payload).forEach(key => payload[key] === undefined && delete payload[key]);
 
@@ -337,7 +354,11 @@ export const AuditService = {
                         analystName: d.analystName || d.analystname || d.analyst_name,
                         status: d.status,
                         labId: d.labId || d.labid || d.lab_id,
-                        data: d.data
+                        data: d.data,
+                        isTask: d.isTask || d.istask || d.is_task,
+                        deadline: d.deadline,
+                        assignedTo: d.assignedTo || d.assignedto || d.assigned_to,
+                        observation: d.observation
                     };
 
                 } catch (err: any) {

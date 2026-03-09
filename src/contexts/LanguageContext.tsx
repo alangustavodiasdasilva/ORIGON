@@ -10,7 +10,7 @@ const translations = {
             batches: "Batches",
             icac: "ICAC Generator",
             interlab: "Interlaboratory",
-            quality: "QualityControl",
+            quality: "Checklist",
             config: "Settings"
         },
         status: {
@@ -149,7 +149,7 @@ const translations = {
             batches: "Lotes",
             icac: "Gerador ICAC",
             interlab: "Interlaboratorial",
-            quality: "Qualidade",
+            quality: "Checklist",
             config: "Configurações"
         },
         status: {

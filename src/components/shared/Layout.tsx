@@ -6,10 +6,9 @@ import {
     LogOut,
     Microscope,
     Network,
-    CheckCircle2,
+    CheckCircle2, CheckSquare,
     AlertCircle,
     Info,
-    Award,
     Package,
     Download,
     Upload,
@@ -91,7 +90,7 @@ export default function Layout() {
         { href: "/verificacao", label: "Verificação", icon: CheckCircle2, allowedRoles: ['admin_global', 'admin_lab', 'quality_admin'] },
         { href: "/operacao", label: "Operação", icon: Zap, allowedRoles: ['admin_global', 'admin_lab', 'quality_admin'] },
         { href: "/monitoramento-os", label: "Monitoramento O.S.", icon: FileSpreadsheet, allowedRoles: ['admin_global', 'admin_lab', 'quality_admin'] },
-        { href: "/quality", label: t('nav.quality'), icon: Award, allowedRoles: ['admin_global', 'admin_lab', 'quality_admin'] },
+        { href: "/quality", label: t('nav.quality'), icon: CheckSquare, allowedRoles: ['admin_global', 'admin_lab', 'quality_admin'] },
         { href: "/admin", label: t('nav.config'), icon: ShieldCheck, allowedRoles: ['admin_global', 'admin_lab'] },
     ];
 

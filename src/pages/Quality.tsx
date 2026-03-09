@@ -510,47 +510,110 @@ export default function Quality() {
                     <div className="space-y-8 animate-fade-in-up">
                         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                             {categoryDocs.map((doc) => (
-                                <div key={doc.id} className="group/card flex flex-col border border-neutral-200 bg-white hover:border-black transition-all h-full animate-fade-in">
-                                    <div className="aspect-[4/3] bg-neutral-50 border-b border-neutral-100 relative overflow-hidden flex items-center justify-center group-hover/card:bg-white transition-colors">
+                                <div key={doc.id} className={cn("group/card flex flex-col border transition-all h-full animate-fade-in relative", doc.status === 'completed' ? "border-emerald-500 bg-emerald-50/20" : "border-neutral-200 bg-white hover:border-black")}>
+
+                                    {/* Task Checkbox Overlay */}
+                                    {doc.isTask && (
+                                        <div className="absolute top-4 left-4 z-10 bg-white shadow-sm border border-neutral-200">
+                                            <button
+                                                onClick={async () => {
+                                                    try {
+                                                        const supabaseClient = (await import('@/lib/supabase')).supabase;
+                                                        const { error } = await supabaseClient
+                                                            .from('auditoria_documentos')
+                                                            .update({ status: doc.status === 'completed' ? 'verified' : 'completed' })
+                                                            .eq('id', doc.id);
+
+                                                        if (error) throw error;
+                                                        loadInitialData();
+                                                        addToast({ title: doc.status === 'completed' ? 'Marcada como Pendente' : 'Marcada como Concluída', type: 'success' });
+                                                    } catch (e) {
+                                                        addToast({ title: 'Erro de status', type: 'error' });
+                                                    }
+                                                }}
+                                                className={cn("h-8 w-8 flex items-center justify-center transition-colors", doc.status === 'completed' ? "bg-emerald-500 text-white" : "hover:bg-neutral-100 text-neutral-300")}
+                                            >
+                                                <CheckSquare className="h-5 w-5" />
+                                            </button>
+                                        </div>
+                                    )}
+
+                                    <div className={cn("aspect-[4/3] bg-neutral-50 border-b border-neutral-100 relative overflow-hidden flex items-center justify-center transition-colors", doc.status === 'completed' ? "" : "group-hover/card:bg-white")}>
                                         {doc.fileType.startsWith('image/') ? (
                                             <img src={doc.data} alt={doc.fileName} className="w-full h-full object-cover opacity-80 group-hover/card:opacity-100 transition-opacity" />
+                                        ) : doc.isTask ? (
+                                            <div className="flex flex-col items-center gap-2 p-6 text-center w-full">
+                                                <div className={cn("p-4 rounded-full mb-2", doc.status === 'completed' ? "bg-emerald-100 text-emerald-600" : "bg-neutral-100 text-black")}>
+                                                    <CheckSquare className="h-8 w-8" />
+                                                </div>
+                                                <span className="text-sm font-bold truncate w-full px-2" title={doc.name}>{doc.name}</span>
+                                                {doc.observation && (
+                                                    <span className="text-[10px] text-neutral-500 uppercase line-clamp-2 mt-1 px-4">{doc.observation}</span>
+                                                )}
+                                            </div>
                                         ) : (
                                             <div className="flex flex-col items-center gap-2">
                                                 <FileText className="h-10 w-10 text-neutral-300" />
                                                 <span className="text-[9px] font-mono text-neutral-400 uppercase">{doc.fileType.split('/')[1] || 'FILE'}</span>
                                             </div>
                                         )}
-                                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/card:opacity-100 transition-opacity flex items-center justify-center">
-                                            <button onClick={() => handlePreview(doc)} className="h-10 w-10 bg-white flex items-center justify-center hover:bg-neutral-100 transition-colors">
-                                                <Eye className="h-5 w-5 text-black" />
-                                            </button>
-                                        </div>
+                                        {!doc.isTask && (
+                                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/card:opacity-100 transition-opacity flex items-center justify-center">
+                                                <button onClick={() => handlePreview(doc)} className="h-10 w-10 bg-white flex items-center justify-center hover:bg-neutral-100 transition-colors">
+                                                    <Eye className="h-5 w-5 text-black" />
+                                                </button>
+                                            </div>
+                                        )}
                                     </div>
                                     <div className="p-4 flex-1 flex flex-col justify-between">
                                         <div className="space-y-1 mb-4">
-                                            <p className="text-xs font-bold uppercase tracking-wider truncate mb-1">{doc.fileName}</p>
+                                            {doc.isTask ? (
+                                                <p className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-1">DETALHES DA TAREFA</p>
+                                            ) : (
+                                                <p className="text-xs font-bold uppercase tracking-wider truncate mb-1">{doc.fileName}</p>
+                                            )}
+
                                             <div className="flex items-center justify-between">
-                                                <span className="text-[9px] text-neutral-400 font-mono">{(doc.fileSize / 1024).toFixed(1)} KB</span>
+                                                {doc.isTask ? (
+                                                    <div className="flex gap-2">
+                                                        <span className="text-[9px] font-mono font-bold uppercase text-red-500 border border-red-200 px-1 py-0.5 rounded">Prazo: {doc.deadline ? new Date(doc.deadline).toLocaleDateString() : 'S/P'}</span>
+                                                        {doc.assignedTo && (
+                                                            <span className="text-[9px] font-mono font-bold uppercase text-neutral-500 border border-neutral-200 bg-neutral-100 px-1 py-0.5 rounded">Para: {doc.assignedTo}</span>
+                                                        )}
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-[9px] text-neutral-400 font-mono">{(doc.fileSize / 1024).toFixed(1)} KB</span>
+                                                )}
                                                 <span className="text-[9px] text-neutral-400 font-mono italic">{new Date(doc.uploadDate).toLocaleDateString()}</span>
                                             </div>
                                             {/* Lab/City Info Badge */}
                                             {doc.labId && (() => {
                                                 const labInfo = getLabInfo(doc.labId);
                                                 return labInfo ? (
-                                                    <div className="mt-2 pt-2 border-t border-neutral-100">
-                                                        <span className="text-[8px] font-mono font-bold text-black uppercase tracking-widest bg-neutral-100 px-2 py-1 rounded-sm inline-block">
+                                                    <div className="mt-2 pt-2 border-t border-neutral-100 flex flex-col gap-1">
+                                                        <span className="text-[8px] font-mono font-bold text-black uppercase tracking-widest bg-neutral-100 px-2 py-1 rounded-sm inline-block self-start">
                                                             📍 {labInfo.name} - {labInfo.city}
+                                                        </span>
+                                                        <span className="text-[8px] font-mono font-bold text-neutral-500 uppercase tracking-widest">
+                                                            Por: {doc.analystName}
                                                         </span>
                                                     </div>
                                                 ) : null;
                                             })()}
                                         </div>
                                         <div className="flex items-center gap-2 pt-4 border-t border-neutral-100">
-                                            <button onClick={() => handleDownload(doc)} className="flex-1 flex items-center justify-center py-2 border border-black hover:bg-black hover:text-white transition-colors text-[9px] font-bold uppercase tracking-widest">
-                                                <Download className="mr-2 h-3 w-3" /> DOWNLOAD
-                                            </button>
-                                            <button onClick={() => handleDeleteDoc(doc.id)} className="p-2 text-neutral-300 hover:text-red-600 transition-colors">
-                                                <Trash2 className="h-4 w-4" />
+                                            {!doc.isTask && (
+                                                <button onClick={() => handleDownload(doc)} className="flex-1 flex items-center justify-center py-2 border border-black hover:bg-black hover:text-white transition-colors text-[9px] font-bold uppercase tracking-widest">
+                                                    <Download className="mr-2 h-3 w-3" /> DOWNLOAD
+                                                </button>
+                                            )}
+                                            {doc.isTask && doc.status === 'completed' && (
+                                                <div className="flex-1 flex items-center justify-center py-2 bg-emerald-100 text-emerald-800 font-bold text-[9px] uppercase tracking-widest">
+                                                    ✓ Finalizada
+                                                </div>
+                                            )}
+                                            <button onClick={() => handleDeleteDoc(doc.id)} className={cn("p-2 transition-colors", doc.isTask ? "text-red-500 border border-red-200 hover:bg-red-50 flex-1 ml-2" : "text-neutral-300 hover:text-red-600")}>
+                                                <Trash2 className="h-4 w-4 mx-auto" />
                                             </button>
                                         </div>
                                     </div>
@@ -605,6 +668,81 @@ export default function Quality() {
                         <div className="shrink-0 text-right hidden md:block border-l border-white/10 pl-8">
                             <p className="text-[9px] font-mono text-neutral-500 uppercase">Status da Sessão</p>
                             <p className="text-xs font-bold uppercase tracking-widest text-emerald-400">Ambiente Criptografado</p>
+                        </div>
+                    </div>
+                )
+            }
+
+            {/* MODAL: Nova Tarefa/Checklist Item */}
+            {
+                selectedCategoryId && !isConfigMode && (
+                    <div className="mt-8 border border-neutral-200 bg-neutral-50 p-6 flex flex-col gap-4">
+                        <div className="space-y-1">
+                            <h3 className="text-sm font-bold uppercase tracking-widest">Adicionar Tarefa / Afazer</h3>
+                            <p className="text-[10px] text-neutral-500 uppercase">Preencha os dados e anexe documentos se necessário.</p>
+                        </div>
+                        <div className="flex flex-col md:flex-row gap-4">
+                            <div className="flex-1 space-y-2">
+                                <label className="text-[9px] font-bold uppercase tracking-widest">Nome da Tarefa</label>
+                                <Input id="taskName" placeholder="Ex: Inspecionar Balanças..." className="border-black rounded-none" />
+                            </div>
+                            <div className="flex-1 space-y-2">
+                                <label className="text-[9px] font-bold uppercase tracking-widest">Atribuir a (Resp.)</label>
+                                <Input id="taskAssignee" placeholder="Nome (Ex: João)..." className="border-black rounded-none" />
+                            </div>
+                            <div className="flex-1 space-y-2">
+                                <label className="text-[9px] font-bold uppercase tracking-widest">Prazo (Deadline)</label>
+                                <Input type="date" id="taskDeadline" className="border-black rounded-none" />
+                            </div>
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-[9px] font-bold uppercase tracking-widest">Observação / Instrução</label>
+                            <Input id="taskObs" placeholder="Ex: Fazer com cuidado redobrado..." className="border-black rounded-none" />
+                        </div>
+                        <div className="flex justify-end gap-4 mt-2">
+                            <Button
+                                onClick={async () => {
+                                    const taskName = (document.getElementById('taskName') as HTMLInputElement).value;
+                                    const taskAssignee = (document.getElementById('taskAssignee') as HTMLInputElement).value;
+                                    const taskDeadline = (document.getElementById('taskDeadline') as HTMLInputElement).value;
+                                    const taskObs = (document.getElementById('taskObs') as HTMLInputElement).value;
+                                    const currentCategory = categories.find(c => c.id === selectedCategoryId);
+
+                                    if (!taskName) {
+                                        addToast({ title: 'Nome da tarefa é obrigatório', type: 'error' });
+                                        return;
+                                    }
+
+                                    try {
+                                        await AuditService.upload({
+                                            name: taskName,
+                                            fileName: taskName + '.task',
+                                            fileSize: 0,
+                                            fileType: 'task/custom',
+                                            data: 'tarefa-virtual', // Dummy data para representar a ausência de arquivo.
+                                            category: currentCategory?.name || 'Geral',
+                                            analystName: user?.nome || 'Gestor',
+                                            labId: currentLab?.id || user?.lab_id,
+                                            isTask: true,
+                                            deadline: taskDeadline,
+                                            assignedTo: taskAssignee || undefined,
+                                            observation: taskObs
+                                        });
+
+                                        addToast({ title: 'Tarefa Adicionada!', type: 'success' });
+                                        (document.getElementById('taskName') as HTMLInputElement).value = '';
+                                        (document.getElementById('taskAssignee') as HTMLInputElement).value = '';
+                                        (document.getElementById('taskDeadline') as HTMLInputElement).value = '';
+                                        (document.getElementById('taskObs') as HTMLInputElement).value = '';
+                                        loadInitialData();
+                                    } catch (e: any) {
+                                        addToast({ title: 'Erro ao criar', description: e.message, type: 'error' });
+                                    }
+                                }}
+                                className="bg-black text-white hover:bg-neutral-800 rounded-none text-[10px] font-bold uppercase tracking-widest px-8"
+                            >
+                                <Plus className="mr-2 h-4 w-4" /> CRIAR TAREFA
+                            </Button>
                         </div>
                     </div>
                 )
