@@ -39,7 +39,7 @@ export default function MonitoramentoOS() {
     const matrixTableRef = useRef<HTMLDivElement>(null);
     const analiticoSectionRef = useRef<HTMLDivElement>(null);
     const [collapsedClients, setCollapsedClients] = React.useState<string[]>([]);
-    const [analysisPeriod, setAnalysisPeriod] = React.useState<7 | 14 | 30 | 90 | 180 | 365>(30);
+    const [analysisPeriod, setAnalysisPeriod] = React.useState<7 | 14 | 30 | 90 | 180 | 365>(7);
     const [isClearConfirmOpen, setIsClearConfirmOpen] = useState(false);
     const [analyticsLabId, setAnalyticsLabId] = useState<string>('all');
 
@@ -135,7 +135,11 @@ export default function MonitoramentoOS() {
         });
         return Object.entries(s)
             .sort(([, a], [, b]) => b - a)
-            .map(([name, total]) => ({ name, total }));
+            .map(([name, total]) => ({ name, total }))
+            .filter(({ name }) => {
+                const norm = name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                return !norm.includes('media');
+            });
     }, [filteredOS]);
 
     const clienteStats = React.useMemo(() => {
@@ -152,7 +156,11 @@ export default function MonitoramentoOS() {
                 name,
                 total: data.totalAmostras,
                 avgTime: data.count > 0 ? (data.totalHoras / data.count).toFixed(1) : '-'
-            }));
+            }))
+            .filter(c => {
+                const norm = c.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                return !norm.includes('nao informado');
+            });
     }, [osList]);
 
     const revisorDailyStats = React.useMemo(() => {
