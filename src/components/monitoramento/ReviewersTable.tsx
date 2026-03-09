@@ -32,7 +32,10 @@ export const ReviewersTable: React.FC<ReviewersTableProps> = ({
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-neutral-100">
-                        {revisorStats.map((stat, i) => (
+                        {revisorStats.filter(stat => {
+                            const norm = stat.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9 ]/g, '').trim();
+                            return norm.length > 0 && !norm.includes('media') && !norm.includes('nao informado');
+                        }).map((stat, i) => (
                             <tr key={stat.name} className="hover:bg-neutral-50/50 transition-colors group cursor-pointer" onClick={() => toggleReviewerSelection(stat.name)}>
                                 <td className="p-4">
                                     <div className="flex items-center gap-3">
