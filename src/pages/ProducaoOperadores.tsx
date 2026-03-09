@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import {
     Upload, Users, Sun, Moon, Trophy, TrendingUp, Calendar,
     ChevronUp, ChevronDown, Loader2, FileSpreadsheet, Star,
-    BarChart3, ChevronDown as ChevronDownIcon, ArrowRight
+    BarChart3, ChevronRight
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -276,7 +276,7 @@ export default function ProducaoOperadores() {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full max-w-7xl">
                     {labs.map((lab) => (
                         <button key={lab.id} onClick={() => selectLab(lab.id)} className="group relative flex flex-col p-8 bg-white border-2 border-neutral-200 hover:border-black rounded-2xl transition-all duration-300 text-left hover:shadow-xl hover:-translate-y-1">
-                            <div className="absolute top-6 right-6 opacity-0 group-hover:opacity-100 transition-opacity"><ArrowRight className="h-6 w-6 text-black" /></div>
+                            <div className="absolute top-6 right-6 opacity-0 group-hover:opacity-100 transition-opacity"><ChevronRight className="h-6 w-6 text-black" /></div>
                             <span className="text-[10px] font-bold uppercase tracking-widest text-neutral-400 mb-2">Laboratório</span>
                             <h3 className="text-xl font-bold text-black group-hover:underline">{lab.nome}</h3>
                         </button>

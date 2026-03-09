@@ -28,9 +28,9 @@ export const DailyBalanceTabSection: React.FC<DailyBalanceTabSectionProps> = ({
 }) => {
     return (
         <div className="space-y-8 animate-fade-in pb-20">
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 bg-white border border-neutral-200 rounded-3xl p-8 shadow-sm">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 bg-white border border-neutral-200 rounded-2xl p-6 shadow-sm">
                 <div>
-                    <h3 className="text-2xl font-serif text-black leading-tight tracking-tight flex items-center gap-2">
+                    <h3 className="text-xl font-serif text-black leading-tight tracking-tight flex items-center gap-2">
                         <Clock className="h-6 w-6 text-neutral-400" />
                         Matriz de Envelhecimento
                     </h3>
@@ -54,7 +54,7 @@ export const DailyBalanceTabSection: React.FC<DailyBalanceTabSectionProps> = ({
                 </div>
             </div>
 
-            <div ref={matrixTableRef} className="bg-white border border-neutral-200 rounded-[2rem] overflow-hidden shadow-[0_8px_30px_rgb(0,0,0,0.04)] mt-8">
+            <div ref={matrixTableRef} className="bg-white border border-neutral-200 rounded-2xl overflow-hidden shadow-[0_8px_30px_rgb(0,0,0,0.04)] mt-6">
                 <div className="overflow-x-auto no-scrollbar max-h-[600px] overflow-y-auto w-full relative">
                     <table className="w-full text-[11px] text-left border-collapse">
                         <thead className="sticky top-0 bg-white shadow-sm z-30 border-b-2 border-neutral-200">

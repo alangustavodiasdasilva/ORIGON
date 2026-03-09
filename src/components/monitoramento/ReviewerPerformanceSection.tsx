@@ -23,11 +23,11 @@ export const ReviewerPerformanceSection: React.FC<ReviewerPerformanceSectionProp
     labId
 }) => {
     return (
-        <div className="bg-white border border-neutral-200 rounded-3xl p-8 shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
+        <div className="bg-white border border-neutral-200 rounded-2xl p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
             <div className="flex flex-col gap-6 mb-8">
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 pb-6 border-b border-neutral-100">
                     <div>
-                        <h3 className="text-2xl font-serif text-black leading-tight tracking-tight flex items-center gap-2">
+                        <h3 className="text-xl font-serif text-black leading-tight tracking-tight flex items-center gap-2">
                             <div key={`tab-icon-${activeTab}`} className="shrink-0 flex items-center">
                                 {activeTab === 'geral' ? <Activity className="h-6 w-6 text-neutral-400" /> : <Users className="h-6 w-6 text-neutral-400" />}
                             </div>
@@ -132,7 +132,7 @@ export const ReviewerPerformanceSection: React.FC<ReviewerPerformanceSectionProp
                 )}
             </div>
 
-            <div className="h-[450px] w-full bg-neutral-50/30 rounded-2xl p-4">
+            <div className="h-[300px] w-full bg-neutral-50/30 rounded-2xl p-4">
                 <ResponsiveContainer key={`reviewer-chart-${activeTab}-${labId}`} width="100%" height="100%">
                     <LineChart data={revisorDailyStats.data} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />

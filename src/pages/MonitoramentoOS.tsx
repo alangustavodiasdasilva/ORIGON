@@ -1034,7 +1034,7 @@ export default function MonitoramentoOS() {
             </div>
 
             {labId === 'all' && (
-                <div className="space-y-6 animate-fade-in mb-8">
+                <div className="space-y-6 animate-fade-in mb-6">
 
                     {/* Filtro de laboratórios compartilhado */}
                     <div className="bg-white border border-neutral-200 rounded-2xl px-6 py-4 shadow-sm flex flex-col sm:flex-row items-start sm:items-center gap-4">
@@ -1085,7 +1085,7 @@ export default function MonitoramentoOS() {
             )}
 
             {(activeTab === 'geral' || activeTab === 'revisores') && labId !== 'all' && (
-                <div key={`content-${activeTab}`} className="space-y-8 animate-in fade-in duration-300">
+                <div key={`content-${activeTab}`} className="space-y-6 animate-in fade-in duration-300">
                     <ReviewerPerformanceSection
                         activeTab={activeTab}
                         toggleReviewerSelection={toggleReviewerSelection}

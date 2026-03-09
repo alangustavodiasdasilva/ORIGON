@@ -40,13 +40,13 @@ const SimpleWeekAverage = ({
                 <table className="w-full border-collapse text-[11px] min-w-max">
                     <thead>
                         <tr>
-                            <th className="border-b-2 border-r-2 border-black bg-white p-0 w-[180px] min-w-[180px] h-[50px] align-middle sticky left-0 z-30 shadow-[4px_0_10px_rgba(0,0,0,0.03)] focus:outline-none">
+                            <th className="border-b-2 border-r-2 border-black bg-white p-0 w-[180px] min-w-[180px] h-[40px] align-middle sticky left-0 z-30 shadow-[4px_0_10px_rgba(0,0,0,0.03)] focus:outline-none">
                                 <div className="flex items-center justify-center w-full h-full text-center font-bold tracking-widest uppercase text-[10px] text-black">
                                     Últimos {data.length} Dias
                                 </div>
                             </th>
                             {data.map((d, i) => (
-                                <th key={i} className="border-b-2 border-r border-black/10 bg-white p-0 w-[60px] min-w-[60px] h-[50px] align-top z-10 transition-colors hover:bg-neutral-50 focus:outline-none">
+                                <th key={i} className="border-b-2 border-r border-black/10 bg-white p-0 w-[60px] min-w-[60px] h-[40px] align-top z-10 transition-colors hover:bg-neutral-50 focus:outline-none">
                                     <div className="flex flex-col h-full w-full">
                                         <div className="h-1/2 flex items-center justify-center border-b border-black/10 text-black font-bold bg-neutral-100/30 text-[10px]">
                                             {d.name}
@@ -54,7 +54,7 @@ const SimpleWeekAverage = ({
                                     </div>
                                 </th>
                             ))}
-                            <th className="border-b-2 border-l-2 border-black bg-neutral-900 p-0 w-[100px] min-w-[100px] h-[50px] align-middle sticky right-0 z-30 shadow-[-4px_0_10px_rgba(0,0,0,0.1)] focus:outline-none">
+                            <th className="border-b-2 border-l-2 border-black bg-neutral-900 p-0 w-[100px] min-w-[100px] h-[40px] align-middle sticky right-0 z-30 shadow-[-4px_0_10px_rgba(0,0,0,0.1)] focus:outline-none">
                                 <div className="flex items-center justify-center w-full h-full text-center font-bold tracking-widest uppercase text-[10px] text-white">
                                     Média Diária
                                 </div>
@@ -63,7 +63,7 @@ const SimpleWeekAverage = ({
                     </thead>
                     <tbody>
                         <tr className="hover:bg-neutral-50/50 transition-colors group">
-                            <td className="border-b border-r-2 border-black/10 border-r-black bg-white p-0 h-[40px] sticky left-0 z-20 shadow-[4px_0_10px_rgba(0,0,0,0.03)]">
+                            <td className="border-b border-r-2 border-black/10 border-r-black bg-white p-0 h-[32px] sticky left-0 z-20 shadow-[4px_0_10px_rgba(0,0,0,0.03)]">
                                 <div className="flex h-full w-full relative">
                                     <div className="w-[105px] flex items-center justify-center font-bold px-1 text-[9px] relative z-10 border-r border-black/10 shadow-sm"
                                         style={{ backgroundColor: '#fdf036', color: 'black' }}>
@@ -77,7 +77,7 @@ const SimpleWeekAverage = ({
                             </td>
 
                             {data.map((d, i) => (
-                                <td key={i} className="p-0 h-[40px] relative border-b border-r border-black/5 align-middle">
+                                <td key={i} className="p-0 h-[32px] relative border-b border-r border-black/5 align-middle">
                                     <div
                                         className={cn(
                                             "absolute inset-0 z-10 transition-colors border-y border-black/20 group-hover:brightness-105 shadow-sm",
@@ -92,7 +92,7 @@ const SimpleWeekAverage = ({
                                 </td>
                             ))}
 
-                            <td className="border-b border-l-2 border-black bg-black p-0 h-[40px] sticky right-0 z-20 shadow-[-4px_0_10px_rgba(0,0,0,0.1)]">
+                            <td className="border-b border-l-2 border-black bg-black p-0 h-[32px] sticky right-0 z-20 shadow-[-4px_0_10px_rgba(0,0,0,0.1)]">
                                 <div className="flex items-center justify-center w-full h-full font-mono font-black text-[14px] text-white">
                                     {avg.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
                                 </div>
@@ -138,7 +138,7 @@ export const IntelligenceAnalytics: React.FC<IntelligenceAnalyticsProps> = ({
                                 <span>{(analysisMetrics.absorptionRate * 100).toFixed(1)}%</span>
                             </div>
                         </div>
-                        <div className="text-2xl font-serif text-black">{analysisMetrics.currentProduced.toLocaleString('pt-BR')}</div>
+                        <div className="text-xl font-serif text-black">{analysisMetrics.currentProduced.toLocaleString('pt-BR')}</div>
                         <div className="text-[10px] font-bold text-neutral-400 mt-1">Produzido nos últimos {analysisPeriod}d</div>
                     </div>
 
@@ -154,7 +154,7 @@ export const IntelligenceAnalytics: React.FC<IntelligenceAnalyticsProps> = ({
                                 />
                             </div>
                         </div>
-                        <div className="text-2xl font-serif text-black">{(analysisMetrics.weightedEfficiencyIndex * 100).toFixed(1)}%</div>
+                        <div className="text-xl font-serif text-black">{(analysisMetrics.weightedEfficiencyIndex * 100).toFixed(1)}%</div>
                         <div className="text-[10px] font-bold text-neutral-400 mt-1">Índice Ponderado de O.S. Finalizadas</div>
                     </div>
 
@@ -168,14 +168,14 @@ export const IntelligenceAnalytics: React.FC<IntelligenceAnalyticsProps> = ({
                                 <span>{(analysisMetrics.revisionRate * 100).toFixed(1)}%</span>
                             </div>
                         </div>
-                        <div className="text-2xl font-serif text-black">{analysisMetrics.currentReceived.toLocaleString('pt-BR')}</div>
+                        <div className="text-xl font-serif text-black">{analysisMetrics.currentReceived.toLocaleString('pt-BR')}</div>
                         <div className="text-[10px] font-bold text-neutral-400 mt-1">Amostras Recebidas · {(analysisMetrics.revisionRate * 100).toFixed(1)}% revisadas</div>
                     </div>
                 </div>
 
                 {/* Alertas e Insights */}
                 {analysisMetrics.alerts.length > 0 && (
-                    <div className="lg:w-1/3 bg-neutral-900 rounded-[2rem] p-6 shadow-xl relative overflow-hidden">
+                    <div className="lg:w-1/3 bg-neutral-900 rounded-2xl p-5 shadow-xl relative overflow-hidden">
                         <div className="relative z-10">
                             <div className="flex items-center gap-2 mb-4">
                                 <AlertCircle className="h-4 w-4 text-amber-400" />
@@ -195,7 +195,7 @@ export const IntelligenceAnalytics: React.FC<IntelligenceAnalyticsProps> = ({
             </div>
 
             {/* Novo Gráfico Cascata (Gantt) - Balanço Operacional */}
-            <div className="bg-white border border-neutral-200 rounded-[2.5rem] p-8 shadow-sm">
+            <div className="bg-white border border-neutral-200 rounded-3xl p-6 shadow-sm">
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
                     <div>
                         <h3 className="text-xl font-serif text-black leading-tight flex items-center gap-2">
