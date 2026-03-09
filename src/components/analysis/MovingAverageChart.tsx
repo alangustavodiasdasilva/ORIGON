@@ -92,7 +92,7 @@ export default function MovingAverageChart({ samples, windowSize = 3, onSampleHo
 
         // Dimensões
         const width = 1200;
-        const height = 320;
+        const height = 400;
         const padding = { left: 60, right: 40, top: 40, bottom: 60 };
 
         const chartWidth = width - padding.left - padding.right;
@@ -288,7 +288,7 @@ export default function MovingAverageChart({ samples, windowSize = 3, onSampleHo
 
             <div className="flex flex-col lg:flex-row gap-8">
                 {/* Área do Gráfico */}
-                <div className="relative flex-1 aspect-[21/9] max-h-[400px] bg-neutral-50/30 border border-neutral-100 group">
+                <div className="relative flex-1 min-h-[350px] bg-neutral-50/30 border border-neutral-100 group rounded-xl">
                     <svg id="trend-chart-svg" viewBox={`0 0 ${chartData.width} ${chartData.height}`} className="w-full h-full overflow-visible">
 
                         {/* Banda de Desvio Padrão */}
