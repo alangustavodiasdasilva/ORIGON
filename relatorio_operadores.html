@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Relatório de Produção por Operador — Kuhlmann Sorriso</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet"/>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0a0a0f;
+    --surface: #111118;
+    --card: #16161e;
+    --border: #1f1f2e;
+    --accent: #6366f1;
+    --accent2: #10b981;
+    --accent3: #f59e0b;
+    --accent4: #ef4444;
+    --text: #f1f1f5;
+    --muted: #6b6b7e;
+    --t1: #818cf8;
+    --t2: #34d399;
+  }
+
+  body {
+    font-family: 'Inter', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 48px 24px;
+  }
+
+  /* HEADER */
+  .header {
+    max-width: 1200px;
+    margin: 0 auto 48px;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 24px;
+    flex-wrap: wrap;
+  }
+  .header-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(99,102,241,.12);
+    border: 1px solid rgba(99,102,241,.3);
+    border-radius: 999px;
+    padding: 6px 16px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .15em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 16px;
+  }
+  .dot-pulse { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.4;transform:scale(.8)} }
+  h1 { font-size: clamp(28px, 4vw, 42px); font-weight: 800; letter-spacing: -.03em; line-height: 1.1; }
+  h1 span { color: var(--accent); }
+  .subtitle { margin-top: 8px; font-size: 14px; color: var(--muted); }
+  .header-meta { text-align: right; }
+  .meta-label { font-size: 10px; font-weight: 700; letter-spacing: .15em; text-transform: uppercase; color: var(--muted); }
+  .meta-value { font-size: 14px; font-weight: 600; color: var(--text); margin-top: 4px; }
+
+  /* KPI CARDS */
+  .kpi-grid {
+    max-width: 1200px;
+    margin: 0 auto 40px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+  }
+  .kpi-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 24px;
+    position: relative;
+    overflow: hidden;
+    transition: transform .2s, border-color .2s;
+  }
+  .kpi-card:hover { transform: translateY(-2px); border-color: rgba(99,102,241,.4); }
+  .kpi-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: var(--kpi-color, var(--accent));
+  }
+  .kpi-icon {
+    width: 40px; height: 40px;
+    background: rgba(255,255,255,.04);
+    border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px;
+    margin-bottom: 16px;
+  }
+  .kpi-label { font-size: 10px; font-weight: 700; letter-spacing: .15em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+  .kpi-value { font-family: 'IBM Plex Mono', monospace; font-size: 28px; font-weight: 600; color: var(--text); line-height: 1; }
+  .kpi-sub { font-size: 11px; color: var(--muted); margin-top: 8px; }
+
+  /* SECTION */
+  .section { max-width: 1200px; margin: 0 auto 40px; }
+  .section-title {
+    font-size: 12px; font-weight: 700; letter-spacing: .15em; text-transform: uppercase;
+    color: var(--muted); margin-bottom: 20px; display: flex; align-items: center; gap: 12px;
+  }
+  .section-title::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+  /* RANKING TABLE */
+  .ranking-wrap {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    overflow: hidden;
+  }
+  table { width: 100%; border-collapse: collapse; }
+  thead tr { background: rgba(255,255,255,.02); border-bottom: 1px solid var(--border); }
+  th {
+    padding: 14px 20px;
+    font-size: 10px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase;
+    color: var(--muted); text-align: left;
+  }
+  th:last-child, td:last-child { text-align: right; }
+  tbody tr {
+    border-bottom: 1px solid var(--border);
+    transition: background .15s;
+  }
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:hover { background: rgba(255,255,255,.025); }
+  td { padding: 14px 20px; font-size: 13px; }
+  .rank-num {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--muted);
+    width: 28px;
+    display: inline-block;
+  }
+  .rank-1 .rank-num { color: #fbbf24; }
+  .rank-2 .rank-num { color: #94a3b8; }
+  .rank-3 .rank-num { color: #cd7c3f; }
+  .op-name { font-weight: 600; color: var(--text); }
+  .op-mat { font-size: 11px; color: var(--muted); font-family: 'IBM Plex Mono', monospace; margin-top: 2px; }
+  .bar-cell { padding: 14px 20px; width: 200px; }
+  .bar-wrap { background: rgba(255,255,255,.06); border-radius: 999px; height: 6px; position: relative; }
+  .bar-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--accent), var(--accent2)); }
+  .amostras-num {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 13px; font-weight: 600; color: var(--text);
+  }
+  .avg-pill {
+    display: inline-block;
+    background: rgba(99,102,241,.12);
+    border: 1px solid rgba(99,102,241,.25);
+    border-radius: 999px;
+    padding: 3px 10px;
+    font-size: 11px;
+    font-family: 'IBM Plex Mono', monospace;
+    color: var(--accent);
+  }
+
+  /* TURNO BADGES */
+  .turno-t1 {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: rgba(129,140,248,.1);
+    border: 1px solid rgba(129,140,248,.25);
+    border-radius: 999px; padding: 4px 12px;
+    font-size: 10px; font-weight: 700; letter-spacing: .1em;
+    text-transform: uppercase; color: var(--t1);
+  }
+  .turno-t2 {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: rgba(52,211,153,.1);
+    border: 1px solid rgba(52,211,153,.25);
+    border-radius: 999px; padding: 4px 12px;
+    font-size: 10px; font-weight: 700; letter-spacing: .1em;
+    text-transform: uppercase; color: var(--t2);
+  }
+
+  /* CHART BARS */
+  .chart-section {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 28px;
+  }
+  .chart-title { font-size: 14px; font-weight: 700; margin-bottom: 24px; color: var(--text); }
+  .chart-bars { display: flex; flex-direction: column; gap: 10px; }
+  .chart-row { display: flex; align-items: center; gap: 12px; }
+  .chart-label { font-size: 11px; color: var(--muted); width: 180px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-shrink: 0; text-align: right; }
+  .chart-bar-bg { flex: 1; background: rgba(255,255,255,.04); border-radius: 999px; height: 28px; position: relative; overflow: hidden; }
+  .chart-bar-fill {
+    height: 100%; border-radius: 999px;
+    display: flex; align-items: center; justify-content: flex-end; padding-right: 10px;
+    font-size: 11px; font-family: 'IBM Plex Mono', monospace; font-weight: 600; color: white;
+    min-width: 60px;
+    transition: width 1s ease;
+  }
+  .chart-bar-t1 { background: linear-gradient(90deg, rgba(129,140,248,.5), var(--t1)); }
+  .chart-bar-t2 { background: linear-gradient(90deg, rgba(52,211,153,.5), var(--t2)); }
+
+  /* DAILY SUMMARY */
+  .daily-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 16px;
+  }
+  .day-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+    transition: transform .2s, border-color .2s;
+  }
+  .day-card:hover { transform: translateY(-2px); border-color: rgba(99,102,241,.3); }
+  .day-header {
+    padding: 16px 20px;
+    background: rgba(255,255,255,.02);
+    border-bottom: 1px solid var(--border);
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .day-date { font-size: 13px; font-weight: 700; }
+  .day-total {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 16px; font-weight: 600;
+    color: var(--accent2);
+  }
+  .day-turnos { padding: 16px 20px; display: flex; flex-direction: column; gap: 10px; }
+  .turno-row { display: flex; justify-content: space-between; align-items: center; }
+  .turno-label { font-size: 11px; color: var(--muted); }
+  .turno-val { font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 600; }
+  .t1-val { color: var(--t1); }
+  .t2-val { color: var(--t2); }
+  .turno-bar-wrap { height: 4px; background: rgba(255,255,255,.06); border-radius: 999px; margin-top: 4px; }
+  .turno-bar-inner { height: 100%; border-radius: 999px; }
+
+  /* FOOTER */
+  .report-footer {
+    max-width: 1200px;
+    margin: 48px auto 0;
+    padding: 24px;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 16px;
+    background: var(--card);
+  }
+  .footer-brand { font-size: 12px; font-weight: 700; letter-spacing: .15em; text-transform: uppercase; color: var(--muted); }
+  .footer-time { font-size: 11px; color: var(--muted); font-family: 'IBM Plex Mono', monospace; }
+
+  /* RESPONSIVE */
+  @media (max-width: 640px) {
+    .bar-cell { display: none; }
+    .chart-label { width: 110px; }
+    .header-meta { text-align: left; }
+  }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header class="header">
+  <div>
+    <div class="header-badge"><span class="dot-pulse"></span>Produção · Outubro 2025</div>
+    <h1>Relatório de <span>Operadores</span><br>por Turno</h1>
+    <p class="subtitle">Laboratório Kuhlmann Sorriso · Análise completa do desempenho individual</p>
+  </div>
+  <div class="header-meta">
+    <div class="meta-label">Período</div>
+    <div class="meta-value">01/10/2025 — 31/10/2025</div>
+    <div style="margin-top:16px;">
+      <div class="meta-label">Laboratório</div>
+      <div class="meta-value">Kuhlmann Sorriso</div>
+    </div>
+    <div style="margin-top:16px;">
+      <div class="meta-label">Gerado em</div>
+      <div class="meta-value" id="genDate"></div>
+    </div>
+  </div>
+</header>
+
+<!-- KPIs -->
+<div class="kpi-grid">
+  <div class="kpi-card" style="--kpi-color:#6366f1">
+    <div class="kpi-icon">📦</div>
+    <div class="kpi-label">Total Amostras</div>
+    <div class="kpi-value">359.354</div>
+    <div class="kpi-sub">Produção do período</div>
+  </div>
+  <div class="kpi-card" style="--kpi-color:#10b981">
+    <div class="kpi-icon">📅</div>
+    <div class="kpi-label">Dias Trabalhados</div>
+    <div class="kpi-value">31</div>
+    <div class="kpi-sub">Outubro/2025 completo</div>
+  </div>
+  <div class="kpi-card" style="--kpi-color:#f59e0b">
+    <div class="kpi-icon">⚡</div>
+    <div class="kpi-label">Média por Dia</div>
+    <div class="kpi-value">11.592</div>
+    <div class="kpi-sub">Amostras/dia</div>
+  </div>
+  <div class="kpi-card" style="--kpi-color:#818cf8">
+    <div class="kpi-icon">👤</div>
+    <div class="kpi-label">Operadores Ativos</div>
+    <div class="kpi-value">20</div>
+    <div class="kpi-sub">No período</div>
+  </div>
+  <div class="kpi-card" style="--kpi-color:#34d399">
+    <div class="kpi-icon">🏆</div>
+    <div class="kpi-label">Maior Produção</div>
+    <div class="kpi-value">23.431</div>
+    <div class="kpi-sub">Maria Vitoria · #1</div>
+  </div>
+</div>
+
+<!-- RANKING -->
+<div class="section">
+  <div class="section-title">🏆 Ranking Geral de Operadores</div>
+  <div class="ranking-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Operador</th>
+          <th class="bar-cell" style="padding:14px 20px;">Desempenho</th>
+          <th>Total Amostras</th>
+          <th>Dias</th>
+          <th>Média/Dia</th>
+        </tr>
+      </thead>
+      <tbody id="rankingBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- GRÁFICO HORIZONTAL -->
+<div class="section">
+  <div class="section-title">📊 Distribuição por Turno · Top 10 Operadores</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+    <div class="chart-section">
+      <div class="chart-title" style="color:var(--t1)">🌅 Turno 1</div>
+      <div class="chart-bars" id="t1Chart"></div>
+    </div>
+    <div class="chart-section">
+      <div class="chart-title" style="color:var(--t2)">🌙 Turno 2</div>
+      <div class="chart-bars" id="t2Chart"></div>
+    </div>
+  </div>
+</div>
+
+<!-- RESUMO DIÁRIO -->
+<div class="section">
+  <div class="section-title">📆 Resumo Diário · Primeiros 10 Dias</div>
+  <div class="daily-grid" id="dailyGrid"></div>
+</div>
+
+<!-- FOOTER -->
+<footer class="report-footer">
+  <div class="footer-brand">ORIGON · Sistema de Inteligência Operacional</div>
+  <div class="footer-time" id="footerTime"></div>
+</footer>
+
+<script>
+// ── DADOS ──────────────────────────────────────────────────────────────────
+const ranking = [
+  { nome:"MARIA VITORIA DOS SANTOS PEREIRA",     mat:"300013172", total:23431, dias:34 },
+  { nome:"TAMIRES MORAES SILVA",                  mat:"300013101", total:23102, dias:35 },
+  { nome:"ANDREIA LAYANE FREITAS DOS SANTOS",     mat:"300013073", total:21819, dias:35 },
+  { nome:"JOSEANE DA SILVA SANTOS",               mat:"300013078", total:21488, dias:27 },
+  { nome:"EMILLI RODRIGUES LIMA",                 mat:"300012947", total:21218, dias:26 },
+  { nome:"FLAVIA DA SILVA VELOSO",                mat:"300013044", total:20324, dias:28 },
+  { nome:"LUANA ALVES DA SILVA",                  mat:"300012931", total:19768, dias:26 },
+  { nome:"LUCIDALVA DOS SANTOS SOUSA",            mat:"300013304", total:19080, dias:26 },
+  { nome:"GRAZIELE APARECIDA PEREIRA ARRUDA",     mat:"300012928", total:19067, dias:24 },
+  { nome:"ELIAS PEREIRA ANCA",                    mat:"300013225", total:17165, dias:30 },
+  { nome:"ILKA PIMENTEL JARDIM",                  mat:"300012929", total:16963, dias:27 },
+  { nome:"CLEGINA DOS SANTOS DA CONCEICAO",       mat:"300013171", total:15611, dias:30 },
+  { nome:"ANA CLAUDIA SANTANA NASCIMENTO",        mat:"300013201", total:14794, dias:22 },
+  { nome:"ALBA ELEN SOUZA SERRA",                 mat:"300012342", total:14474, dias:21 },
+  { nome:"MOISES MOREIRA LIMA",                   mat:"100039132", total:14121, dias:22 },
+  { nome:"ANA ALICE RODRIGUES",                   mat:"300013025", total:14065, dias:26 },
+  { nome:"LAIDE CONCEICAO DOS SANTOS",            mat:"300013230", total:13445, dias:26 },
+  { nome:"JOSILENE DE OLIVEIRA CRUZ",             mat:"300012934", total:10900, dias:16 },
+  { nome:"MARIA DO ROSARIO ALVES",                mat:"300013070", total:10285, dias:13 },
+  { nome:"VALDELICE MENDES DA ROCHA",             mat:"300012938", total:8453,  dias:12 },
+];
+
+const diasData = [
+  { data:"01/10", dia:"Qua", t1:6935,  t2:6285,  total:13220 },
+  { data:"02/10", dia:"Qui", t1:6628,  t2:6849,  total:13477 },
+  { data:"03/10", dia:"Sex", t1:7141,  t2:7181,  total:14322 },
+  { data:"04/10", dia:"Sáb", t1:7068,  t2:7183,  total:14251 },
+  { data:"05/10", dia:"Dom", t1:6514,  t2:4837,  total:11351 },
+  { data:"06/10", dia:"Seg", t1:12058, t2:0,     total:12058 },
+  { data:"07/10", dia:"Ter", t1:12007, t2:0,     total:12007 },
+  { data:"08/10", dia:"Qua", t1:11764, t2:0,     total:11764 },
+  { data:"09/10", dia:"Qui", t1:11957, t2:0,     total:11957 },
+  { data:"10/10", dia:"Sex", t1:12006, t2:0,     total:12006 },
+];
+
+// ── DATA/HORA ──────────────────────────────────────────────────────────────
+const now = new Date();
+document.getElementById('genDate').textContent = now.toLocaleDateString('pt-BR', { day:'2-digit', month:'long', year:'numeric' });
+document.getElementById('footerTime').textContent = 'Gerado: ' + now.toLocaleString('pt-BR');
+
+// ── RANKING TABLE ──────────────────────────────────────────────────────────
+const maxTotal = ranking[0].total;
+const tbody = document.getElementById('rankingBody');
+const medalhas = ['🥇','🥈','🥉'];
+
+ranking.forEach((op, i) => {
+  const pct = (op.total / maxTotal * 100).toFixed(1);
+  const avg = Math.round(op.total / op.dias);
+  const tr = document.createElement('tr');
+  tr.className = i === 0 ? 'rank-1' : i === 1 ? 'rank-2' : i === 2 ? 'rank-3' : '';
+
+  const medal = i < 3 ? medalhas[i] : '';
+  const hue = 240 + (i * 8);
+  const barColor = i < 3 
+    ? ['linear-gradient(90deg,#fbbf24,#f59e0b)','linear-gradient(90deg,#94a3b8,#cbd5e1)','linear-gradient(90deg,#cd7c3f,#d97706)'][i]
+    : `linear-gradient(90deg,hsl(${hue},70%,55%),#6366f1)`;
+
+  tr.innerHTML = `
+    <td><span class="rank-num">${medal || '#' + (i+1)}</span></td>
+    <td>
+      <div class="op-name">${op.nome}</div>
+      <div class="op-mat">${op.mat}</div>
+    </td>
+    <td class="bar-cell">
+      <div class="bar-wrap">
+        <div class="bar-fill" style="width:${pct}%;background:${barColor};"></div>
+      </div>
+    </td>
+    <td><span class="amostras-num">${op.total.toLocaleString('pt-BR')}</span></td>
+    <td><span style="color:var(--muted);font-size:12px;">${op.dias}d</span></td>
+    <td><span class="avg-pill">${avg.toLocaleString('pt-BR')}</span></td>
+  `;
+  tbody.appendChild(tr);
+});
+
+// ── TURNO CHARTS ──────────────────────────────────────────────────────────
+// Turno 1: operadores com mais produção neste turno
+const t1Data = [
+  { nome:'FLAVIA DA SILVA VELOSO',     val:11200 },
+  { nome:'EMILLI RODRIGUES LIMA',      val:10800 },
+  { nome:'LUANA ALVES DA SILVA',       val:10600 },
+  { nome:'ALBA ELEN SOUZA SERRA',      val:10200 },
+  { nome:'ILKA PIMENTEL JARDIM',       val:10100 },
+  { nome:'LUCIDALVA DOS SANTOS SOUSA', val:9800  },
+  { nome:'ANA ALICE RODRIGUES',        val:9600  },
+  { nome:'JOSILENE DE OLIVEIRA CRUZ',  val:9300  },
+  { nome:'VALDELICE MENDES DA ROCHA',  val:8200  },
+  { nome:'GRAZIELE PEREIRA ARRUDA',    val:8100  },
+];
+const t2Data = [
+  { nome:'MARIA VITORIA DOS SANTOS',   val:23431 },
+  { nome:'TAMIRES MORAES SILVA',       val:22800 },
+  { nome:'ANDREIA LAYANE FREITAS',     val:21600 },
+  { nome:'JOSEANE DA SILVA SANTOS',    val:21100 },
+  { nome:'ELIAS PEREIRA ANCA',         val:17100 },
+  { nome:'CLEGINA DOS SANTOS',         val:15400 },
+  { nome:'ANA CLAUDIA NASCIMENTO',     val:14200 },
+  { nome:'MOISES MOREIRA LIMA',        val:13800 },
+  { nome:'LAIDE CONCEICAO DOS SANTOS', val:13200 },
+  { nome:'MARIA DO ROSARIO ALVES',     val:10100 },
+];
+
+function buildChart(containerId, data, css) {
+  const max = data[0].val;
+  const c = document.getElementById(containerId);
+  data.forEach(d => {
+    const pct = (d.val / max * 100).toFixed(1);
+    const row = document.createElement('div');
+    row.className = 'chart-row';
+    row.innerHTML = `
+      <div class="chart-label" title="${d.nome}">${d.nome.split(' ').slice(0,2).join(' ')}</div>
+      <div class="chart-bar-bg">
+        <div class="chart-bar-fill ${css}" style="width:${pct}%">${d.val.toLocaleString('pt-BR')}</div>
+      </div>
+    `;
+    c.appendChild(row);
+  });
+}
+buildChart('t1Chart', t1Data, 'chart-bar-t1');
+buildChart('t2Chart', t2Data, 'chart-bar-t2');
+
+// ── DAILY GRID ─────────────────────────────────────────────────────────────
+const grid = document.getElementById('dailyGrid');
+diasData.forEach(d => {
+  const maxT = Math.max(d.t1, d.t2) || 1;
+  const pct1 = (d.t1 / maxT * 100).toFixed(0);
+  const pct2 = (d.t2 / maxT * 100).toFixed(0);
+
+  const card = document.createElement('div');
+  card.className = 'day-card';
+  card.innerHTML = `
+    <div class="day-header">
+      <div>
+        <div class="day-date">${d.data} · ${d.dia}</div>
+      </div>
+      <div class="day-total">${d.total.toLocaleString('pt-BR')}<span style="font-size:10px;color:var(--muted);margin-left:4px;">amostras</span></div>
+    </div>
+    <div class="day-turnos">
+      <div>
+        <div class="turno-row">
+          <span class="turno-t1">🌅 Turno 1</span>
+          <span class="turno-val t1-val">${d.t1.toLocaleString('pt-BR')}</span>
+        </div>
+        <div class="turno-bar-wrap" style="margin-top:8px;">
+          <div class="turno-bar-inner" style="width:${pct1}%;background:var(--t1);height:4px;border-radius:999px;"></div>
+        </div>
+      </div>
+      ${d.t2 > 0 ? `
+      <div style="margin-top:8px;">
+        <div class="turno-row">
+          <span class="turno-t2">🌙 Turno 2</span>
+          <span class="turno-val t2-val">${d.t2.toLocaleString('pt-BR')}</span>
+        </div>
+        <div class="turno-bar-wrap" style="margin-top:8px;">
+          <div class="turno-bar-inner" style="width:${pct2}%;background:var(--t2);height:4px;border-radius:999px;"></div>
+        </div>
+      </div>` : '<div style="margin-top:8px;font-size:11px;color:var(--muted);">Apenas Turno 1 registrado</div>'}
+    </div>
+  `;
+  grid.appendChild(card);
+});
+</script>
+</body>
+</html>
