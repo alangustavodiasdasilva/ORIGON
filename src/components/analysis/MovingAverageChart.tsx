@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import type { Sample } from "@/entities/Sample";
 import { cn } from "@/lib/utils";
 import { formatDecimalBR } from "@/services/ocrExtraction";
-import { TrendingUp, Activity, BarChart3, LineChart, AreaChart } from "lucide-react";
+import { TrendingUp, Activity, BarChart3, LineChart, AreaChart, CircleDot } from "lucide-react";
 
 interface MovingAverageChartProps {
     samples: Sample[];
@@ -24,6 +24,7 @@ const FIELDS = [
 const CHART_TYPES = [
     { key: 'line', label: 'Linhas', icon: LineChart },
     { key: 'area', label: 'Área', icon: AreaChart },
+    { key: 'scatter', label: 'Dispersão', icon: CircleDot },
 ] as const;
 
 // Labels em português sem termos normativos
@@ -91,7 +92,7 @@ export default function MovingAverageChart({ samples, windowSize = 3, onSampleHo
 
         // Dimensões
         const width = 1200;
-        const height = 450;
+        const height = 320;
         const padding = { left: 60, right: 40, top: 40, bottom: 60 };
 
         const chartWidth = width - padding.left - padding.right;
@@ -287,7 +288,7 @@ export default function MovingAverageChart({ samples, windowSize = 3, onSampleHo
 
             <div className="flex flex-col lg:flex-row gap-8">
                 {/* Área do Gráfico */}
-                <div className="relative flex-1 aspect-[16/9] bg-neutral-50/30 border border-neutral-100 group">
+                <div className="relative flex-1 aspect-[21/9] max-h-[400px] bg-neutral-50/30 border border-neutral-100 group">
                     <svg id="trend-chart-svg" viewBox={`0 0 ${chartData.width} ${chartData.height}`} className="w-full h-full overflow-visible">
 
                         {/* Banda de Desvio Padrão */}
@@ -373,6 +374,19 @@ export default function MovingAverageChart({ samples, windowSize = 3, onSampleHo
                                         className="opacity-90"
                                     />
                                 )}
+
+                                {/* GRÁFICO DE DISPERSÃO */}
+                                {chartType === 'scatter' && s.points.map((p, idx) => (
+                                    <circle
+                                        key={`scatter-${i}-${idx}`}
+                                        cx={p.x}
+                                        cy={p.y}
+                                        r="5"
+                                        fill={p.isOutlier ? "#ef4444" : s.color}
+                                        opacity="0.7"
+                                        className="pointer-events-none"
+                                    />
+                                ))}
 
                                 {/* PONTOS DE DADOS - Comum a ambos */}
                                 {s.points.map((p, idx) => (
