@@ -138,7 +138,7 @@ export default function MonitoramentoOS() {
             .map(([name, total]) => ({ name, total }))
             .filter(({ name }) => {
                 const norm = name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-                return !norm.includes('media');
+                return !norm.includes('media') && !norm.includes('nao informado');
             });
     }, [filteredOS]);
 
