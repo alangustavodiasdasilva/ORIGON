@@ -755,7 +755,7 @@ export default function MonitoramentoOS() {
                 if (!str) return false;
                 const normalize = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
                 const norm = normalize(str);
-                return norm === 'media' || norm.includes('* media') || norm === 'nao informado';
+                return norm.includes('media') || norm === 'nao informado';
             };
             if (isInvalidText(os.cliente) || isInvalidText(os.revisor) || isInvalidText(os.tomador)) return false;
             return true;
