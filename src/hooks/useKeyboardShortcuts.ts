@@ -55,8 +55,8 @@ export function useKeyboardShortcuts() {
                 case 'q':
                     if (ctrl && e.shiftKey) {
                         e.preventDefault();
-                        navigate('/quality');
-                        addToast({ title: 'Navegando para Qualidade', type: 'info' });
+                        navigate('/checklist');
+                        addToast({ title: 'Navegando para Checklist', type: 'info' });
                     }
                     break;
 
@@ -139,7 +139,7 @@ function showKeyboardShortcutsModal() {
                             <kbd class="px-3 py-1 text-xs font-mono bg-white border-2 border-black">Ctrl + Shift + I</kbd>
                         </div>
                         <div class="flex items-center justify-between p-3 bg-neutral-50 rounded">
-                            <span class="text-sm">Qualidade</span>
+                            <span class="text-sm">Checklist</span>
                             <kbd class="px-3 py-1 text-xs font-mono bg-white border-2 border-black">Ctrl + Shift + Q</kbd>
                         </div>
                         <div class="flex items-center justify-between p-3 bg-neutral-50 rounded">

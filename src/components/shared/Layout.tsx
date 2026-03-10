@@ -6,7 +6,7 @@ import {
     LogOut,
     Microscope,
     Network,
-    CheckCircle2, CheckSquare,
+    CheckCircle2,
     AlertCircle,
     Info,
     Package,
@@ -15,7 +15,8 @@ import {
     Zap,
     Menu,
     X,
-    FileSpreadsheet
+    FileSpreadsheet,
+    ClipboardCheck
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
@@ -90,7 +91,7 @@ export default function Layout() {
         { href: "/verificacao", label: "Verificação", icon: CheckCircle2, allowedRoles: ['admin_global', 'admin_lab', 'quality_admin'] },
         { href: "/operacao", label: "Operação", icon: Zap, allowedRoles: ['admin_global', 'admin_lab', 'quality_admin'] },
         { href: "/monitoramento-os", label: "Monitoramento O.S.", icon: FileSpreadsheet, allowedRoles: ['admin_global', 'admin_lab', 'quality_admin'] },
-        { href: "/quality", label: t('nav.quality'), icon: CheckSquare, allowedRoles: ['admin_global', 'admin_lab', 'quality_admin'] },
+        { href: "/checklist", label: "Checklist", icon: ClipboardCheck, allowedRoles: ['admin_global', 'admin_lab', 'quality_admin'] },
         { href: "/admin", label: t('nav.config'), icon: ShieldCheck, allowedRoles: ['admin_global', 'admin_lab'] },
     ];
 

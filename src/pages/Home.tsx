@@ -309,7 +309,7 @@ export default function Home() {
                                                         {activeAnalysts.filter(a => a.current_lote_id === lote.id && a.id !== user?.id).map((analyst, idx) => (
                                                             <div key={idx} className="w-6 h-6 rounded-full border border-white bg-neutral-200 flex items-center justify-center text-[8px] font-bold overflow-hidden relative z-10" title={`${analyst.nome} is editing`}>
                                                                 {analyst.foto ? (
-                                                                    <img src={analyst.foto} className="w-full h-full object-cover" />
+                                                                    <img src={analyst.foto} alt={`Foto de ${analyst.nome}`} className="w-full h-full object-cover" />
                                                                 ) : (
                                                                     getInitials(analyst.nome)
                                                                 )}

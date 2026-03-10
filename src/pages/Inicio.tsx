@@ -1,5 +1,5 @@
 import { useAuth } from "@/contexts/AuthContext";
-import { ArrowRight, Package, Shield, Building2, Activity, LogOut } from "lucide-react";
+import { ArrowRight, Package, Building2, Activity, LogOut, ClipboardCheck } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { LabService, type Lab } from "@/entities/Lab";
@@ -92,10 +92,10 @@ export default function Inicio() {
             iconColor: "text-blue-600"
         },
         {
-            title: "Gestão de Qualidade",
-            description: "Auditorias e certificações",
-            href: "/quality",
-            icon: Shield,
+            title: "Checklist Estratégico",
+            description: "Controle de conformidade e gestão de atividades",
+            href: "/checklist",
+            icon: ClipboardCheck,
             gradient: "from-orange-500/10 to-red-500/10",
             iconColor: "text-orange-600"
         }
