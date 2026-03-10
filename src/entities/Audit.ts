@@ -387,6 +387,125 @@ export const AuditService = {
         return newDoc;
     },
 
+    /**
+     * Cria uma tarefa no checklist com o mínimo de campos necessários.
+     * Detecta automaticamente o esquema de nomenclatura do banco (snake_case ou camelCase).
+     */
+    async createTask(params: {
+        name: string;
+        labId?: string;
+        isTask?: boolean;
+        deadline?: string;
+        assignedTo?: string;
+        observation?: string;
+        category?: string;
+        createdBy?: string;
+    }): Promise<AuditDocument> {
+        if (isSupabaseEnabled()) {
+            // Tenta inserir com snake_case (padrão do Supabase)
+            const snakePayload: Record<string, unknown> = {
+                name: params.name,
+                status: 'verified',
+                category: params.category || 'Checklist Operacional',
+                is_task: params.isTask ?? true,
+            };
+            if (params.labId) snakePayload.lab_id = params.labId;
+            if (params.deadline) snakePayload.deadline = params.deadline;
+            if (params.assignedTo) snakePayload.assigned_to = params.assignedTo;
+            if (params.observation) snakePayload.observation = params.observation;
+            if (params.createdBy) snakePayload.created_by = params.createdBy;
+
+            const { data: snakeData, error: snakeError } = await supabase
+                .from('auditoria_documentos')
+                .insert([snakePayload])
+                .select()
+                .single();
+
+            if (!snakeError && snakeData) {
+                const d = snakeData;
+                return {
+                    id: d.id,
+                    name: d.name || params.name,
+                    fileName: params.name + '.task',
+                    fileSize: 0,
+                    fileType: 'task/custom',
+                    uploadDate: d.created_at || new Date().toISOString(),
+                    category: d.category || params.category || 'Checklist Operacional',
+                    analystName: d.created_by || params.createdBy || 'Sistema',
+                    status: d.status || 'verified',
+                    labId: d.lab_id || params.labId,
+                    isTask: d.is_task ?? true,
+                    deadline: d.deadline || params.deadline,
+                    assignedTo: d.assigned_to || params.assignedTo,
+                    observation: d.observation || params.observation,
+                };
+            }
+
+            // Fallback: tenta camelCase se snake_case falhou com erro de coluna
+            if (snakeError && (snakeError.code === '42703' || snakeError.message?.includes('column'))) {
+                console.warn('snake_case failed, trying camelCase:', snakeError.message);
+                const camelPayload: Record<string, unknown> = {
+                    name: params.name,
+                    status: 'verified',
+                    category: params.category || 'Checklist Operacional',
+                    isTask: params.isTask ?? true,
+                };
+                if (params.labId) camelPayload.labId = params.labId;
+                if (params.deadline) camelPayload.deadline = params.deadline;
+                if (params.assignedTo) camelPayload.assignedTo = params.assignedTo;
+                if (params.observation) camelPayload.observation = params.observation;
+
+                const { data: camelData, error: camelError } = await supabase
+                    .from('auditoria_documentos')
+                    .insert([camelPayload])
+                    .select()
+                    .single();
+
+                if (camelError) throw camelError;
+                const d = camelData!;
+                return {
+                    id: d.id, name: d.name || params.name,
+                    fileName: params.name + '.task', fileSize: 0, fileType: 'task/custom',
+                    uploadDate: d.uploadDate || d.created_at || new Date().toISOString(),
+                    category: d.category || 'Checklist Operacional',
+                    analystName: params.createdBy || 'Sistema',
+                    status: d.status || 'verified',
+                    labId: d.labId || params.labId,
+                    isTask: d.isTask ?? true,
+                    deadline: d.deadline || params.deadline,
+                    assignedTo: d.assignedTo || params.assignedTo,
+                    observation: d.observation || params.observation,
+                };
+            }
+
+            if (snakeError) throw snakeError;
+        }
+
+        // Fallback local storage
+        const raw = localStorage.getItem(DOCS_KEY);
+        const allDocs = raw ? JSON.parse(raw) : [];
+        const newDoc: AuditDocument = {
+            id: crypto.randomUUID(),
+            name: params.name,
+            fileName: params.name + '.task',
+            fileSize: 0,
+            fileType: 'task/custom',
+            uploadDate: new Date().toISOString(),
+            category: params.category || 'Checklist Operacional',
+            analystName: params.createdBy || 'Sistema',
+            status: 'verified',
+            labId: params.labId,
+            isTask: params.isTask ?? true,
+            deadline: params.deadline,
+            assignedTo: params.assignedTo,
+            observation: params.observation,
+        };
+        allDocs.push(newDoc);
+        localStorage.setItem(DOCS_KEY, JSON.stringify(allDocs));
+        return newDoc;
+    },
+
+
     async delete(id: string): Promise<void> {
         if (isSupabaseEnabled()) {
             const { error } = await supabase.from('auditoria_documentos').delete().eq('id', id);

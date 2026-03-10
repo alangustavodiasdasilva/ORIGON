@@ -317,8 +317,7 @@ export default function MovingAverageChart({ samples, windowSize = 3, onSampleHo
                                     x={chartData.padding.left - 12}
                                     y={line.y + 6}
                                     textAnchor="end"
-                                    className="fill-neutral-900 font-mono font-black"
-                                    style={{ fontSize: '16px' }}
+                                    className="fill-neutral-900 font-mono font-black text-16px"
                                 >
                                     {formatDecimalBR(line.val, 1)}
                                 </text>
@@ -460,8 +459,7 @@ export default function MovingAverageChart({ samples, windowSize = 3, onSampleHo
                                 x={lbl.x}
                                 y={chartData.height - 10}
                                 textAnchor="middle"
-                                className="fill-neutral-900 font-mono font-bold"
-                                style={{ fontSize: '12px' }}
+                                className="fill-neutral-900 font-mono font-bold text-12px"
                             >
                                 {lbl.label}
                             </text>

@@ -135,7 +135,7 @@ export default function StatisticsPanel({ samples, selectedColor }: StatisticsPa
                 return (
                     <Card key={color} className="overflow-hidden border border-neutral-200 bg-white shadow-sm hover:shadow-lg transition-all duration-200">
                         {/* Thin color indicator */}
-                        <div className="h-0.5 w-full" style={{ backgroundColor: color }} />
+                        <div className="h-0.5 w-full color-indicator" style={{ backgroundColor: color }} />
 
                         <CardContent className="p-6">
                             {/* Header */}
@@ -176,6 +176,9 @@ export default function StatisticsPanel({ samples, selectedColor }: StatisticsPa
                                                         onBlur={saveEdit}
                                                         className="flex-1 min-w-0 px-3 py-2 text-xl font-mono font-bold border-2 border-blue-500 rounded-lg text-center focus:outline-none focus:ring-2 focus:ring-blue-300 bg-blue-50"
                                                         autoFocus
+                                                        title={`Editar média de ${field.label}`}
+                                                        placeholder={`Ex: ${editValue}`}
+                                                        aria-label={`Editar média de ${field.label}`}
                                                     />
                                                 </div>
                                             ) : (

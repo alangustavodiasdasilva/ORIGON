@@ -272,9 +272,34 @@ body.dark,
     opacity: 0;
   }
 
+  /* Static color class for the highlight yellow (#fdf036) used in analytics tables */
+  .bg-highlight-yellow {
+    background-color: #fdf036;
+  }
+
+  .border-l-highlight-yellow {
+    border-left-color: #fdf036;
+  }
+
+  .animate-fade-slide-down {
+    animation: fadeSlideDown 0.3s ease;
+  }
+
+  /* Static font-size helpers (replaces inline style={{ fontSize }}) */
+  .text-16px {
+    font-size: 16px;
+  }
+
+  .text-12px {
+    font-size: 12px;
+  }
+
   .no-scrollbar {
     -ms-overflow-style: none;
     scrollbar-width: none;
+    /* Firefox 64+ and Chrome 121+ */
+    overflow: -moz-scrollbars-none;
+    /* Firefox legacy */
   }
 
   .no-scrollbar::-webkit-scrollbar {

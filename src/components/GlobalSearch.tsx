@@ -15,7 +15,7 @@ interface SearchResult {
     title: string;
     subtitle: string;
     url: string;
-    metadata?: Record<string, any>;
+    metadata?: Record<string, unknown>;
 }
 
 export default function GlobalSearch() {
@@ -143,7 +143,7 @@ export default function GlobalSearch() {
                         type: 'document',
                         title: doc.fileName,
                         subtitle: `${t('search.document')} • ${doc.category} • ${new Date(doc.uploadDate).toLocaleDateString()}`,
-                        url: `/quality`
+                        url: `/checklist`
                     });
                 }
             });
@@ -155,7 +155,8 @@ export default function GlobalSearch() {
         } finally {
             setIsSearching(false);
         }
-    }, []);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [t]);
 
     // Debounce search
     useEffect(() => {
@@ -214,6 +215,8 @@ export default function GlobalSearch() {
                         <button
                             onClick={() => setIsOpen(false)}
                             className="text-neutral-400 hover:text-black"
+                            title="Fechar busca"
+                            aria-label="Fechar busca"
                         >
                             <X className="h-5 w-5" />
                         </button>

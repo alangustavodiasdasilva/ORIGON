@@ -65,10 +65,9 @@ const SimpleWeekAverage = ({
                         <tr className="hover:bg-neutral-50/50 transition-colors group">
                             <td className="border-b border-r-2 border-black/10 border-r-black bg-white p-0 h-[32px] sticky left-0 z-20 shadow-[4px_0_10px_rgba(0,0,0,0.03)]">
                                 <div className="flex h-full w-full relative">
-                                    <div className="w-[105px] flex items-center justify-center font-bold px-1 text-[9px] relative z-10 border-r border-black/10 shadow-sm"
-                                        style={{ backgroundColor: '#fdf036', color: 'black' }}>
+                                    <div className="w-[105px] flex items-center justify-center font-bold px-1 text-[9px] relative z-10 border-r border-black/10 shadow-sm bg-highlight-yellow text-black">
                                         {data[0]?.name} a {data[data.length - 1]?.name}
-                                        <div className="absolute right-[-4px] top-1/2 -translate-y-1/2 w-0 h-0 border-y-[4px] border-y-transparent border-l-[4px]" style={{ borderLeftColor: '#fdf036' }}></div>
+                                        <div className="absolute right-[-4px] top-1/2 -translate-y-1/2 w-0 h-0 border-y-[4px] border-y-transparent border-l-[4px] border-l-highlight-yellow"></div>
                                     </div>
                                     <div className="flex-1 flex items-center justify-end pr-4 pl-2 font-mono font-black text-[12px] text-black bg-white">
                                         Total: {sum.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
@@ -80,11 +79,10 @@ const SimpleWeekAverage = ({
                                 <td key={i} className="p-0 h-[32px] relative border-b border-r border-black/5 align-middle">
                                     <div
                                         className={cn(
-                                            "absolute inset-0 z-10 transition-colors border-y border-black/20 group-hover:brightness-105 shadow-sm",
+                                            "absolute inset-0 z-10 transition-colors border-y border-black/20 group-hover:brightness-105 shadow-sm bg-highlight-yellow",
                                             i === 0 && "border-l border-black/20",
                                             i === data.length - 1 && "border-r border-black/20"
                                         )}
-                                        style={{ backgroundColor: '#fdf036' }}
                                     />
                                     <div className="relative z-20 flex items-center justify-center h-full w-full font-mono font-black text-[11px] text-black">
                                         {(Number(d[dataKey]) || 0).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}

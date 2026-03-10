@@ -28,29 +28,25 @@ export default function AnalystsTab() {
     const [labId, setLabId] = useState("");
     const [foto, setFoto] = useState<string | undefined>(undefined);
 
-    useEffect(() => {
-        loadData();
-    }, [currentUser, currentLab]);
-
     const loadData = async () => {
         // Prepare promises
-        const promises: Promise<any>[] = [LabService.list()];
-
-        // Check scope
         const isGlobalAdmin = currentUser?.acesso === 'admin_global';
         const targetLabId = currentLab?.id || (currentUser?.acesso === 'admin_lab' ? currentUser.lab_id : null);
 
         // Global admin sees EVERYTHING, lab admin sees only their lab
-        if (targetLabId && !isGlobalAdmin) {
-            promises.push(AnalistaService.listByLab(targetLabId));
-        } else {
-            promises.push(AnalistaService.list());
-        }
+        const anaListPromise = (targetLabId && !isGlobalAdmin)
+            ? AnalistaService.listByLab(targetLabId)
+            : AnalistaService.list();
 
-        const [lData, aData] = await Promise.all(promises);
+        const [lData, aData] = await Promise.all([LabService.list(), anaListPromise]);
         setLabs(lData);
         setAnalistas(aData);
     };
+
+    useEffect(() => {
+        loadData();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [currentUser, currentLab]);
 
     const handleOpenDialog = (a?: Analista) => {
         // Default labId for new analyst
@@ -141,9 +137,18 @@ export default function AnalystsTab() {
 
 
     const handleDelete = async (id: string) => {
-        if (confirm("Tem certeza que deseja excluir este analista?")) {
+        if (!confirm("Tem certeza que deseja excluir este analista?")) return;
+
+        // Atualização otimista: remove da lista imediatamente
+        setAnalistas(prev => prev.filter(a => a.id !== id));
+
+        try {
             await AnalistaService.delete(id);
-            loadData();
+        } catch (err) {
+            console.error("Erro ao excluir analista:", err);
+            // Em caso de erro, restaura a lista do banco
+            await loadData();
+            alert("Erro ao excluir analista. Por favor, tente novamente.");
         }
     };
 

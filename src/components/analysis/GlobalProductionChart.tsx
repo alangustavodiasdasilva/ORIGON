@@ -57,19 +57,20 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 };
 
 export default function GlobalProductionChart({ data, labs }: GlobalProductionChartProps) {
-    if (!data || data.length === 0) return null;
-
     const [startDate, setStartDate] = useState<string>('');
     const [endDate, setEndDate] = useState<string>('');
     const [granularity, setGranularity] = useState<'day' | 'week' | 'month'>('day');
     const [selectedLabs, setSelectedLabs] = useState<string[]>([]);
 
-    // Initialize selected labs
-    useMemo(() => {
-        if (labs && labs.length > 0 && selectedLabs.length === 0) {
+    // Initialize selected labs when labs change
+    React.useEffect(() => {
+        if (labs && labs.length > 0) {
             setSelectedLabs(labs.map(l => l.id));
         }
     }, [labs]);
+
+    // Early return after all hooks
+    if (!data || data.length === 0) return null;
 
     const toggleLab = (labId: string, e: React.MouseEvent) => {
         if (e.ctrlKey || e.metaKey || e.shiftKey) {

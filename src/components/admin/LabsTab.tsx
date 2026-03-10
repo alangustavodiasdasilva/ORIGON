@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Plus, Trash2, Edit2, Landmark, X, AlertTriangle, Loader2, CheckCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,11 +25,20 @@ export default function LabsTab() {
     const [cidade, setCidade] = useState("");
     const [estado, setEstado] = useState("");
 
+    // Flag para bloquear o realtime durante operações de delete (evita race condition)
+    const isDeleteInProgressRef = useRef(false);
+
     useEffect(() => {
         loadLabs();
         // Sincronização Realtime — atualiza automaticamente sem F5
         // quando qualquer usuário altera labs no banco de dados
-        const unsubscribe = LabService.subscribe(() => loadLabs());
+        const unsubscribe = LabService.subscribe(() => {
+            // Se estiver no meio de um delete, ignora o evento realtime
+            // para evitar que o item deletado volte para a tela
+            if (!isDeleteInProgressRef.current) {
+                loadLabs();
+            }
+        });
         return unsubscribe;
     }, []);
 
@@ -91,6 +100,13 @@ export default function LabsTab() {
         const labId = deletingLab.id;
         const labNome = deletingLab.nome;
 
+        // Bloqueia realtime durante o delete para evitar race condition
+        isDeleteInProgressRef.current = true;
+
+        // Atualização otimista: remove da lista IMEDIATAMENTE
+        setLabs(prev => prev.filter(l => l.id !== labId));
+        setDeletingLab(null);
+
         try {
             // Passo 1: Apagar máquinas vinculadas
             const machines = await MachineService.listByLab(labId);
@@ -107,12 +123,7 @@ export default function LabsTab() {
             // Passo 3: Excluir o laboratório
             await LabService.delete(labId);
 
-            // Fecha o painel de confirmação e mostra sucesso inline
-            setDeletingLab(null);
             setDeleteSuccess(`Laboratório "${labNome}" removido com sucesso.`);
-
-            // Recarrega lista
-            await loadLabs();
 
             // Toast após tudo estabilizar
             setTimeout(() => {
@@ -124,16 +135,21 @@ export default function LabsTab() {
                 setDeleteSuccess(null);
             }, 2500);
 
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error("Erro ao excluir laboratório:", err);
-            setDeletingLab(null);
+            // Em caso de erro: restaura o item na lista
+            await loadLabs();
             addToast({
                 title: "Erro ao Excluir",
-                description: err?.message || "Falha ao remover o laboratório.",
+                description: (err instanceof Error ? err.message : null) || "Falha ao remover o laboratório.",
                 type: "error"
             });
         } finally {
             setIsDeleting(false);
+            // Libera o realtime após delay para garantir propagação
+            setTimeout(() => {
+                isDeleteInProgressRef.current = false;
+            }, 3000);
         }
     };
 
@@ -154,8 +170,7 @@ export default function LabsTab() {
 
             {/* Banner de sucesso inline */}
             {deleteSuccess && (
-                <div className="flex items-center gap-3 bg-emerald-50 border border-emerald-200 rounded-xl px-5 py-3 text-sm text-emerald-800"
-                    style={{ animation: 'fadeSlideDown 0.3s ease' }}>
+                <div className="flex items-center gap-3 bg-emerald-50 border border-emerald-200 rounded-xl px-5 py-3 text-sm text-emerald-800 animate-fade-slide-down">
                     <CheckCircle className="h-4 w-4 text-emerald-500 shrink-0" />
                     <span className="font-medium">{deleteSuccess}</span>
                 </div>
@@ -164,8 +179,7 @@ export default function LabsTab() {
             {/* Painel de confirmação inline — SEM portal/modal para evitar erro insertBefore */}
             {deletingLab && (
                 <div
-                    className="border border-red-200 bg-red-50/80 rounded-xl p-4 space-y-3 overflow-hidden"
-                    style={{ animation: 'fadeSlideDown 0.25s ease' }}
+                    className="border border-red-200 bg-red-50/80 rounded-xl p-4 space-y-3 overflow-hidden animate-fade-slide-down"
                 >
                     <div className="flex items-start gap-3">
                         <AlertTriangle className="h-5 w-5 text-red-500 mt-0.5 shrink-0" />

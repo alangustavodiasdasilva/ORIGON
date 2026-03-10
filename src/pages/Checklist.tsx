@@ -90,18 +90,15 @@ export default function Checklist() {
 
         try {
             const targetLabId = currentLab?.id || user?.lab_id;
-            await AuditService.upload({
+            await AuditService.createTask({
                 name: formData.name,
-                fileName: formData.name + '.task',
-                fileSize: 0,
-                fileType: 'task/custom',
-                category: 'Checklist Operacional',
-                analystName: user?.nome || 'Analista',
                 labId: targetLabId || undefined,
                 isTask: true,
-                deadline: formData.deadline,
+                deadline: formData.deadline || undefined,
                 assignedTo: formData.assignedTo || undefined,
-                observation: formData.observation
+                observation: formData.observation || undefined,
+                category: 'Checklist Operacional',
+                createdBy: user?.nome || undefined,
             });
 
             addToast({ title: 'Atividade Registrada!', type: 'success' });
@@ -423,7 +420,7 @@ function ChecklistItemCard({ item, viewMode, onToggle, onDelete }: {
                     </div>
                 </div>
                 <div className="flex items-center gap-4">
-                    <button onClick={onDelete} className="p-3 text-neutral-200 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100">
+                    <button onClick={onDelete} className="p-3 text-neutral-200 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100" title="Remover atividade" aria-label="Remover atividade">
                         <Trash2 className="h-5 w-5" />
                     </button>
                     <ChevronRight className="h-5 w-5 text-neutral-200" />

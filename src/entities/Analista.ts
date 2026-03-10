@@ -141,12 +141,11 @@ export const AnalistaService = {
         if (isSupabaseEnabled()) {
             const { error } = await supabase.from('analistas').delete().eq('id', id);
             if (error) throw error;
-            return;
         }
-
+        // SEMPRE sincroniza o localStorage após deletar — evita o "fantasma"
+        // que voltava quando o Supabase estava lento ou era o fallback
         const analistas = getStoredAnalistas();
-        const filtered = analistas.filter(a => a.id !== id);
-        saveStoredAnalistas(filtered);
+        saveStoredAnalistas(analistas.filter(a => a.id !== id));
     },
 
     async updateLastActive(id: string, loteId?: string | null): Promise<void> {
