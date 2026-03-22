@@ -125,7 +125,7 @@ export default function Quality() {
                 }
             };
             reader.readAsDataURL(file);
-        } catch (error) {
+        } catch (_error) {
             addToast({ title: "Erro no Upload", type: "error" });
             setIsUploading(false);
         }

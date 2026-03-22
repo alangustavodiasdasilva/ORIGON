@@ -73,6 +73,7 @@ export default function ChatAssistant() {
     // Quando abrir o chat e não estiver minimizado, remove a bolinha
     useEffect(() => {
         if (isOpen && !isMinimized) {
+            // eslint-disable-next-line react-hooks/set-state-in-effect
             setHasUnread(false);
         }
     }, [isOpen, isMinimized]);

@@ -107,6 +107,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
         window.addEventListener('offline', handleOffline);
 
         // Initial check
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         checkPendingData();
 
         // Periodic check every 5 minutes

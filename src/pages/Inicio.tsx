@@ -12,6 +12,7 @@ export default function Inicio() {
 
     useEffect(() => {
         if (user?.acesso === 'admin_global' && !currentLab) {
+            // eslint-disable-next-line react-hooks/set-state-in-effect
             setIsLoadingLabs(true);
             LabService.list()
                 .then(setLabs)

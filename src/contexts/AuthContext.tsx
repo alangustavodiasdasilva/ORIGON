@@ -139,6 +139,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
             if (found) {
                 // Segurança: Remove a senha do objeto de sessão antes de salvar no localStorage
+                // eslint-disable-next-line @typescript-eslint/no-unused-vars
                 const { senha: _senha, ...userSession } = found;
 
                 // Se a senha no banco era texto puro, atualiza para hash (Migração Automática)
