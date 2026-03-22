@@ -31,7 +31,7 @@ const getStoredProducao = (): ProducaoData[] => {
 
 const saveStoredProducao = (data: ProducaoData[]) => {
     try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(data.slice(-5000))); // Keep last 5000
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); 
     } catch (e) {
         console.warn("Storage full, could not save all production data:", e);
     }
@@ -102,6 +102,10 @@ export const producaoService = {
 
                 const { data, error } = await query.order('data_producao', { ascending: true });
                 if (error) throw error;
+                
+                // Limpa o cache local pois o Supabase é a fonte oficial
+                localStorage.removeItem(STORAGE_KEY);
+                
                 return data || [];
             } catch (err) {
                 console.warn("Supabase list failed, falling back to local:", err);
@@ -113,6 +117,26 @@ export const producaoService = {
         const filtered = local;
 
         return labId === 'all' ? filtered : (labId ? filtered.filter(p => p.lab_id === labId) : filtered);
+    },
+
+    subscribe(callback: () => void): () => void {
+        const url = import.meta.env.VITE_SUPABASE_URL;
+        const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
+        const enabled = !!url && url !== 'YOUR_SUPABASE_URL' && !!key && key !== 'YOUR_SUPABASE_ANON_KEY';
+        if (!enabled) return () => {};
+
+        const channel = supabase
+            .channel('producao-realtime-' + Math.random().toString(36).slice(2))
+            .on(
+                'postgres_changes',
+                { event: '*', schema: 'public', table: 'operacao_producao' },
+                () => callback()
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
     },
 
     async deleteAll(labId: string) {

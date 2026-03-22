@@ -40,7 +40,7 @@ export default function ToolsWidget() {
                         <div className="flex items-center gap-2 text-yellow-800 dark:text-yellow-100 font-bold text-xs uppercase tracking-widest">
                             <StickyNote className="h-3 w-3" /> Bloco de Notas
                         </div>
-                        <button onClick={() => setActiveTool(null)} className="text-yellow-800/50 hover:text-yellow-900 dark:text-yellow-100/50 dark:hover:text-white">
+                        <button onClick={() => setActiveTool(null)} title="Fechar" className="text-yellow-800/50 hover:text-yellow-900 dark:text-yellow-100/50 dark:hover:text-white">
                             <X className="h-3 w-3" />
                         </button>
                     </div>
@@ -59,7 +59,7 @@ export default function ToolsWidget() {
                         <div className="flex items-center gap-2 text-slate-300 font-bold text-xs uppercase tracking-widest">
                             <Calculator className="h-3 w-3" /> Média Rápida
                         </div>
-                        <button onClick={() => setActiveTool(null)} className="text-slate-500 hover:text-white">
+                        <button onClick={() => setActiveTool(null)} title="Fechar" className="text-slate-500 hover:text-white">
                             <X className="h-3 w-3" />
                         </button>
                     </div>

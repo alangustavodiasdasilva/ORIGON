@@ -153,15 +153,8 @@ export const statusOSService = {
                     }
                 }
 
-                // Sincroniza o cache local com os dados frescos da nuvem
-                if (allData.length > 0) {
-                    const local = getStoredStatusOS();
-                    const otherLabsData = local.filter(d => d.lab_id !== labId);
-                    saveStoredStatusOS([...otherLabsData, ...allData]);
-                } else if (labId !== 'all') {
-                    const otherLabsData = getStoredStatusOS().filter(d => d.lab_id !== labId);
-                    saveStoredStatusOS(otherLabsData);
-                }
+                // Limpa o cache local pois o Supabase é a verdadeira fonte oficial
+                localStorage.removeItem(STORAGE_KEY);
 
                 return allData;
             } catch (err) {

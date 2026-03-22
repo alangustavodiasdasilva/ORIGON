@@ -22,24 +22,8 @@ export default function Login() {
 
         setIsSubmitting(true);
         try {
-            // Validate credentials WITHOUT logging in yet
-            const { AnalistaService } = await import("@/entities/Analista");
-            const users = await AnalistaService.list();
-
-            // Hash protection just like AuthContext
-            const encoder = new TextEncoder();
-            const data = encoder.encode(senha);
-            const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-            const hashArray = Array.from(new Uint8Array(hashBuffer));
-            const inputHash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-
-            console.log("Users found:", users.length, users); // Debugging
-
-            const normalizedEmail = email.toLowerCase().trim();
-            const found = users.find(u => u.email.toLowerCase() === normalizedEmail && (u.senha === senha || u.senha === inputHash));
-
-            if (found) {
-                // Show splash screen FIRST
+            const success = await login(email, senha);
+            if (success) {
                 setShowSplash(true);
             } else {
                 addToast({

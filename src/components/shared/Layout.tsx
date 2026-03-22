@@ -16,7 +16,6 @@ import {
     Menu,
     X,
     FileSpreadsheet,
-    ClipboardCheck
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
@@ -29,13 +28,13 @@ import NotificationCenter from "@/components/NotificationCenter";
 import GlobalSearch from "@/components/GlobalSearch";
 import { BackupService } from "@/services/BackupService";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
+import { PresenceIndicators } from "@/components/realtime/PresenceIndicators";
 
 export default function Layout() {
     const location = useLocation();
     const { user, logout } = useAuth();
     const { toasts } = useToast();
     const { t, language, setLanguage } = useLanguage();
-    const [onlineUsers, setOnlineUsers] = useState<Analista[]>([]);
 
     // Enable global keyboard shortcuts
     useKeyboardShortcuts();
@@ -61,27 +60,9 @@ export default function Layout() {
         }
     }, [user?.id, location.search]);
 
-    useEffect(() => {
-        const loadOnline = async () => {
-            try {
-                const list = await AnalistaService.list();
-                const now = new Date().getTime();
-                const others = list.filter(a => {
-                    const isActive = a.last_active && (now - new Date(a.last_active).getTime() < 12000);
-                    return a.id !== user?.id &&
-                        a.email !== "admin@fibertech.com" &&
-                        isActive;
-                });
-                setOnlineUsers(others);
-            } catch (error) {
-                console.error("Erro ao carregar usuários online:", error);
-            }
-        };
-
-        loadOnline();
-        const interval = setInterval(loadOnline, 10000); // 10s — usuários online não exige atualização instantânea
-        return () => clearInterval(interval);
-    }, [user?.id]);
+    // A verificação de ativos (15s) mantém a query do banco viva (Analytics),
+    // mas não precisamos mais da request manual para atualizar a UI de online.
+    // O Supabase Presence (RealtimeService) assumirá a parte visual.
 
     const navItems = [
         { href: "/", label: t('nav.home'), icon: LayoutDashboard, public: true },
@@ -91,7 +72,6 @@ export default function Layout() {
         { href: "/verificacao", label: "Verificação", icon: CheckCircle2, allowedRoles: ['admin_global', 'admin_lab', 'quality_admin'] },
         { href: "/operacao", label: "Operação", icon: Zap, allowedRoles: ['admin_global', 'admin_lab', 'quality_admin'] },
         { href: "/monitoramento-os", label: "Monitoramento O.S.", icon: FileSpreadsheet, allowedRoles: ['admin_global', 'admin_lab', 'quality_admin'] },
-        { href: "/checklist", label: "Checklist", icon: ClipboardCheck, allowedRoles: ['admin_global', 'admin_lab', 'quality_admin'] },
         { href: "/admin", label: t('nav.config'), icon: ShieldCheck, allowedRoles: ['admin_global', 'admin_lab'] },
     ];
 
@@ -355,11 +335,10 @@ export default function Layout() {
                         )}
 
                         <div className="flex items-center gap-2 pl-4 border-l border-neutral-200">
-                            <span className="h-2 w-2 bg-black animate-pulse rounded-full" />
-                            <span className="text-[10px] font-bold uppercase tracking-widest text-black whitespace-nowrap">
-                                <span className="hidden sm:inline">{onlineUsers.length + 1} {t('common.active_users')}</span>
-                                <span className="sm:hidden">{onlineUsers.length + 1} ON</span>
-                            </span>
+                            {/* Novo Componente Nativo de Presença Realtime */}
+                            <div className="hidden sm:block">
+                                <PresenceIndicators />
+                            </div>
                         </div>
                     </div>
                 </header>

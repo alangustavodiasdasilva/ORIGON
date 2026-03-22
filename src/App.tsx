@@ -11,6 +11,7 @@ import { LanguageProvider } from "@/contexts/LanguageContext";
 import { ErrorBoundary } from "@/components/shared/ErrorBoundary";
 import { producaoService } from "@/services/producao.service";
 import { statusOSService } from "@/services/statusOS.service";
+import { realtimeService } from "@/services/RealtimeService";
 
 // Limpeza diária à meia noite das tabelas "Operacao" e "Monitoramento O.S."
 function useDailyClear() {
@@ -57,7 +58,18 @@ const Verificacao = lazy(() => import("@/pages/Verificacao"));
 
 
 function AppRoutes() {
-    const { isAuthenticated, isLoading: authLoading } = useAuth();
+    const { user, isAuthenticated, isLoading: authLoading } = useAuth();
+    
+    // Injeta realtime presence
+    useEffect(() => {
+        if (isAuthenticated && user?.id) {
+            try {
+                realtimeService.init(user.id, user.nome);
+            } catch (err) {
+                console.error("Falha ao inicializar o RealtimeService:", err);
+            }
+        }
+    }, [isAuthenticated, user?.id, user?.nome]);
 
     // Executa o check de meia-noite se estiver logado
     useDailyClear();

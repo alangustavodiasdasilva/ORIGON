@@ -45,6 +45,14 @@ export default function AnalystsTab() {
 
     useEffect(() => {
         loadData();
+        
+        const unsubscribe = AnalistaService.subscribe(() => {
+            loadData();
+        });
+        
+        return () => {
+            unsubscribe();
+        };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [currentUser, currentLab]);
 

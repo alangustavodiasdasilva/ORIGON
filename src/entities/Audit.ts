@@ -506,6 +506,26 @@ export const AuditService = {
     },
 
 
+    subscribe(callback: () => void): () => void {
+        const url = import.meta.env.VITE_SUPABASE_URL;
+        const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
+        const enabled = !!url && url !== 'YOUR_SUPABASE_URL' && !!key && key !== 'YOUR_SUPABASE_ANON_KEY';
+        if (!enabled) return () => {};
+
+        const channel = supabase
+            .channel('audit-realtime-' + Math.random().toString(36).slice(2))
+            .on(
+                'postgres_changes',
+                { event: '*', schema: 'public', table: 'auditoria_documentos' },
+                () => callback()
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    },
+
     async delete(id: string): Promise<void> {
         if (isSupabaseEnabled()) {
             const { error } = await supabase.from('auditoria_documentos').delete().eq('id', id);

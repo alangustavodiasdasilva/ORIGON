@@ -842,8 +842,7 @@ export default function MonitoramentoOS() {
         try {
             await statusOSService.clearData(labId); // Limpa a tabela para substituir pela nova
 
-            let totalRecords = 0;
-            await parseStatusOSFileInChunks(file, async (batch: StatusOSParsed[]) => {
+            const result = await parseStatusOSFileInChunks(file, async (batch: StatusOSParsed[]) => {
                 if (batch.length > 0) {
                     const safeDate = (d: Date | null) => d ? d.toISOString() : undefined;
                     const parsedBatch: any[] = batch.map(b => ({
@@ -854,12 +853,21 @@ export default function MonitoramentoOS() {
                         data_finalizacao: safeDate(b.data_finalizacao)
                     }));
                     await statusOSService.uploadData(parsedBatch, labId);
-                    totalRecords += batch.length;
                 }
             }, 2000);
-            if (totalRecords === 0) { addToast({ title: "Arquivo Vazio", description: "Nenhum dado válido encontrado.", type: "warning" }); return; }
+            
+            if (result.totalValidos === 0) { 
+                addToast({ title: "Arquivo Válido não encontrado", description: result.erros.length > 0 ? `Problema detectado: ${result.erros[0]}` : "Nenhuma O.S. válida no arquivo.", type: "warning" }); 
+                return; 
+            }
+            
             await loadData();
-            addToast({ title: "Sucesso!", description: `${totalRecords} registros processados.`, type: "success" });
+            
+            if (result.totalRejeitados > 0) {
+                addToast({ title: "Atenção (Incompletos)", description: `${result.totalValidos} O.S. importadas, ${result.totalRejeitados} ignoradas. Ex: ${result.erros[0]}`, type: "warning" });
+            } else {
+                addToast({ title: "Sucesso!", description: `${result.totalValidos} O.S. processadas perfeitamente.`, type: "success" });
+            }
         } catch (error: any) {
             console.error("Erro no upload:", error);
             addToast({ title: "Erro de Processamento", description: error.message || "Erro desconhecido", type: "error" });

@@ -1,5 +1,12 @@
 import * as XLSX from 'xlsx';
 
+export interface ParseResult {
+    totalLido: number;
+    totalValidos: number;
+    totalRejeitados: number;
+    erros: string[];
+}
+
 export interface ProducaoParsed {
     lab_id: string;
     identificador_unico: string;
@@ -28,7 +35,7 @@ export const parseProducaoFileInChunks = async (
     labId: string,
     onBatch: (batch: ProducaoParsed[]) => Promise<void>,
     batchSize: number = 2000
-): Promise<number> => {
+): Promise<ParseResult> => {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
 
@@ -74,8 +81,7 @@ export const parseProducaoFileInChunks = async (
                 let currentBlockDate: string | null = null;
                 let currentTurnoLabel: string = "";
                 let currentBatch: ProducaoParsed[] = [];
-                let totalProcessed = 0;
-                let rowsWithData = 0;
+                let result: ParseResult = { totalLido: 0, totalValidos: 0, totalRejeitados: 0, erros: [] };
 
                 for (let i = 0; i < rows.length; i++) {
                     if (i === headerRowIndex) continue;
@@ -134,13 +140,28 @@ export const parseProducaoFileInChunks = async (
                             if (typeof cell === 'number') val = cell;
                             else if (typeof cell === 'string' && cell.trim() !== "") {
                                 const clean = cell.replace(/\./g, "").replace(",", ".");
-                                // Verify it's not a date string mistakenly being parsed as value
                                 if (!clean.includes("/") && !isNaN(parseFloat(clean))) {
                                     val = parseFloat(clean);
                                 }
                             }
 
-                            if (isNaN(val) || val < 0) continue;
+                            result.totalLido++;
+
+                            if (isNaN(val) || val < 0) {
+                                result.totalRejeitados++;
+                                if (result.erros.length < 15) result.erros.push(`Linha ${i + 1}, Mq ${machineMap[colIdx] || '?' }: peso inválido (${cell})`);
+                                continue;
+                            }
+                            if (!currentBlockDate) {
+                                result.totalRejeitados++;
+                                if (result.erros.length < 15) result.erros.push(`Linha ${i + 1}: Data de produção não identificada pelo bloco.`);
+                                continue;
+                            }
+                            if (!currentTurnoLabel) {
+                                result.totalRejeitados++;
+                                if (result.erros.length < 15) result.erros.push(`Linha ${i + 1}: Turno não identificado.`);
+                                continue;
+                            }
 
                             // Find which machine this column belongs to
                             // Rule: Exact match first, then offset +1
@@ -159,30 +180,24 @@ export const parseProducaoFileInChunks = async (
                                     peso: val,
                                     metadata: { source: 'excel_upload_streaming_robust' }
                                 });
-                                foundInRow++;
+                                result.totalValidos++;
                             }
-                        }
-
-                        if (foundInRow > 0) {
-                            rowsWithData++;
                         }
 
                         if (currentBatch.length >= batchSize) {
                             await onBatch(currentBatch);
-                            totalProcessed += currentBatch.length;
                             currentBatch = [];
                         }
                     }
                 }
 
-                console.log(`Finished parsing. Total rows with data: ${rowsWithData}, Total records: ${totalProcessed + currentBatch.length}`);
+                console.log(`Finished parsing. Total Validos: ${result.totalValidos}, Total Rejeitados: ${result.totalRejeitados}`);
 
                 if (currentBatch.length > 0) {
                     await onBatch(currentBatch);
-                    totalProcessed += currentBatch.length;
                 }
 
-                resolve(totalProcessed);
+                resolve(result);
             } catch (error) {
                 reject(error);
             }

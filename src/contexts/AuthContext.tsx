@@ -30,14 +30,7 @@ async function hashPassword(password: string): Promise<string> {
     return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
-// Mock Seed User for First Run
-const SEED_ADMIN: Omit<Analista, 'id' | 'created_at' | 'updated_at'> = {
-    nome: "Administrador Global",
-    email: "admin@fibertech.com",
-    senha: "admin",
-    acesso: "admin_global",
-    cargo: "Diretor"
-};
+
 
 export function AuthProvider({ children }: { children: ReactNode }) {
     const [user, setUser] = useState<Analista | null>(null);
@@ -68,12 +61,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     }
                 }
             }
-            // Seed database if empty - wrapped in try-catch to prevent app hang
-            try {
-                await checkAndSeed();
-            } catch (e) {
-                console.warn("Database seeding failed (likely offline):", e);
-            }
+
 
             setIsLoading(false);
         };
@@ -91,29 +79,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
     }, [currentLab, isLoading]);
 
-    const checkAndSeed = async () => {
-        const users = await AnalistaService.list();
 
-        // Seed Default Admin if empty
-        if (users.length === 0) {
-            console.log("Seeding admin user...");
-            await AnalistaService.create(SEED_ADMIN);
-        }
-
-        // Ensure Specific User Exists (User Request)
-        const specificUser = users.find(u => u.email === "alangds03@gmail.com");
-        if (!specificUser) {
-            console.log("Seeding specific global admin...");
-            await AnalistaService.create({
-                nome: "Alan Dias",
-                email: "alangds03@gmail.com",
-                senha: "212472",
-                acesso: "admin_global",
-                cargo: "Desenvolvedor",
-                foto: undefined
-            });
-        }
-    };
 
     const refreshUser = async () => {
         if (!user) return;

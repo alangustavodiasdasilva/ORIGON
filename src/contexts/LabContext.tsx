@@ -14,9 +14,15 @@ export function LabProvider({ children }: { children: ReactNode }) {
 
     useEffect(() => {
         // Load saved lab selection from localStorage
-        const savedLabId = localStorage.getItem(STORAGE_KEY);
-        if (savedLabId) {
-            setSelectedLabIdState(savedLabId);
+        // AuthContext saves the full lab object as JSON; extract the id safely
+        const savedLabRaw = localStorage.getItem(STORAGE_KEY);
+        if (savedLabRaw) {
+            try {
+                const parsed = JSON.parse(savedLabRaw);
+                setSelectedLabIdState(parsed?.id ?? savedLabRaw);
+            } catch {
+                setSelectedLabIdState(savedLabRaw);
+            }
         }
     }, []);
 

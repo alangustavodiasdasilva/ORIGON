@@ -149,6 +149,12 @@ export default function Verificacao() {
 
     useEffect(() => {
         loadData();
+        const unsubscribe = verificacaoService.subscribe(() => {
+            loadData();
+        });
+        return () => {
+            unsubscribe();
+        };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [labId]);
 

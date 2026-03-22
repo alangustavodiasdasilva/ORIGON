@@ -58,6 +58,13 @@ export default function Checklist() {
 
     useEffect(() => {
         loadData();
+        const unsubscribe = AuditService.subscribe(() => {
+            loadData();
+        });
+        return () => {
+            unsubscribe();
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [user, currentLab]);
 
     const loadData = async () => {
@@ -134,9 +141,14 @@ export default function Checklist() {
 
     const handleDeleteItem = async (id: string) => {
         if (confirm("Confirmar exclusão deste item?")) {
-            await AuditService.delete(id);
-            addToast({ title: "Item removido", type: "info" });
-            loadData();
+            try {
+                await AuditService.delete(id);
+                addToast({ title: "Item removido", type: "info" });
+                loadData();
+            } catch (error) {
+                console.error("Error deleting:", error);
+                addToast({ title: "Erro ao remover item", type: "error" });
+            }
         }
     };
 
@@ -144,8 +156,11 @@ export default function Checklist() {
         const matchesSearch = item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
             (item.observation?.toLowerCase().includes(searchTerm.toLowerCase()));
 
-        if (filterStatus === 'all') return matchesSearch;
-        return matchesSearch && (filterStatus === 'completed' ? item.status === 'completed' : item.status !== 'completed');
+        if (!matchesSearch) return false;
+        
+        if (filterStatus === 'all') return true;
+        
+        return filterStatus === 'completed' ? item.status === 'completed' : item.status !== 'completed';
     });
 
     // const pendingCount = items.filter(i => i.status !== 'completed').length;
@@ -419,9 +434,19 @@ function ChecklistItemCard({ item, viewMode, onToggle, onDelete }: {
                         )}
                     </div>
                 </div>
-                <div className="flex items-center gap-4">
-                    <button onClick={onDelete} className="p-3 text-neutral-200 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100" title="Remover atividade" aria-label="Remover atividade">
-                        <Trash2 className="h-5 w-5" />
+                <div className="flex items-center gap-4 relative z-50">
+                    <button 
+                        type="button"
+                        onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            onDelete();
+                        }} 
+                        className="p-3 text-neutral-200 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100 relative z-50 cursor-pointer flex items-center justify-center isolate" 
+                        title="Remover atividade" 
+                        aria-label="Remover atividade"
+                    >
+                        <Trash2 className="h-5 w-5 pointer-events-none" />
                     </button>
                     <ChevronRight className="h-5 w-5 text-neutral-200" />
                 </div>
@@ -484,7 +509,7 @@ function ChecklistItemCard({ item, viewMode, onToggle, onDelete }: {
                     </div>
                 </div>
 
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-4 relative z-50">
                     {item.deadline && (
                         <div className="text-right flex flex-col items-end">
                             <span className="text-[9px] font-black uppercase tracking-widest text-neutral-300 mb-0.5">Prazo Final</span>
@@ -492,11 +517,16 @@ function ChecklistItemCard({ item, viewMode, onToggle, onDelete }: {
                         </div>
                     )}
                     <button
-                        onClick={onDelete}
-                        className="p-4 bg-red-50 text-red-400 rounded-2xl hover:bg-red-500 hover:text-white transition-all duration-300 shadow-sm opacity-0 group-hover:opacity-100 translate-x-4 group-hover:translate-x-0"
+                        type="button"
+                        onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            onDelete();
+                        }}
+                        className="p-4 bg-red-50 text-red-500 rounded-2xl hover:bg-red-500 hover:text-white transition-all duration-300 shadow-sm opacity-0 group-hover:opacity-100 translate-x-4 group-hover:translate-x-0 relative z-50 cursor-pointer flex items-center justify-center isolate"
                         title="Remover Atividade"
                     >
-                        <Trash2 className="h-5 w-5" />
+                        <Trash2 className="h-5 w-5 pointer-events-none" />
                     </button>
                 </div>
             </div>

@@ -1,5 +1,12 @@
 import * as XLSX from 'xlsx';
 
+export interface ParseResult {
+    totalLido: number;
+    totalValidos: number;
+    totalRejeitados: number;
+    erros: string[];
+}
+
 export interface StatusOSRawData {
     Laboratório: string;
     Contrato: string;
@@ -78,7 +85,7 @@ export const parseStatusOSFileInChunks = async (
     file: File,
     onBatch: (batch: StatusOSParsed[]) => Promise<void>,
     batchSize: number = 2000
-): Promise<number> => {
+): Promise<ParseResult> => {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
 
@@ -101,9 +108,12 @@ export const parseStatusOSFileInChunks = async (
                 });
 
                 let currentBatch: StatusOSParsed[] = [];
-                let totalProcessed = 0;
+                let result: ParseResult = { totalLido: 0, totalValidos: 0, totalRejeitados: 0, erros: [] };
+                let rowIndex = 6; // Começa na linha 7 do excel real
 
                 for (const row of rawData) {
+                    rowIndex++;
+                    result.totalLido++;
                     const getVal = (possibleKeys: string[]) => {
                         const rowKeys = Object.keys(row);
                         for (const pk of possibleKeys) {
@@ -172,24 +182,36 @@ export const parseStatusOSFileInChunks = async (
                         fatura: String(getVal(["Fatura", "Fat", "fatura"]) || ""),
                     };
 
-                    if (parsed.os_numero || parsed.cliente || parsed.romaneio) {
-                        currentBatch.push(parsed);
-                    }
+                    let hasError = false;
+                    let rowErrors = [];
 
-                    if (currentBatch.length >= batchSize) {
-                        await onBatch(currentBatch);
-                        totalProcessed += currentBatch.length;
-                        currentBatch = [];
+                    if (!parsed.os_numero) { hasError = true; rowErrors.push("O.S. ausente"); }
+                    if (!parsed.cliente) { hasError = true; rowErrors.push("Cliente ausente"); }
+                    if (!parsed.data_recepcao) { hasError = true; rowErrors.push("Data Recepção ausente/inválida"); }
+                    if (parsed.total_amostras <= 0) { hasError = true; rowErrors.push("Total de Amostras zerado ou inválido"); }
+
+                    if (hasError) {
+                        result.totalRejeitados++;
+                        if (result.erros.length < 15) {
+                            result.erros.push(`Linha ${rowIndex} (O.S. ${parsed.os_numero || '?' }): ${rowErrors.join(" | ")}`);
+                        }
+                    } else {
+                        result.totalValidos++;
+                        currentBatch.push(parsed);
+
+                        if (currentBatch.length >= batchSize) {
+                            await onBatch(currentBatch);
+                            currentBatch = [];
+                        }
                     }
                 }
 
                 // Final batch
                 if (currentBatch.length > 0) {
                     await onBatch(currentBatch);
-                    totalProcessed += currentBatch.length;
                 }
 
-                resolve(totalProcessed);
+                resolve(result);
             } catch (error) {
                 reject(error);
             }

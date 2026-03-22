@@ -71,7 +71,14 @@ export default function Operacao() {
 
     useEffect(() => {
         loadStats();
-    }, [currentLab]);
+        const unsubscribe = producaoService.subscribe(() => {
+            loadStats();
+        });
+        return () => {
+            unsubscribe();
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [user, currentLab]);
 
     useEffect(() => {
         const handlePaste = (e: ClipboardEvent) => {
@@ -338,8 +345,14 @@ export default function Operacao() {
         try {
             await producaoService.deleteAll(targetLabId); // Limpa a tabela de produção para substituir
 
-            let total = 0; await parseProducaoFileInChunks(file, targetLabId, async (batch: any[]) => { await producaoService.uploadData(batch); total += batch.length; }, 2000);
-            addToast({ title: "Upload concluído", description: `${total} registros substituídos.`, type: "success" }); loadStats();
+            const result = await parseProducaoFileInChunks(file, targetLabId, async (batch: any[]) => { await producaoService.uploadData(batch); }, 2000);
+            
+            if (result.totalRejeitados > 0) {
+                addToast({ title: "Importação com Alertas", description: `${result.totalValidos} importados. ${result.totalRejeitados} ignorados. Ex: ${result.erros[0]}`, type: "warning" });
+            } else {
+                addToast({ title: "Upload concluído", description: `${result.totalValidos} registros importados com sucesso.`, type: "success" }); 
+            }
+            loadStats();
         } catch (error) {
             console.error("Upload producao error:", error);
             addToast({ title: "Erro no processamento", type: "error" });

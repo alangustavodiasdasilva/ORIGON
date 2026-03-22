@@ -148,6 +148,26 @@ export const AnalistaService = {
         saveStoredAnalistas(analistas.filter(a => a.id !== id));
     },
 
+    subscribe(callback: () => void): () => void {
+        if (!isSupabaseEnabled()) {
+            // Sem Supabase, retorna no-op
+            return () => {};
+        }
+
+        const channel = supabase
+            .channel('analistas-realtime-' + Math.random().toString(36).slice(2))
+            .on(
+                'postgres_changes',
+                { event: '*', schema: 'public', table: 'analistas' },
+                () => callback()
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    },
+
     async updateLastActive(id: string, loteId?: string | null): Promise<void> {
         try {
             const updateData: any = { last_active: new Date().toISOString() };
