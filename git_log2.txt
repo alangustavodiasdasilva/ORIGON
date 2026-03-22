@@ -1,3 +1,0 @@
-645ed35 Atualizacoes e correcoes diversas
-7704462 fix: adiciona plugin no vite.config para criar 404.html e arrumar rotas no github pages
-b5b50c9 fix: melhora legibilidade e tamanho das fontes no saldo de análise

@@ -767,7 +767,13 @@ export default function MonitoramentoOS() {
         const faturados = mappedData.filter((d: OSItem) => d.status?.toLowerCase().includes('faturado')).length;
         const emAbertoValue = total - faturados;
         const totalAmostrasValue = mappedData.reduce((acc: number, curr: OSItem) => acc + (curr.total_amostras || 0), 0);
-        const saldoAmostrasValue = mappedData.filter((d: OSItem) => !d.data_finalizacao && d.data_recepcao).reduce((acc: number, curr: OSItem) => acc + (curr.total_amostras || 0), 0);
+        const saldoAmostrasValue = mappedData.filter((d: OSItem) => {
+            const fim = String(d.data_finalizacao || '').trim();
+            const rec = String(d.data_recepcao || '').trim();
+            const hasFim = fim !== '' && fim !== 'null' && fim !== 'undefined' && fim !== '0';
+            const hasRec = rec !== '' && rec !== 'null' && rec !== 'undefined' && rec !== '0';
+            return !hasFim && hasRec;
+        }).reduce((acc: number, curr: OSItem) => acc + (curr.total_amostras || 0), 0);
         setStats({ total, faturados, emAberto: emAbertoValue, totalAmostras: totalAmostrasValue, saldoAmostras: saldoAmostrasValue });
 
         // ── APENAS inicializa seleções se ainda estiverem vazias (não reseta seleção do usuário)
