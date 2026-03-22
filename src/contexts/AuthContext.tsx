@@ -68,9 +68,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     }
                 }
             }
-            // Seed database if empty - wrapped in try-catch to prevent app hang
+            // Seed database if empty - with timeout to prevent app hang
             try {
-                await checkAndSeed();
+                const seedTimeout = new Promise<void>((_, reject) =>
+                    setTimeout(() => reject(new Error("Seed timeout")), 5000)
+                );
+                await Promise.race([checkAndSeed(), seedTimeout]);
             } catch (e) {
                 console.warn("Database seeding failed (likely offline):", e);
             }
