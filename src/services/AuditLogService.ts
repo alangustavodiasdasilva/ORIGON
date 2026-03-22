@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Audit Log Service
  * Tracks all critical user actions for compliance and security

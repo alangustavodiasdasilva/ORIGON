@@ -21,7 +21,7 @@ export default function ExportPreview({ samples, separator, hasHeader, decimalSe
         const headers = ["MIC", "LEN", "UNF", "STR", "RD", "+b"];
         const sep = separator === "tab" ? "\t" : separator;
 
-        let lines: string[] = [];
+        const lines: string[] = [];
         if (hasHeader) {
             lines.push(headers.join(sep));
         }

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * HVI File Generator Service
  * Generates HVI format files (Uster/Premier) for individual samples

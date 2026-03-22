@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, type ReactNode } from "react";
+import { createContext, useContext, useState, type ReactNode } from "react";
 
 interface LabContextType {
     selectedLabId: string | null;
@@ -10,15 +10,9 @@ const LabContext = createContext<LabContextType>({} as LabContextType);
 const STORAGE_KEY = 'fibertech_selected_lab';
 
 export function LabProvider({ children }: { children: ReactNode }) {
-    const [selectedLabId, setSelectedLabIdState] = useState<string | null>(null);
-
-    useEffect(() => {
-        // Load saved lab selection from localStorage
-        const savedLabId = localStorage.getItem(STORAGE_KEY);
-        if (savedLabId) {
-            setSelectedLabIdState(savedLabId);
-        }
-    }, []);
+    const [selectedLabId, setSelectedLabIdState] = useState<string | null>(
+        () => localStorage.getItem(STORAGE_KEY)
+    );
 
     const setSelectedLabId = (labId: string | null) => {
         setSelectedLabIdState(labId);
@@ -36,4 +30,5 @@ export function LabProvider({ children }: { children: ReactNode }) {
     );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const useLab = () => useContext(LabContext);

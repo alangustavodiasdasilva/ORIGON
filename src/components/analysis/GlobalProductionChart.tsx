@@ -1,12 +1,23 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { Line, LineChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { cn } from "@/lib/utils";
 
 import { CalendarDays, RotateCcw } from "lucide-react";
 
+interface LabEntry {
+    id: string;
+    nome: string;
+    [key: string]: unknown;
+}
+
+interface DataPoint {
+    date: string;
+    [key: string]: string | number;
+}
+
 interface GlobalProductionChartProps {
-    data: any[]; // Array of { date: string, [labId]: number }
-    labs: any[]; // Array of { id: string, nome: string, ... }
+    data: DataPoint[]; // Array of { date: string, [labId]: number }
+    labs: LabEntry[]; // Array of { id: string, nome: string, ... }
 }
 
 const CHART_CONFIG = [
@@ -20,16 +31,17 @@ const CHART_CONFIG = [
     { hex: "#64748b", bg: "bg-slate-500", text: "text-slate-500" }, // Lab 8
 ];
 
-const CustomTooltip = ({ active, payload, label }: any) => {
+interface TooltipPayloadEntry { color: string; name: string; value: number; }
+const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: TooltipPayloadEntry[]; label?: string }) => {
     if (active && payload && payload.length) {
         return (
             <div className="bg-white p-4 border border-neutral-200 shadow-xl rounded-lg">
                 <p className="font-bold text-sm mb-2 font-mono flex items-center gap-2">
                     <CalendarDays className="h-4 w-4 text-neutral-500" />
-                    {new Date(label).toLocaleDateString('pt-BR')}
+                    {new Date(label ?? '').toLocaleDateString('pt-BR')}
                 </p>
                 <div className="space-y-1">
-                    {payload.map((entry: any, index: number) => {
+                    {payload.map((entry: TooltipPayloadEntry, index: number) => {
                         const config = CHART_CONFIG.find(c => c.hex === entry.color) || CHART_CONFIG[0];
                         return (
                             <div key={index} className="flex items-center gap-2 justify-between min-w-[150px]">
@@ -57,18 +69,17 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 };
 
 export default function GlobalProductionChart({ data, labs }: GlobalProductionChartProps) {
-    if (!data || data.length === 0) return null;
-
     const [startDate, setStartDate] = useState<string>('');
     const [endDate, setEndDate] = useState<string>('');
     const [granularity, setGranularity] = useState<'day' | 'week' | 'month'>('day');
     const [selectedLabs, setSelectedLabs] = useState<string[]>([]);
 
     // Initialize selected labs
-    useMemo(() => {
+    useEffect(() => {
         if (labs && labs.length > 0 && selectedLabs.length === 0) {
             setSelectedLabs(labs.map(l => l.id));
         }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [labs]);
 
     const toggleLab = (labId: string, e: React.MouseEvent) => {
@@ -116,6 +127,8 @@ export default function GlobalProductionChart({ data, labs }: GlobalProductionCh
         return filtered.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     }, [data, startDate, endDate]);
 
+    if (!data || data.length === 0) return null;
+
     return (
         <div className="w-full bg-white border border-neutral-200 rounded-2xl p-6 shadow-sm mb-12">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
@@ -152,7 +165,7 @@ export default function GlobalProductionChart({ data, labs }: GlobalProductionCh
                     {['day', 'week', 'month'].map((g) => (
                         <button
                             key={g}
-                            onClick={() => setGranularity(g as any)}
+                            onClick={() => setGranularity(g as 'day' | 'week' | 'month')}
                             className={cn(
                                 "px-3 py-1 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all",
                                 granularity === g ? "bg-white text-black shadow-sm" : "text-neutral-400 hover:text-neutral-600"

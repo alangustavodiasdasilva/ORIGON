@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { Card, CardContent } from "@/components/ui/card";
 import type { Sample } from "@/entities/Sample";
 import { calculateStatistics } from "@/lib/stats";

@@ -26,11 +26,6 @@ export default function Admin() {
     const [onlineAnalysts, setOnlineAnalysts] = useState<Analista[]>([]);
     const [isSyncing, setIsSyncing] = useState(false);
 
-    // Segurança: Redireciona usuários comuns para a Home, permite admin_global e admin_lab
-    if (user && user.acesso !== 'admin_global' && user.acesso !== 'admin_lab') {
-        return <Navigate to="/" replace />;
-    }
-
     useEffect(() => {
         const loadCount = async () => {
             let data = [];
@@ -75,8 +70,8 @@ export default function Admin() {
             addToast({ title: "Sincronização Concluída", description: "Seus dados locais foram enviados para a nuvem.", type: "success" });
             // Forçar reload dos dados das abas
             window.location.reload();
-        } catch (error: any) {
-            addToast({ title: "Erro na Sincronização", description: error.message, type: "error" });
+        } catch (error) {
+            addToast({ title: "Erro na Sincronização", description: error instanceof Error ? error.message : String(error), type: "error" });
         } finally {
             setIsSyncing(false);
         }
@@ -95,6 +90,11 @@ export default function Admin() {
     const filteredTabs = user?.acesso === 'admin_global'
         ? tabs
         : tabs.filter(t => t.id !== 'labs');
+
+    // Segurança: Redireciona usuários comuns para a Home, permite admin_global e admin_lab
+    if (user && user.acesso !== 'admin_global' && user.acesso !== 'admin_lab') {
+        return <Navigate to="/" replace />;
+    }
 
     return (
         <div className="max-w-7xl mx-auto space-y-16 animate-fade-in text-black pb-24">
@@ -271,17 +271,6 @@ function SystemConfigTab() {
     const [formModel, setFormModel] = useState<'USTER' | 'PREMIER'>("USTER");
     const [formLabId, setFormLabId] = useState("");
 
-    useEffect(() => {
-        const targetLabId = (currentLab?.id || (user?.acesso === 'admin_lab' ? user.lab_id : "")) || "";
-        setFormLabId(targetLabId);
-        loadData();
-        // Subscribe to real-time changes
-        const unsubscribe = MachineService.subscribe(() => {
-            loadData();
-        });
-        return () => unsubscribe();
-    }, [user, currentLab]);
-
     const loadData = async () => {
         // Load Labs for name resolution
         try {
@@ -312,6 +301,18 @@ function SystemConfigTab() {
         }
     };
 
+    useEffect(() => {
+        const targetLabId = (currentLab?.id || (user?.acesso === 'admin_lab' ? user.lab_id : "")) || "";
+        setFormLabId(targetLabId);
+        loadData();
+        // Subscribe to real-time changes
+        const unsubscribe = MachineService.subscribe(() => {
+            loadData();
+        });
+        return () => unsubscribe();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [user, currentLab]);
+
     const handleSaveMachine = async () => {
         if (!formMachineId.trim()) {
             addToast({ title: "ID da Máquina obrigatório", type: "error" });
@@ -339,6 +340,7 @@ function SystemConfigTab() {
                 await MachineService.update(editingId, payload);
                 addToast({ title: "Máquina Atualizada", type: "success" });
             } else {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 await MachineService.create(payload as any);
                 addToast({ title: "Máquina Adicionada", type: "success" });
             }

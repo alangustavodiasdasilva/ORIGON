@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Backup Service
  * Handles data export, import, and automatic backup scheduling

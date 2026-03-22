@@ -59,7 +59,7 @@ export default function PatternAnalysisModal({ isOpen, onClose, samples, onApply
         try {
             const analysis = await DeepSeekService.analyzeSamples(samples);
             setAiAnalysis(analysis);
-        } catch (error) {
+        } catch (_error) {
             setAiAnalysis("Erro ao gerar relatório descritivo.");
         } finally {
             setIsAiLoading(false);

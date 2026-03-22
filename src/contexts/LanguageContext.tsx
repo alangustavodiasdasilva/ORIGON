@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect } from "react";
+import { createContext, useContext, useState } from "react";
 import type { ReactNode } from "react";
 
 type Language = 'en' | 'pt';
@@ -293,23 +293,19 @@ interface LanguageContextType {
 const LanguageContext = createContext<LanguageContextType>({} as LanguageContextType);
 
 // Helper to access nested keys using dot notation (e.g., 'nav.home')
-function getNestedTranslation(obj: any, path: string): string {
+function getNestedTranslation(obj: Record<string, unknown>, path: string): string {
     if (!path || typeof path !== 'string') return '';
-    const result = path.split('.').reduce((prev, curr) => {
-        return (prev && typeof prev === 'object') ? prev[curr] : undefined;
-    }, obj);
+    const result = path.split('.').reduce((prev: unknown, curr: string) => {
+        return (prev && typeof prev === 'object') ? (prev as Record<string, unknown>)[curr] : undefined;
+    }, obj as unknown);
     return (result !== undefined && result !== null) ? String(result) : path;
 }
 
 export function LanguageProvider({ children }: { children: ReactNode }) {
-    const [language, setLanguageState] = useState<Language>('en');
-
-    useEffect(() => {
-        const storedLang = localStorage.getItem('app_language') as Language;
-        if (storedLang && (storedLang === 'en' || storedLang === 'pt')) {
-            setLanguageState(storedLang);
-        }
-    }, []);
+    const [language, setLanguageState] = useState<Language>(() => {
+        const storedLang = localStorage.getItem('app_language');
+        return (storedLang === 'en' || storedLang === 'pt') ? storedLang : 'en';
+    });
 
     const setLanguage = (lang: Language) => {
         setLanguageState(lang);
@@ -327,4 +323,5 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
     );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const useLanguage = () => useContext(LanguageContext);

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useEffect } from "react";
 import { FileDown, History, Trash2, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";

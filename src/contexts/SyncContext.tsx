@@ -97,7 +97,6 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
                 type: "error"
             });
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isAuthenticated, currentLab, addToast]);
 
     useEffect(() => {
@@ -163,6 +162,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
     );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useSync() {
     const context = useContext(SyncContext);
     if (context === undefined) {

@@ -28,13 +28,9 @@ export default function AnalystsTab() {
     const [labId, setLabId] = useState("");
     const [foto, setFoto] = useState<string | undefined>(undefined);
 
-    useEffect(() => {
-        loadData();
-    }, [currentUser, currentLab]);
-
     const loadData = async () => {
         // Prepare promises
-        const promises: Promise<any>[] = [LabService.list()];
+        const promises: Promise<unknown>[] = [LabService.list()];
 
         // Check scope
         const isGlobalAdmin = currentUser?.acesso === 'admin_global';
@@ -48,9 +44,14 @@ export default function AnalystsTab() {
         }
 
         const [lData, aData] = await Promise.all(promises);
-        setLabs(lData);
-        setAnalistas(aData);
+        setLabs(lData as Lab[]);
+        setAnalistas(aData as Analista[]);
     };
+
+    useEffect(() => {
+        loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [currentUser, currentLab]);
 
     const handleOpenDialog = (a?: Analista) => {
         // Default labId for new analyst
@@ -117,6 +118,7 @@ export default function AnalystsTab() {
                     await refreshUser();
                 }
             } else {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 await AnalistaService.create(payload as any);
             }
             setIsDialogOpen(false);

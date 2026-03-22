@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { ShieldCheck, FileText, Download, Trash2, CheckSquare, Eye, X as CloseIcon, ArrowLeft, Plus, Settings, Edit3, ArrowRight } from "lucide-react";
@@ -14,13 +15,6 @@ export default function Quality() {
     const { user, currentLab, selectLab, deselectLab } = useAuth();
     const { addToast } = useToast();
 
-    // Role check: Only admins or quality_admin
-    if (user && !['admin_global', 'admin_lab', 'quality_admin'].includes(user.acesso)) {
-        return <Navigate to="/" replace />;
-    }
-
-
-
     // Audit State
     const [categories, setCategories] = useState<AuditCategory[]>([]);
     const [documents, setDocuments] = useState<AuditDocument[]>([]);
@@ -34,10 +28,6 @@ export default function Quality() {
     const [editingCategory, setEditingCategory] = useState<Partial<AuditCategory> | null>(null);
     const [labs, setLabs] = useState<any[]>([]);
     const [isLoading, setIsLoading] = useState(true);
-
-    useEffect(() => {
-        loadInitialData();
-    }, [user, currentLab]);
 
     const loadInitialData = async () => {
         setIsLoading(true);
@@ -92,7 +82,9 @@ export default function Quality() {
         }
     };
 
-
+    useEffect(() => {
+        loadInitialData();
+    }, [user, currentLab]);
 
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -338,6 +330,11 @@ export default function Quality() {
 
     const currentCategory = categories.find(c => c.id === selectedCategoryId);
     const categoryDocs = documents.filter(d => d.category === currentCategory?.name);
+
+    // Role check: Only admins or quality_admin
+    if (user && !['admin_global', 'admin_lab', 'quality_admin'].includes(user.acesso)) {
+        return <Navigate to="/" replace />;
+    }
 
     return (
         <div className="space-y-12 animate-fade-in text-black pb-24">

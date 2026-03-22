@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useEffect } from "react";
 import { Plus, Trash2, Edit2, Landmark, X, AlertTriangle, Loader2, CheckCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";

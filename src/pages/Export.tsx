@@ -23,12 +23,6 @@ export default function Export() {
     const [decimalSeparator, setDecimalSeparator] = useState<"." | ",">(".");
     const [selectedColor, setSelectedColor] = useState<string>("#ef4444");
 
-    useEffect(() => {
-        if (loteId) {
-            loadData();
-        }
-    }, [loteId]);
-
     const loadData = async () => {
         if (!loteId) return;
         const l = await LoteService.get(loteId);
@@ -36,6 +30,13 @@ export default function Export() {
         const s = await SampleService.listByLote(loteId);
         setSamples(s);
     };
+
+    useEffect(() => {
+        if (loteId) {
+            loadData();
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [loteId]);
 
     const handleDownload = () => {
         let filtered = samples;

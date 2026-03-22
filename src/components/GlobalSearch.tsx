@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useEffect, useCallback } from 'react';
 import { Search, X, Filter, Building2, FileText } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';

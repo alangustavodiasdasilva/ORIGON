@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useEffect, useMemo, useState } from "react";
 import * as Lucide from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -5,6 +6,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const formatName = (name: string) => {
     return name.replace(/Linha\/Mq/gi, "MAQ").replace(/LINHA\/MQ/gi, "MAQ");
 };

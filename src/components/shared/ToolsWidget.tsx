@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { StickyNote, Calculator, X, Trash2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -6,16 +6,11 @@ import { cn } from "@/lib/utils";
 export default function ToolsWidget() {
     const [isOpen, setIsOpen] = useState(false);
     const [activeTool, setActiveTool] = useState<'notes' | 'calc' | null>(null);
-    const [note, setNote] = useState("");
+    const [note, setNote] = useState(() => localStorage.getItem("fibertech_analyst_notes") ?? "");
 
     // Calc State
     const [calcValues, setCalcValues] = useState<string>("");
     const [calcResult, setCalcResult] = useState<number | null>(null);
-
-    useEffect(() => {
-        const savedNote = localStorage.getItem("fibertech_analyst_notes");
-        if (savedNote) setNote(savedNote);
-    }, []);
 
     const handleSaveNote = (text: string) => {
         setNote(text);

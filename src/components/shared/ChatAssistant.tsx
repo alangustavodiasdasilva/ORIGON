@@ -15,6 +15,16 @@ export default function ChatAssistant() {
     const [hasUnread, setHasUnread] = useState(false);
     const scrollRef = useRef<HTMLDivElement>(null);
 
+    const playNotificationSound = () => {
+        try {
+            const audio = new Audio("https://assets.mixkit.co/active_storage/sfx/2354/2354-preview.mp3");
+            audio.volume = 0.4;
+            audio.play().catch(e => console.warn("Interação do usuário necessária para áudio:", e));
+        } catch (error) {
+            console.error("Falha ao reproduzir som:", error);
+        }
+    };
+
     // Initial load and periodic refresh
     useEffect(() => {
         const loadMessages = async () => {
@@ -66,17 +76,6 @@ export default function ChatAssistant() {
             setHasUnread(false);
         }
     }, [isOpen, isMinimized]);
-
-    const playNotificationSound = () => {
-        try {
-            // Som profissional de notificação
-            const audio = new Audio("https://assets.mixkit.co/active_storage/sfx/2354/2354-preview.mp3");
-            audio.volume = 0.4;
-            audio.play().catch(e => console.warn("Interação do usuário necessária para áudio:", e));
-        } catch (error) {
-            console.error("Falha ao reproduzir som:", error);
-        }
-    };
 
     const handleSend = () => {
         if (!input.trim() || !user) return;

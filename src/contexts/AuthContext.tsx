@@ -139,7 +139,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
             if (found) {
                 // Segurança: Remove a senha do objeto de sessão antes de salvar no localStorage
-                const { senha: _, ...userSession } = found;
+                const { senha: _senha, ...userSession } = found;
 
                 // Se a senha no banco era texto puro, atualiza para hash (Migração Automática)
                 if (found.senha === senha) {
@@ -231,4 +231,5 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const useAuth = () => useContext(AuthContext);

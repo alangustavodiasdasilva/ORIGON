@@ -24,6 +24,7 @@ interface ToastContextValue {
 
 const ToastContext = createContext<ToastContextValue | undefined>(undefined);
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useToast() {
     const context = useContext(ToastContext);
     if (!context) {
@@ -42,12 +43,8 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
         setToasts((prev) => [...prev, { id, title, description, type: finalType }]);
 
         setTimeout(() => {
-            removeToast(id);
+            setToasts((prev) => prev.filter((t) => t.id !== id));
         }, 5000);
-    }, []);
-
-    const removeToast = useCallback((id: string) => {
-        setToasts((prev) => prev.filter((t) => t.id !== id));
     }, []);
 
     return (
