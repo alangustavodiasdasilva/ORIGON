@@ -77,8 +77,8 @@ export default function Home() {
                         const lastCity = localStorage.getItem("last_lote_city");
                         if (lastCity) setNewLoteCidade(lastCity);
                     }
-                } catch (error) {
-                    console.error("Failed to fetch lab details", error);
+                } catch (_error) {
+                    console.error("Failed to fetch lab details", _error);
                     // Fallback on error too
                     const lastCity = localStorage.getItem("last_lote_city");
                     if (lastCity) setNewLoteCidade(lastCity);
@@ -143,8 +143,8 @@ export default function Home() {
                 counts[lote.id] = samples.length;
             }
             setSampleCounts(counts);
-        } catch (error) {
-            console.error(error);
+        } catch (_error) {
+            console.error(_error);
         } finally {
             setIsLoading(false);
         }
@@ -196,7 +196,7 @@ export default function Home() {
             setNewLoteCidade("");
             setIsByLoteModalOpen(false);
             navigate(`/registro?loteId=${newLote.id}`);
-        } catch (error) {
+        } catch (_error) {
             addToast({ title: "Creation Error", type: "error" });
         } finally {
             setIsCreating(false);
@@ -210,7 +210,7 @@ export default function Home() {
             addToast({ title: "Updated", type: "success" });
             setLoteToEdit(null);
             loadLotes();
-        } catch (error) {
+        } catch (_error) {
             addToast({ title: "Update Error", type: "error" });
         }
     };
@@ -225,7 +225,7 @@ export default function Home() {
                 type: "success"
             });
             loadLotes();
-        } catch (error) {
+        } catch (_error) {
             addToast({ title: "Status Update Error", type: "error" });
         }
     };
@@ -240,7 +240,7 @@ export default function Home() {
             });
             setLoteToDelete(null);
             loadLotes();
-        } catch (error) {
+        } catch (_error) {
             addToast({ title: "Delete Error", type: "error" });
         }
     };

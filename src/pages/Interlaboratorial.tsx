@@ -200,9 +200,11 @@ export default function Interlaboratorial() {
                 return `${field1} ${field2} ${field3} ${results.grd} ${getFmtVal('area')} ${getFmtVal('cnt')} ${getFmtVal('uhml')} ${getFmtVal('ui')} ${getFmtVal('sfi')} ${getFmtVal('str')} ${getFmtVal('elg')} ${getFmtVal('mic')} ${getFmtVal('mat')} ${getFmtVal('rd')} ${getFmtVal('plusB')} 000 000 ${getFmtVal('mst')} ${results.cg} ${getFmtVal('tmp')} ${getFmtVal('rh')} ${getFmtVal('sci')}`;
             }).join('\n');
 
+            // eslint-disable-next-line react-hooks/purity
             const filename = `interlaboratorial_uster_${Date.now()}.txt`;
             downloadFile(dataLines, filename);
             saveHistory({
+                // eslint-disable-next-line react-hooks/purity
                 id: Date.now(),
                 date: new Date().toLocaleString(),
                 system: "uster",
@@ -406,10 +408,12 @@ export default function Interlaboratorial() {
             ].join('\n');
 
             const content = header + '\n' + dataLines + '\n' + statsBlock;
+            // eslint-disable-next-line react-hooks/purity
             const filename = `interlaboratorial_premier_${Date.now()}.txt`;
 
             downloadFile(content, filename);
             saveHistory({
+                // eslint-disable-next-line react-hooks/purity
                 id: Date.now(),
                 date: new Date().toLocaleString(),
                 system: "premier",

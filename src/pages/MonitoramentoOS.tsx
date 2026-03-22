@@ -221,7 +221,7 @@ export default function MonitoramentoOS() {
                         if (!grouped[dateKey]) grouped[dateKey] = { name: displayDate, rawDate: dateKey };
                         grouped[dateKey]['Volume Recebido'] = (grouped[dateKey]['Volume Recebido'] || 0) + (os.total_amostras || 0);
                     }
-                } catch (e) { }
+                } catch { /* intentional */ }
             }
 
             if (os.data_finalizacao) {
@@ -237,7 +237,7 @@ export default function MonitoramentoOS() {
                             grouped[dateKey][os.revisor] = (grouped[dateKey][os.revisor] || 0) + (os.total_amostras || 0);
                         }
                     }
-                } catch (e) { }
+                } catch { /* intentional */ }
             }
         });
 
@@ -255,7 +255,7 @@ export default function MonitoramentoOS() {
                         if (!grouped[dateKey]) grouped[dateKey] = { name: displayDate, rawDate: dateKey };
                         grouped[dateKey]['Volume Produzido (Análise)'] = (grouped[dateKey]['Volume Produzido (Análise)'] || 0) + (prod.peso || 0);
                     }
-                } catch (e) { }
+                } catch { /* intentional */ }
             }
         });
 
@@ -276,7 +276,7 @@ export default function MonitoramentoOS() {
 
         osList.forEach((os: OSItem) => {
             if (!os.cliente) return;
-            let dateStr = os.data_recepcao;
+            const dateStr = os.data_recepcao;
 
             try {
                 const dateObj = new Date(dateStr);
@@ -289,7 +289,7 @@ export default function MonitoramentoOS() {
                     grouped[dateKey][os.cliente] = (grouped[dateKey][os.cliente] || 0) + os.total_amostras;
                 }
                 grouped[dateKey]['Total Recebido'] = (grouped[dateKey]['Total Recebido'] || 0) + os.total_amostras;
-            } catch (e) { }
+            } catch { /* intentional */ }
         });
 
         const dataArr = Object.values(grouped).sort((a: any, b: any) => a.rawDate.localeCompare(b.rawDate));
@@ -329,7 +329,7 @@ export default function MonitoramentoOS() {
     //             if (hours < 24) buckets['No Prazo (<24h)'] += os.total_amostras;
     //             else if (hours < 48) buckets['Atenção (24-48h)'] += os.total_amostras;
     //             else buckets['Crítico (>48h)'] += os.total_amostras;
-    //         } catch (e) { }
+    //         } catch { /* intentional */ }
     //     });
 
     //     return [
@@ -402,7 +402,7 @@ export default function MonitoramentoOS() {
                 if (!clienteGroup.dates[dateKey]) clienteGroup.dates[dateKey] = { total: 0, maxDelay: 0 };
                 clienteGroup.dates[dateKey].total += amostras;
                 if (delayHours > clienteGroup.dates[dateKey].maxDelay) clienteGroup.dates[dateKey].maxDelay = delayHours;
-            } catch (e) { }
+            } catch { /* intentional */ }
         });
 
         const sortedDates = Array.from(datesSet).sort();
@@ -477,7 +477,7 @@ export default function MonitoramentoOS() {
 
                 if (!clienteGroup.dates[dateKey]) clienteGroup.dates[dateKey] = { total: 0 };
                 clienteGroup.dates[dateKey].total += amostras;
-            } catch (e) { }
+            } catch { /* intentional */ }
         });
 
         const sortedDates = Array.from(datesSet).sort();
@@ -513,7 +513,7 @@ export default function MonitoramentoOS() {
                 const colKey = labInfo.nome + ' (Recebido)';
                 grouped[dateKey][colKey] = (grouped[dateKey][colKey] || 0) + (os.total_amostras || 0);
                 grouped[dateKey]['Total Recebido'] = (grouped[dateKey]['Total Recebido'] || 0) + (os.total_amostras || 0);
-            } catch (e) { }
+            } catch { /* intentional */ }
         });
 
         // Volume Produzido por lab por dia
@@ -531,7 +531,7 @@ export default function MonitoramentoOS() {
                 const colKey = labInfo.nome + ' (Produzido)';
                 grouped[dateKey][colKey] = (grouped[dateKey][colKey] || 0) + (prod.peso || 0);
                 grouped[dateKey]['Total Produzido'] = (grouped[dateKey]['Total Produzido'] || 0) + (prod.peso || 0);
-            } catch (e) { }
+            } catch { /* intentional */ }
         });
 
         const dataArr = Object.values(grouped).sort((a: any, b: any) => a.rawDate.localeCompare(b.rawDate));
@@ -852,7 +852,7 @@ export default function MonitoramentoOS() {
             await statusOSService.clearData(labId);
             await loadData();
             addToast({ title: "Dados Limpos", type: "success" });
-        } catch (error) { addToast({ title: "Erro ao limpar", type: "error" }); } finally { setIsLoading(false); }
+        } catch (_error) { addToast({ title: "Erro ao limpar", type: "error" }); } finally { setIsLoading(false); }
     };
 
     const handleExportPDF = async () => {

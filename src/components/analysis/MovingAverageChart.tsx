@@ -179,6 +179,7 @@ export default function MovingAverageChart({ samples, windowSize = 3, onSampleHo
             stdDevLowerY
         };
 
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [sortedSamples, selectedField, windowSize]);
 
     if (!chartData || chartData.series.length === 0) return (

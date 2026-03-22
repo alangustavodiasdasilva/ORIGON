@@ -94,8 +94,8 @@ export default function Registro() {
                 const previewUrl = URL.createObjectURL(nextFile);
 
                 setProcessedQueue(prev => [...prev, { file: nextFile, previewUrl, data }]);
-            } catch (error) {
-                console.error("Erro no processamento background", error);
+            } catch (_error) {
+                console.error("Erro no processamento background", _error);
                 // Se der erro, descartamos silenciosamente
             } finally {
                 setIsBackgroundProcessing(false);
@@ -131,8 +131,8 @@ export default function Registro() {
                 const data = await OCRExtractionService.extractFromImage(nextFile, (p) => setOcrProgress(p));
                 const previewUrl = URL.createObjectURL(nextFile);
                 reviewItem = { file: nextFile, previewUrl, data };
-            } catch (error) {
-                console.error(error);
+            } catch (_error) {
+                console.error(_error);
                 addToast({ title: "Erro no OCR", description: "Falha ao processar imagem.", type: "error" });
                 setIsProcessing(false);
                 setProcessingStatus("");
@@ -268,7 +268,7 @@ export default function Registro() {
             addToast({ title: "Registro Removido", type: "info" });
             setModalAction(null);
             loadData();
-        } catch (error) {
+        } catch (_error) {
             addToast({ title: "Erro ao Remover", type: "error" });
         }
     };
@@ -337,7 +337,7 @@ export default function Registro() {
 
             // Carrega próximo
             loadNextForReview();
-        } catch (error) {
+        } catch (_error) {
             addToast({ title: "Erro ao Salvar", type: "error" });
         }
     };

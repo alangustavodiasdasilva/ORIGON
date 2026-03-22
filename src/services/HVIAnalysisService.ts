@@ -119,7 +119,7 @@ export class HVIAnalysisService {
                     const report = this.processGroup(`MÁQUINA: ${m}`, s, {});
                     report.groupType = 'MACHINE';
                     results.push(report);
-                } catch (e) { }
+                } catch { /* intentional */ }
             }
         }
 
@@ -137,7 +137,7 @@ export class HVIAnalysisService {
                     const report = this.processGroup(`QUALIDADE: ${c}`, s, {});
                     report.groupType = 'COLOR';
                     results.push(report);
-                } catch (e) { }
+                } catch { /* intentional */ }
             }
         }
 

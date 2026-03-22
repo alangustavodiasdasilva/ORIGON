@@ -1,3 +1,4 @@
+/* eslint-disable no-useless-escape */
 import Tesseract from 'tesseract.js';
 
 export interface HVIDataRow {
@@ -252,6 +253,7 @@ const parseHVIData = (text: string): ExtractionResult => {
 
 export const OCRExtractionService = {
     async extractFromImage(file: File, onProgress?: (progress: number) => void): Promise<ExtractionResult> {
+        // eslint-disable-next-line no-async-promise-executor
         return new Promise(async (resolve, reject) => {
             try {
                 const imageUrl = URL.createObjectURL(file);

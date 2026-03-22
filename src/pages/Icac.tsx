@@ -191,7 +191,7 @@ function IcacContent() {
                 try {
                     await navigator.clipboard.writeText(fullText);
                     copied = true;
-                } catch (e) {
+                } catch (_e) {
                     console.warn("API Copy failed, trying fallback");
                 }
             }
@@ -420,6 +420,7 @@ function IcacContent() {
                         <div className="flex items-center justify-between border-b border-black pb-4">
                             <div className="flex items-baseline gap-4">
                                 <h2 className="font-serif text-2xl">Output Data</h2>
+                                {/* eslint-disable-next-line react-hooks/purity */}
                                 <span className="text-xs font-mono text-neutral-400">SESSION ID: {Date.now().toString().slice(-6)}</span>
                             </div>
                             <button onClick={() => setResults(null)} className="text-[10px] uppercase tracking-widest text-neutral-400 hover:text-black transition-colors">

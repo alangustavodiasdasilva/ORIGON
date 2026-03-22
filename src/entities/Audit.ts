@@ -164,6 +164,7 @@ export const AuditService = {
 
                 if (pathsToSign.length > 0) {
                     try {
+                        // eslint-disable-next-line @typescript-eslint/no-unused-vars
                         const { data: signedData, error: _signError } = await supabase.storage
                             .from('audit-docs')
                             .createSignedUrls(pathsToSign, 3600); // Valid for 1 hour
@@ -191,6 +192,7 @@ export const AuditService = {
         if (!data) return [];
         const parsed = JSON.parse(data);
         return parsed.map((d: AuditDocument) => {
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
             const { data, ...rest } = d;
             return rest;
         });

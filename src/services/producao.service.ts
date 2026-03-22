@@ -39,6 +39,7 @@ const saveStoredProducao = (data: ProducaoData[]) => {
 };
 
 export const producaoService = {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     async uploadData(data: ProducaoData[], _labId?: string) {
         if (data.length === 0) return;
 

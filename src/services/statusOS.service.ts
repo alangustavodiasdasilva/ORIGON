@@ -135,6 +135,7 @@ export const statusOSService = {
                     const local = getStoredStatusOS();
                     return (labId === 'all' ? local : local.filter(d => d.lab_id === labId)) as StatusOS[];
                 }
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
             } catch (_) { /* ignora falha de leitura do timestamp */ }
 
             try {

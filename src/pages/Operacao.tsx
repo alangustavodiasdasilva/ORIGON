@@ -182,7 +182,7 @@ export default function Operacao() {
             const result = (await worker.recognize(processedImageUrl)) as any;
             await worker.terminate();
             const rawText = result.data.text || "";
-            let debugLog = `--- LEITURA BRUTA ---\n${rawText}\n-------------------\n\n`;
+            const debugLog = `--- LEITURA BRUTA ---\n${rawText}\n-------------------\n\n`;
             let lines = result.data.lines || [];
             if (lines.length === 0 && rawText.trim().length > 0) {
                 lines = rawText.split('\n').map((txt: string) => ({ text: txt, words: txt.split(/\s+/).filter(Boolean).map(w => ({ text: w, bbox: { x0: 0, x1: 0, y0: 0, y1: 0 }, confidence: 100 })) }));
@@ -208,7 +208,7 @@ export default function Operacao() {
                 if (!isDataRow) {
                     const dateMatch = text.match(globalDateRegex);
                     if (dateMatch) {
-                        let day = dateMatch[1], month = dateMatch[2], year = dateMatch[3];
+                        const day = dateMatch[1], month = dateMatch[2]; let year = dateMatch[3];
                         if (year.length === 2) year = `20${year}`;
                         if (parseInt(month) <= 12 && parseInt(day) <= 31 && parseInt(year) >= 2020) {
                             const newDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
@@ -219,6 +219,7 @@ export default function Operacao() {
                     }
                 }
                 const nums = extractNumbersFromLine(line.words || []);
+                // eslint-disable-next-line no-useless-escape
                 const isFuzzyTurno = /[T\[].{2,5}\s+[123]\b/.test(text) || upper.includes("TURNO");
                 const isFuzzyTotal = upper.includes("TOTAL") || /TOT.{0,2}L/i.test(text) || upper.includes("AL GERAL");
                 const hasLabel = isFuzzyTurno || isFuzzyTotal || upper.includes("T1") || upper.includes("T2");
@@ -227,8 +228,11 @@ export default function Operacao() {
                 if (hasLabel && nums.length > 1) { while (nums.length > 0 && parseInt(nums[0].val) <= 3) nums.shift(); }
                 if (isDataLine) {
                     let label = "TURNO INDEFINIDO";
+                    // eslint-disable-next-line no-useless-escape
                     const t1 = upper.includes("TURNO 1") || upper.includes("T1") || /[T\[].{2,5}\s*1\b/.test(text);
+                    // eslint-disable-next-line no-useless-escape
                     const t2 = upper.includes("TURNO 2") || upper.includes("T2") || /[T\[].{2,5}\s*2\b/.test(text);
+                    // eslint-disable-next-line no-useless-escape
                     const t3 = upper.includes("TURNO 3") || upper.includes("T3") || /[T\[].{2,5}\s*3\b/.test(text);
                     if (t1) { if (currentBlock && currentBlock.turnos.some(t => t.nome === "TURNO 1")) { ensureBlock(''); sequentialNumericLineCount = 0; } label = "TURNO 1"; sequentialNumericLineCount = 1; }
                     else if (t2) { label = "TURNO 2"; sequentialNumericLineCount = 2; }
@@ -313,13 +317,13 @@ export default function Operacao() {
             await producaoService.uploadData(recordsToInsert);
             addToast({ title: "Salvo com sucesso!", description: `${recordsToInsert.length} registros salvos.`, type: "success" });
             setOcrData(null); setPastedImage(null); loadStats();
-        } catch (error) { addToast({ title: "Erro ao salvar", type: "error" }); } finally { setIsLoading(false); }
+        } catch (_error) { addToast({ title: "Erro ao salvar", type: "error" }); } finally { setIsLoading(false); }
     };
 
     const handleClearAllData = async () => {
         const targetLabId = currentLab?.id || user?.lab_id;
         if (!confirm("LIMPAR TUDO?") || !targetLabId) return;
-        try { await producaoService.deleteAll(targetLabId); loadStats(); addToast({ title: "Histórico Limpo", type: "success" }); } catch (error) { addToast({ title: "Erro ao limpar", type: "error" }); }
+        try { await producaoService.deleteAll(targetLabId); loadStats(); addToast({ title: "Histórico Limpo", type: "success" }); } catch (_error) { addToast({ title: "Erro ao limpar", type: "error" }); }
     };
 
     const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {

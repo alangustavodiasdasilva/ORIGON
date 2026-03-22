@@ -185,6 +185,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const selectLab = async (labId: string) => {
         if (labId === 'all') {
             const allLab = { id: 'all', nome: 'Todos os Laboratórios' };
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             setCurrentLab(allLab as any);
             localStorage.setItem("fibertech_selected_lab", JSON.stringify(allLab));
             return;

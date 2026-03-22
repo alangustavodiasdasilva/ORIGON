@@ -43,7 +43,7 @@ export default function Login() {
                 });
                 setIsSubmitting(false);
             }
-        } catch (error) {
+        } catch (_error) {
             addToast({
                 title: "Connection Error",
                 type: "error"

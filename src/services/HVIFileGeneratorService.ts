@@ -160,7 +160,7 @@ export class HVIFileGeneratorService {
     /**
      * Format number with padding (Uster format)
      */
-    // @ts-ignore
+    // @ts-expect-error - private method used via string key access
     private static formatUster(value: number, decimals: number, width: number): string {
         const formatted = value.toFixed(decimals);
         return formatted.padStart(width, ' ');

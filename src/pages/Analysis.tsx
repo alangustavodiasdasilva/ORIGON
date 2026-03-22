@@ -112,7 +112,7 @@ export default function Analysis() {
             await SampleService.update(id, { [field]: value });
             await loadData();
             addToast({ title: "Value Updated", type: "success" });
-        } catch (error) {
+        } catch (_error) {
             addToast({ title: "Update Failed", type: "error" });
         } finally {
             setIsProcessing(false);
@@ -125,7 +125,7 @@ export default function Analysis() {
             await SampleService.update(id, { cor: color });
             await loadData();
             addToast({ title: "Classified", type: "success" });
-        } catch (error) {
+        } catch (_error) {
             addToast({ title: "Error", type: "error" });
         } finally {
             setIsProcessing(false);
@@ -139,7 +139,7 @@ export default function Analysis() {
             await SampleService.delete(id);
             await loadData();
             addToast({ title: "Sample Removed", type: "success" });
-        } catch (error) {
+        } catch (_error) {
             addToast({ title: "Remove Failed", type: "error" });
         } finally {
             setIsProcessing(false);
@@ -160,7 +160,7 @@ export default function Analysis() {
             await SampleService.bulkUpdate(bulkPayload);
             await loadData();
             addToast({ title: "Patterns Applied", description: "Samples classified successfully.", type: "success" });
-        } catch (error) {
+        } catch (_error) {
             addToast({ title: "Classification Failed", type: "error" });
         } finally {
             setIsProcessing(false);
