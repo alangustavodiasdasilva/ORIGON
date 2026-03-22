@@ -20,7 +20,6 @@ const Interlaboratorial = lazy(() => import("@/pages/Interlaboratorial"));
 const Export = lazy(() => import("@/pages/Export"));
 const Admin = lazy(() => import("@/pages/Admin"));
 const Login = lazy(() => import("@/pages/Login"));
-const Quality = lazy(() => import("@/pages/Quality"));
 const Operacao = lazy(() => import("@/pages/Operacao"));
 const MonitoramentoOS = lazy(() => import("@/pages/MonitoramentoOS"));
 
@@ -55,7 +54,6 @@ function AppRoutes() {
                     <Route path="operacao" element={<Operacao />} />
                     <Route path="monitoramento-os" element={<MonitoramentoOS />} />
                     <Route path="export" element={<Export />} />
-                    <Route path="quality" element={<Quality />} />
                     <Route path="admin" element={<Admin />} />
                 </Route>
             </Routes>

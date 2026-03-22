@@ -5,14 +5,13 @@ import { useNavigate } from 'react-router-dom';
 import { LoteService } from '@/entities/Lote';
 import { SampleService } from '@/entities/Sample';
 import { LabService } from '@/entities/Lab';
-import { AuditService } from '@/entities/Audit';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { useLanguage } from '@/contexts/LanguageContext';
 
 interface SearchResult {
     id: string;
-    type: 'lote' | 'sample' | 'document' | 'lab';
+    type: 'lote' | 'sample' | 'lab';
     title: string;
     subtitle: string;
     url: string;
@@ -131,24 +130,6 @@ export default function GlobalSearch() {
                 }
             });
 
-            // Search audit documents
-            const docs = await AuditService.list();
-            docs.forEach(doc => {
-                if (
-                    doc.fileName.toLowerCase().includes(lowerQuery) ||
-                    doc.name.toLowerCase().includes(lowerQuery) ||
-                    doc.category.toLowerCase().includes(lowerQuery)
-                ) {
-                    searchResults.push({
-                        id: doc.id,
-                        type: 'document',
-                        title: doc.fileName,
-                        subtitle: `${t('search.document')} • ${doc.category} • ${new Date(doc.uploadDate).toLocaleDateString()}`,
-                        url: `/quality`
-                    });
-                }
-            });
-
             setResults(searchResults.slice(0, 50)); // Limit to 50 results
             setSelectedIndex(0);
         } catch (error) {
@@ -172,7 +153,6 @@ export default function GlobalSearch() {
             case 'lote': return <FileText className="h-4 w-4" />;
             case 'sample': return <Filter className="h-4 w-4" />;
             case 'lab': return <Building2 className="h-4 w-4" />;
-            case 'document': return <FileText className="h-4 w-4" />;
         }
     };
 

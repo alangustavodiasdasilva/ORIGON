@@ -9,7 +9,6 @@ import {
     CheckCircle2,
     AlertCircle,
     Info,
-    Award,
     Package,
     Download,
     Upload,
@@ -23,7 +22,6 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/contexts/ToastContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { AnalistaService, type Analista } from "@/entities/Analista";
-import ChatAssistant from "./ChatAssistant";
 import ParticleBackground from "./ParticleBackground";
 import NotificationCenter from "@/components/NotificationCenter";
 import GlobalSearch from "@/components/GlobalSearch";
@@ -90,7 +88,6 @@ export default function Layout() {
         { href: "/interlaboratorial", label: t('nav.interlab'), icon: Network, public: true },
         { href: "/operacao", label: "Operação", icon: Zap, allowedRoles: ['admin_global', 'admin_lab', 'quality_admin'] },
         { href: "/monitoramento-os", label: "Monitoramento O.S.", icon: FileSpreadsheet, allowedRoles: ['admin_global', 'admin_lab', 'quality_admin'] },
-        { href: "/quality", label: t('nav.quality'), icon: Award, allowedRoles: ['admin_global', 'admin_lab', 'quality_admin'] },
         { href: "/admin", label: t('nav.config'), icon: ShieldCheck, allowedRoles: ['admin_global', 'admin_lab'] },
     ];
 
@@ -369,8 +366,6 @@ export default function Layout() {
                     </div>
                 </main>
             </div>
-
-            <ChatAssistant />
         </div>
     );
 }

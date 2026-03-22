@@ -8,7 +8,6 @@ import { LoteService } from '@/entities/Lote';
 import { SampleService } from '@/entities/Sample';
 import { AnalistaService } from '@/entities/Analista';
 import { LabService } from '@/entities/Lab';
-import { AuditService } from '@/entities/Audit';
 
 export interface BackupData {
     version: string;
@@ -18,8 +17,6 @@ export interface BackupData {
         samples: any[];
         analistas: any[];
         labs: any[];
-        auditDocuments: any[];
-        auditCategories: any[];
     };
 }
 
@@ -30,13 +27,11 @@ export class BackupService {
      * Export all system data to JSON
      */
     static async exportAll(): Promise<BackupData> {
-        const [lotes, samples, analistas, labs, auditDocs, auditCats] = await Promise.all([
+        const [lotes, samples, analistas, labs] = await Promise.all([
             LoteService.list(),
             SampleService.list(),
             AnalistaService.list(),
             LabService.list(),
-            AuditService.list(),
-            AuditService.listCategories()
         ]);
 
         return {
@@ -47,8 +42,6 @@ export class BackupService {
                 samples,
                 analistas,
                 labs,
-                auditDocuments: auditDocs,
-                auditCategories: auditCats
             }
         };
     }
@@ -89,8 +82,7 @@ export class BackupService {
                 backup.data.lotes.length +
                 backup.data.samples.length +
                 backup.data.analistas.length +
-                backup.data.labs.length +
-                backup.data.auditDocuments.length;
+                backup.data.labs.length;
 
             if (!confirm(`Importar backup de ${backup.timestamp}?\n\n` +
                 `Este backup contém ${itemCount} itens.\n` +
