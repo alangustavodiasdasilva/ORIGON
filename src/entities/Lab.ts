@@ -40,20 +40,10 @@ export const LabService = {
                 const { data, error } = await supabase.from('laboratorios').select('*').order('nome');
                 if (error) throw error;
 
-                // Se Supabase retornou dados, ele é fonte de verdade — sincroniza o localStorage
-                if (data && data.length > 0) {
-                    saveStoredLabs(data);
-                    return data;
-                }
-
-                // Se Supabase veio vazio mas local tem dados: preserva local (evita apagar tudo)
-                const localData = getStoredLabs();
-                if (localData.length > 0) {
-                    console.warn("Supabase retornou vazio. Usando localStorage como fallback.");
-                    return localData;
-                }
-
-                return [];
+                // Supabase é a fonte de verdade — sincroniza e retorna (mesmo que vazio)
+                const labs = data || [];
+                saveStoredLabs(labs);
+                return labs;
             } catch (error) {
                 console.warn("Supabase (Laboratorios) indisponível, usando localStorage:", error);
                 return getStoredLabs();

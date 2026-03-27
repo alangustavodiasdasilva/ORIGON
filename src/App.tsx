@@ -51,7 +51,7 @@ const Interlaboratorial = lazy(() => import("@/pages/Interlaboratorial"));
 const Export = lazy(() => import("@/pages/Export"));
 const Admin = lazy(() => import("@/pages/Admin"));
 const Login = lazy(() => import("@/pages/Login"));
-const Checklist = lazy(() => import("@/pages/Checklist"));
+
 const Operacao = lazy(() => import("@/pages/Operacao"));
 const MonitoramentoOS = lazy(() => import("@/pages/MonitoramentoOS"));
 const Verificacao = lazy(() => import("@/pages/Verificacao"));
@@ -95,8 +95,7 @@ function AppRoutes() {
                     <Route index element={<Inicio />} />
                     <Route path="lotes" element={<Home />} />
                     <Route path="registro" element={<Registro />} />
-                    <Route path="checklist" element={<Checklist />} />
-                    <Route path="quality" element={<Checklist />} /> {/* Alias for backward compatibility */}
+
                     <Route path="analysis" element={<Analysis />} />
                     <Route path="icac" element={<Icac />} />
                     <Route path="interlaboratorial" element={<Interlaboratorial />} />

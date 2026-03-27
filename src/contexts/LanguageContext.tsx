@@ -10,8 +10,6 @@ const translations = {
             batches: "Batches",
             icac: "ICAC Generator",
             interlab: "Interlaboratory",
-            quality: "Checklist",
-            checklist: "Strategic Checklist",
             config: "Settings"
         },
         status: {
@@ -127,13 +125,6 @@ const translations = {
             document_attached: "Document Attached",
             document_removed: "Document Removed"
         },
-        checklist: {
-            title: "Strategic Checklist",
-            subtitle: "Compliance control and activity management",
-            new_task: "Register Activity",
-            pending: "Pending",
-            completed: "Completed"
-        },
         inicio: {
             select_lab: "Select Laboratory",
             no_labs: "No laboratories found.",
@@ -157,8 +148,6 @@ const translations = {
             batches: "Lotes",
             icac: "Gerador ICAC",
             interlab: "Interlaboratorial",
-            quality: "Checklist",
-            checklist: "Checklist Estratégico",
             config: "Configurações"
         },
         status: {
@@ -273,13 +262,6 @@ const translations = {
             error_no_lab: "Erro: Laboratório não identificado",
             document_attached: "Documento Anexado",
             document_removed: "Documento Removido"
-        },
-        checklist: {
-            title: "Checklist Estratégico",
-            subtitle: "Controle de conformidade e gestão de atividades",
-            new_task: "Registrar Atividade",
-            pending: "Pendentes",
-            completed: "Concluídos"
         },
         inicio: {
             select_lab: "Selecione o Laboratório",

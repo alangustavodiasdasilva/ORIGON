@@ -24,8 +24,6 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { AnalistaService, type Analista } from "@/entities/Analista";
 import ChatAssistant from "./ChatAssistant";
 import ParticleBackground from "./ParticleBackground";
-import NotificationCenter from "@/components/NotificationCenter";
-import GlobalSearch from "@/components/GlobalSearch";
 import { BackupService } from "@/services/BackupService";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { PresenceIndicators } from "@/components/realtime/PresenceIndicators";
@@ -278,13 +276,13 @@ export default function Layout() {
                     </div>
 
                     <div className="flex items-center gap-3 lg:gap-4">
-                        {/* Global Search - Hidden on tiny screens if needed, but keeping for now */}
+                        {/* Global Search Removido  */}
                         <div className="hidden sm:block">
-                            <GlobalSearch />
+                            {/* <GlobalSearch /> */}
                         </div>
 
-                        {/* Notification Center */}
-                        <NotificationCenter />
+                        {/* Notification Center Removido */}
+                        {/* <NotificationCenter /> */}
 
                         {/* Admin Tools */}
                         {isAdmin && (

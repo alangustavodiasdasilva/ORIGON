@@ -34,25 +34,17 @@ export const MachineService = {
             const { data, error } = await supabase.from('maquinas').select('*');
             if (error) throw error;
 
-            if (data && data.length > 0) {
-                return data.map((m: any) => ({
-                    id: m.id,
-                    machineId: m.identificacao,
-                    serialNumber: m.numero_serie,
-                    model: m.modelo,
-                    labId: m.lab_id,
-                    created_at: m.created_at
-                }));
-            }
-
-            // CRITICAL SAFETY NET: If Supabase empty, fall back to avoid hiding data
-            const localData = getStoredMachines();
-            if (localData.length > 0) {
-                console.warn("Supabase (Machines) empty. Using LOCAL STORAGE fallback.");
-                return localData;
-            }
-
-            return []; // Nothing anywhere
+            // Supabase é a fonte de verdade — sincroniza o localStorage e retorna
+            const machines = (data || []).map((m: any) => ({
+                id: m.id,
+                machineId: m.identificacao,
+                serialNumber: m.numero_serie,
+                model: m.modelo,
+                labId: m.lab_id,
+                created_at: m.created_at
+            }));
+            saveStoredMachines(machines);
+            return machines;
         }
         return getStoredMachines();
     },
@@ -156,12 +148,11 @@ export const MachineService = {
         if (isSupabaseEnabled()) {
             const { error } = await supabase.from('maquinas').delete().eq('id', id);
             if (error) throw error;
-            return;
         }
-
+        // SEMPRE limpa do localStorage — independente do Supabase estar ativo ou não
+        // Isso evita que dados deletados reapareçam via fallback
         const machines = getStoredMachines();
-        const filtered = machines.filter(m => m.id !== id);
-        saveStoredMachines(filtered);
+        saveStoredMachines(machines.filter(m => m.id !== id));
     },
 
     subscribe(callback: () => void): () => void {

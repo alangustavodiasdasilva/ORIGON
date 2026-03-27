@@ -250,7 +250,7 @@ export class NotificationService {
             'high',
             'Documento de Qualidade Pendente',
             `O documento "${documentName}" requer revisão no laboratório ${labName}`,
-            { labId, actionUrl: '/checklist' }
+            { labId, actionUrl: '/lotes' }
         );
     }
 
@@ -264,7 +264,7 @@ export class NotificationService {
             'critical',
             'Não Conformidade Detectada',
             message,
-            { labId, actionUrl: '/checklist' }
+            { labId, actionUrl: '/lotes' }
         );
     }
 
