@@ -124,7 +124,8 @@ export default function HVIStatisticalReportModal({ isOpen, onClose, samples }: 
                                         >
                                             <div className="flex items-center gap-3">
                                                 {r.groupType === 'COLOR' && (
-                                                    <div className="h-3 w-3 rounded-full border border-black/30 shadow-sm bg-dynamic" style={{ '--bg-color': r.machine.replace('QUALIDADE: ', '') } as React.CSSProperties} />
+                                                    /* dynamic color from DB — cannot use static class */
+                                                    <div className="h-3 w-3 rounded-full border border-black/30 shadow-sm" style={{ backgroundColor: r.machine.replace('QUALIDADE: ', '') }} />
                                                 )}
                                                 <span className="truncate max-w-[180px]">{getCleanLabel(r.machine, r.groupType)}</span>
                                             </div>
@@ -156,7 +157,8 @@ export default function HVIStatisticalReportModal({ isOpen, onClose, samples }: 
                                     <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b-4 border-black pb-8">
                                         <div className="space-y-3">
                                             <div className="flex items-center gap-5">
-                                                {activeColor && <div className="h-16 w-4 rounded-sm shadow-lg bg-dynamic" style={{ '--bg-color': activeColor } as React.CSSProperties} />}
+                                                {activeColor && /* dynamic color from DB — cannot use static class */
+                                                    <div className="h-16 w-4 rounded-sm shadow-lg" style={{ backgroundColor: activeColor }} />}
                                                 <h3 className="text-4xl md:text-6xl font-serif font-black tracking-tighter text-black uppercase italic leading-none">
                                                     {getCleanLabel(currentReport.machine, currentReport.groupType)}
                                                 </h3>
@@ -257,8 +259,9 @@ export default function HVIStatisticalReportModal({ isOpen, onClose, samples }: 
                                                         {(analysis.distribution || []).map((d: { label: string; value: number; percent: number }, i: number) => (
                                                             <div
                                                                 key={i}
-                                                                className="flex-1 bg-black/90 hover:bg-black transition-all cursor-pointer relative group h-dynamic"
-                                                                style={{ '--dynamic-height': `${d.percent}%` } as React.CSSProperties}
+                                                                className="flex-1 bg-black/90 hover:bg-black transition-all cursor-pointer relative group"
+                                                                /* dynamic height from data — cannot use static class */
+                                                                style={{ height: `${d.percent}%` }}
                                                                 title={`${d.label}: ${d.percent.toFixed(1)}%`}
                                                             >
                                                                 <div className="absolute -top-6 left-1/2 -translate-x-1/2 bg-black text-white text-[7px] px-1 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">

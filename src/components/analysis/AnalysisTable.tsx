@@ -99,10 +99,12 @@ export default function AnalysisTable({
                                     {COLORS.map(color => (
                                         <button
                                             key={color}
-                                            title={`Classificar como ${color}`}
+                                            title={`Classificar amostra como ${color}`}
+                                            aria-label={`Classificar amostra como ${color}`}
                                             onClick={() => onColorChange(sample.id, color)}
                                             className={`w-3.5 h-3.5 rounded-full border transition-all hover:scale-125 ${sample.cor === color ? 'ring-2 ring-offset-1 ring-black scale-110' : 'border-neutral-300 opacity-60 hover:opacity-100'}`}
-                                            style={{ backgroundColor: color }}
+                                            data-color={color}
+                                            style={{ backgroundColor: color } /* dynamic hex from DB */}
                                         />
                                     ))}
                                 </div>
@@ -116,13 +118,16 @@ export default function AnalysisTable({
                                     <td
                                         key={col.key}
                                         className={`py-2 px-3 ${col.editable ? 'cursor-pointer hover:bg-blue-50' : ''} ${sample.cor ? 'border-l-2' : ''}`}
-                                        style={col.key === 'amostra_id' && sample.cor ? { borderLeftColor: sample.cor } : {}}
+                                        style={col.key === 'amostra_id' && sample.cor ? { borderLeftColor: sample.cor } /* dynamic color from DB */ : undefined}
                                         onClick={() => col.editable && handleCellClick(sample, col.key)}
                                     >
                                         {isEditing ? (
                                             <input
                                                 autoFocus
                                                 value={editValue}
+                                                title={`Editar ${col.label}`}
+                                                aria-label={`Editar campo ${col.label}`}
+                                                placeholder={col.label}
                                                 onChange={e => setEditValue(e.target.value)}
                                                 onBlur={() => handleCellBlur(sample.id, col.key)}
                                                 onKeyDown={e => handleKeyDown(e, sample.id, col.key)}
