@@ -359,14 +359,7 @@ export default function Analysis() {
                             ))}
                         </div>
                         <div className="ml-auto shrink-0 flex items-center gap-4">
-                            <Button 
-                                variant="outline" 
-                                onClick={() => setIsTemplatesModalOpen(true)}
-                                className="h-10 rounded-none border-black flex items-center gap-2 uppercase text-[10px] font-bold tracking-widest hover:bg-neutral-50"
-                            >
-                                <Palette className="h-3 w-3" />
-                                Metas por Cor
-                            </Button>
+
                             <div className="px-3 py-1.5 bg-blue-50 border border-blue-200 rounded text-[9px] font-bold text-blue-700 uppercase tracking-tight">
                                 <span className="opacity-70 mr-1 italic">Objetivo:</span> 
                                 Calibrar variação das sub-medições no arquivo TXT
