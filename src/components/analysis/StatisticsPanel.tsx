@@ -135,7 +135,9 @@ export default function StatisticsPanel({ samples, selectedColor }: StatisticsPa
                 return (
                     <Card key={color} className="overflow-hidden border border-neutral-200 bg-white shadow-sm hover:shadow-lg transition-all duration-200">
                         {/* Thin color indicator */}
-                        <div className="h-0.5 w-full color-indicator" style={{ backgroundColor: color }} />
+                        <svg width="100%" height="2" className="block">
+                            <rect width="100%" height="2" fill={color} />
+                        </svg>
 
                         <CardContent className="p-6">
                             {/* Header */}

@@ -18,7 +18,9 @@ const CustomTooltip = ({ active, payload, label }: any) => {
                     {payload.map((entry: any, index: number) => (
                         <div key={`${entry.name}-${index}`} className="flex items-center justify-between gap-8">
                             <div className="flex items-center gap-2">
-                                <div className="h-2 w-2 rounded-full shadow-sm bg-dynamic" style={{ '--bg-color': entry.stroke || entry.color } as React.CSSProperties} />
+                                <svg width="8" height="8" viewBox="0 0 8 8" className="shadow-sm">
+                                    <circle cx="4" cy="4" r="4" fill={entry.stroke || entry.color} />
+                                </svg>
                                 <span className="text-[11px] font-medium text-neutral-600 uppercase pt-0.5">{entry.name}</span>
                             </div>
                             <span className="text-[11px] font-mono font-bold text-black">{Number(entry.value).toLocaleString('pt-BR')}</span>
@@ -387,7 +389,9 @@ export default function ProductionTrendChart({ data }: ProductionTrendChartProps
             <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-3 pt-6 pb-2 border-t border-neutral-100">
                 {seriesConfig.map((s) => (
                     <div key={s.name} className="flex items-center gap-2">
-                        <div className="w-3 h-3 rounded-full shadow-sm bg-dynamic" style={{ '--bg-color': s.color } as React.CSSProperties} />
+                        <svg width="12" height="12" viewBox="0 0 12 12" className="shadow-sm">
+                            <circle cx="6" cy="6" r="6" fill={s.color} />
+                        </svg>
                         <span className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest">{formatName(s.name)}</span>
                     </div>
                 ))}
