@@ -188,7 +188,9 @@ export default function ColorTemplatesModal({ isOpen, onClose, specificColor }: 
                         {(specificColor ? COLORS.filter(c => c.hex === specificColor) : COLORS).map((colorObj) => (
                             <div key={colorObj.hex} className="space-y-4 border border-neutral-200 p-4 bg-neutral-50/20">
                                 <div className="flex items-center gap-2 border-b border-neutral-200 pb-2">
-                                    <div className="w-4 h-4 rounded-full" style={{ backgroundColor: colorObj.hex }} />
+                                    <svg width="16" height="16" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" className="rounded-full">
+                                        <circle cx="8" cy="8" r="8" fill={colorObj.hex} />
+                                    </svg>
                                     <h3 className="text-xs font-black uppercase tracking-widest">{colorObj.label}</h3>
                                 </div>
 

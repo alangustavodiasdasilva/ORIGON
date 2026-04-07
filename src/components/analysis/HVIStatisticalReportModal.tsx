@@ -124,8 +124,9 @@ export default function HVIStatisticalReportModal({ isOpen, onClose, samples }: 
                                         >
                                             <div className="flex items-center gap-3">
                                                 {r.groupType === 'COLOR' && (
-                                                    /* dynamic color from DB — cannot use static class */
-                                                    <div className="h-3 w-3 rounded-full border border-black/30 shadow-sm" style={{ backgroundColor: r.machine.replace('QUALIDADE: ', '') }} />
+                                                    <svg width="12" height="12" viewBox="0 0 12 12" xmlns="http://www.w3.org/2000/svg" className="rounded-full shadow-sm drop-shadow-sm">
+                                                        <circle cx="6" cy="6" r="5.5" fill={r.machine.replace('QUALIDADE: ', '')} stroke="black" strokeOpacity="0.3" strokeWidth="1" />
+                                                    </svg>
                                                 )}
                                                 <span className="truncate max-w-[180px]">{getCleanLabel(r.machine, r.groupType)}</span>
                                             </div>
@@ -157,8 +158,11 @@ export default function HVIStatisticalReportModal({ isOpen, onClose, samples }: 
                                     <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b-4 border-black pb-8">
                                         <div className="space-y-3">
                                             <div className="flex items-center gap-5">
-                                                {activeColor && /* dynamic color from DB — cannot use static class */
-                                                    <div className="h-16 w-4 rounded-sm shadow-lg" style={{ backgroundColor: activeColor }} />}
+                                                {activeColor && 
+                                                    <svg width="16" height="64" viewBox="0 0 16 64" xmlns="http://www.w3.org/2000/svg" className="rounded-sm shadow-lg drop-shadow-lg">
+                                                        <rect width="16" height="64" rx="2" fill={activeColor} />
+                                                    </svg>
+                                                }
                                                 <h3 className="text-4xl md:text-6xl font-serif font-black tracking-tighter text-black uppercase italic leading-none">
                                                     {getCleanLabel(currentReport.machine, currentReport.groupType)}
                                                 </h3>
@@ -259,12 +263,13 @@ export default function HVIStatisticalReportModal({ isOpen, onClose, samples }: 
                                                         {(analysis.distribution || []).map((d: { label: string; value: number; percent: number }, i: number) => (
                                                             <div
                                                                 key={i}
-                                                                className="flex-1 bg-black/90 hover:bg-black transition-all cursor-pointer relative group"
-                                                                /* dynamic height from data — cannot use static class */
-                                                                style={{ height: `${d.percent}%` }}
+                                                                className="flex-1 h-full flex flex-col justify-end cursor-pointer relative group"
                                                                 title={`${d.label}: ${d.percent.toFixed(1)}%`}
                                                             >
-                                                                <div className="absolute -top-6 left-1/2 -translate-x-1/2 bg-black text-white text-[7px] px-1 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                                                                <svg width="100%" height={`${d.percent}%`} preserveAspectRatio="none" className="transition-all">
+                                                                    <rect width="100%" height="100%" className="fill-black/90 group-hover:fill-black transition-colors" />
+                                                                </svg>
+                                                                <div className="absolute top-0 pt-0 left-1/2 -translate-x-1/2 -translate-y-full bg-black text-white text-[7px] px-1 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap mb-1">
                                                                     {d.percent.toFixed(1)}%
                                                                 </div>
                                                             </div>
