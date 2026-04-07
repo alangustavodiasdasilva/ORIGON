@@ -68,12 +68,12 @@ interface SampleResult {
 }
 
 const DEFAULT_CONFIG: HviConfig = {
-    mic: { target: "4.55", deviation: "0.05" },
-    str: { target: "25.6", deviation: "0.7" },
-    uhml: { target: "25.6", deviation: "0.3" },
-    ui: { target: "79.3", deviation: "0.5" },
-    rd: { target: "75.2", deviation: "0.5" },
-    b: { target: "15.5", deviation: "0.3" },
+    mic: { target: "4.55", deviation: "0.10" },
+    str: { target: "25.6", deviation: "1.5" },
+    uhml: { target: "25.6", deviation: "0.5" },
+    ui: { target: "79.3", deviation: "1.0" },
+    rd: { target: "75.2", deviation: "1.0" },
+    b: { target: "15.5", deviation: "0.5" },
 };
 
 // --- SAFE UTILS ---

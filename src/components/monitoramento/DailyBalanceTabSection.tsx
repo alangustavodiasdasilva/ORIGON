@@ -10,10 +10,10 @@ interface DailyBalanceTabSectionProps {
     handleExportPDF: () => void;
     isGeneratingPDF: boolean;
     matrixTableRef: React.RefObject<HTMLDivElement | null>;
-    collapsedClients: string[];
+    expandedClients: string[];
     toggleClientCollapse: (client: string) => void;
     pinnedCells: Record<string, number>;
-    togglePinCell: (client: string, date: string) => void;
+    setPinLevel: (client: string, date: string, level: number) => void;
 }
 
 export const DailyBalanceTabSection: React.FC<DailyBalanceTabSectionProps> = ({
@@ -21,13 +21,22 @@ export const DailyBalanceTabSection: React.FC<DailyBalanceTabSectionProps> = ({
     handleExportPDF,
     isGeneratingPDF,
     matrixTableRef,
-    collapsedClients,
+    expandedClients,
     toggleClientCollapse,
     pinnedCells,
-    togglePinCell
+    setPinLevel
 }) => {
+    const [activePinMenu, setActivePinMenu] = React.useState<{ client: string; date: string } | null>(null);
+
     return (
         <div className="space-y-8 animate-fade-in pb-20">
+            {activePinMenu && (
+                <div 
+                    className="fixed inset-0 z-[60] bg-transparent" 
+                    onClick={() => setActivePinMenu(null)}
+                />
+            )}
+
             <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 bg-white border border-neutral-200 rounded-2xl p-6 shadow-sm">
                 <div>
                     <h3 className="text-xl font-serif text-black leading-tight tracking-tight flex items-center gap-2">
@@ -55,7 +64,7 @@ export const DailyBalanceTabSection: React.FC<DailyBalanceTabSectionProps> = ({
             </div>
 
             <div ref={matrixTableRef} className="bg-white border border-neutral-200 rounded-2xl overflow-hidden shadow-[0_8px_30px_rgb(0,0,0,0.04)] mt-6">
-                <div className="overflow-x-auto no-scrollbar max-h-[600px] overflow-y-auto w-full relative">
+                <div className="overflow-x-auto no-scrollbar max-h-[1200px] overflow-y-auto w-full relative">
                     <table className="w-full text-[11px] text-left border-collapse">
                         <thead className="sticky top-0 bg-white shadow-sm z-30 border-b-2 border-neutral-200">
                             <tr className="bg-neutral-50/50">
@@ -78,8 +87,8 @@ export const DailyBalanceTabSection: React.FC<DailyBalanceTabSectionProps> = ({
                                 <React.Fragment key={client.clientName}>
                                     <tr className="bg-white hover:bg-neutral-50 transition-colors group cursor-pointer" onClick={() => toggleClientCollapse(client.clientName)}>
                                         <td className="p-3 flex items-center gap-2 font-bold text-black border-l-4 border-l-black border-r border-neutral-200 sticky left-0 z-10 bg-white group-hover:bg-neutral-50 transition-colors shadow-[2px_0_5px_rgba(0,0,0,0.02)]">
-                                            <div key={collapsedClients.includes(client.clientName) ? "plus-saldo" : "minus-saldo"} className="shrink-0 flex items-center">
-                                                {collapsedClients.includes(client.clientName) ? <PlusSquare className="h-3.5 w-3.5 text-black" /> : <MinusSquare className="h-3.5 w-3.5 text-black" />}
+                                            <div className="shrink-0 flex items-center">
+                                                {expandedClients.includes(client.clientName) ? <MinusSquare className="h-3.5 w-3.5 text-black" /> : <PlusSquare className="h-3.5 w-3.5 text-neutral-400" />}
                                             </div>
                                             <span className="truncate">{client.clientName}</span>
                                         </td>
@@ -87,19 +96,21 @@ export const DailyBalanceTabSection: React.FC<DailyBalanceTabSectionProps> = ({
                                             const cell = client.dates[date];
                                             const total = cell?.total || 0;
                                             const pin = pinnedCells[`${client.clientName}|${date}`];
+                                            const isMenuActive = activePinMenu?.client === client.clientName && activePinMenu?.date === date;
 
-                                            let cellStyle = "text-neutral-200";
-                                            if (pin === 1) cellStyle = "bg-red-500/90 text-white border-red-600 shadow-inner";
-                                            else if (pin === 2) cellStyle = "bg-amber-400/90 text-amber-950 border-amber-500 shadow-inner font-bolder";
-                                            else if (pin === 3) cellStyle = "bg-emerald-500/90 text-white border-emerald-600 shadow-inner";
-                                            else if (total > 0 && cell?.maxDelay >= 48) cellStyle = "bg-white text-black";
-                                            else if (total > 0 && cell?.maxDelay >= 24) cellStyle = "bg-white text-black";
-                                            else if (total > 0) cellStyle = "bg-white text-black";
+                                            let cellStyle = "text-neutral-200 cursor-default";
+                                            if (pin === 1) cellStyle = "bg-red-500/95 text-white border-red-600 shadow-inner cursor-pointer";
+                                            else if (pin === 2) cellStyle = "bg-amber-400/95 text-amber-950 border-amber-500 shadow-inner font-bolder cursor-pointer";
+                                            else if (pin === 3) cellStyle = "bg-emerald-500/95 text-white border-emerald-600 shadow-inner cursor-pointer";
+                                            else if (total > 0) cellStyle = "bg-white text-black hover:bg-neutral-100 cursor-pointer";
 
                                             return (
                                                 <td key={date}
-                                                    onClick={(e) => { e.stopPropagation(); togglePinCell(client.clientName, date); }}
-                                                    className={cn("p-1.5 text-center border-r border-neutral-100 transition-colors relative overflow-hidden", cellStyle)}
+                                                    onClick={(e) => { 
+                                                        e.stopPropagation(); 
+                                                        if (total > 0) setActivePinMenu({ client: client.clientName, date }); 
+                                                    }}
+                                                    className={cn("p-1.5 text-center border-r border-neutral-100 transition-colors relative", cellStyle)}
                                                 >
                                                     {total > 0 ? (
                                                         <div className="flex flex-col items-center justify-center h-full py-1">
@@ -107,9 +118,16 @@ export const DailyBalanceTabSection: React.FC<DailyBalanceTabSectionProps> = ({
                                                             {cell.maxDelay > 0 && (
                                                                 <span className={cn("text-[10px] font-black mt-0.5 leading-none", pin ? (pin === 2 ? "text-amber-900" : "text-white") : "text-neutral-400")}>{cell.maxDelay}h</span>
                                                             )}
-                                                            {cell.maxDelay >= 48 && !pin && (
-                                                                <div className="absolute top-1 right-1">
-                                                                    <div className="h-1.5 w-1.5 rounded-full bg-red-400 animate-pulse" />
+                                                            
+                                                            {isMenuActive && (
+                                                                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[70] bg-white rounded-full shadow-2xl border border-neutral-100 p-1 flex items-center gap-1 animate-in zoom-in-75 duration-150">
+                                                                    <button title="Marcar como Urgente (Vermelho)" onClick={(e) => { e.stopPropagation(); setPinLevel(client.clientName, date, 1); setActivePinMenu(null); }} className="h-6 w-6 rounded-full bg-red-500 hover:scale-110 transition-transform shadow-sm" />
+                                                                    <button title="Marcar como Atenção (Amarelo)" onClick={(e) => { e.stopPropagation(); setPinLevel(client.clientName, date, 2); setActivePinMenu(null); }} className="h-6 w-6 rounded-full bg-amber-400 hover:scale-110 transition-transform shadow-sm" />
+                                                                    <button title="Marcar como OK (Verde)" onClick={(e) => { e.stopPropagation(); setPinLevel(client.clientName, date, 3); setActivePinMenu(null); }} className="h-6 w-6 rounded-full bg-emerald-500 hover:scale-110 transition-transform shadow-sm" />
+                                                                    <div className="w-[1px] h-4 bg-neutral-100 mx-0.5" />
+                                                                    <button title="Limpar Marcação" onClick={(e) => { e.stopPropagation(); setPinLevel(client.clientName, date, 0); setActivePinMenu(null); }} className="h-6 w-6 rounded-full bg-neutral-100 flex items-center justify-center hover:bg-neutral-200 transition-colors">
+                                                                        <span className="text-[10px] font-black text-neutral-400">X</span>
+                                                                    </button>
                                                                 </div>
                                                             )}
                                                         </div>
@@ -121,10 +139,11 @@ export const DailyBalanceTabSection: React.FC<DailyBalanceTabSectionProps> = ({
                                             {client.total.toLocaleString('pt-BR')}
                                         </td>
                                     </tr>
-                                    {!collapsedClients.includes(client.clientName) && client.sortedClientes.map((clienteNode: any, idx: number) => (
+                                    {expandedClients.includes(client.clientName) && client.sortedClientes.map((clienteNode: any, idx: number) => (
                                         <tr key={`${client.clientName}-${clienteNode.name}`} className={cn("bg-neutral-50/30 hover:bg-neutral-50/80 transition-colors", idx === client.sortedClientes.length - 1 ? "border-b-2 border-b-neutral-200" : "")}>
-                                            <td className="p-3 pl-10 text-[10px] font-bold text-neutral-600 truncate border-r border-neutral-200 sticky left-0 z-10 bg-neutral-50/90 shadow-[2px_0_5px_rgba(0,0,0,0.02)]">
-                                                {clienteNode.name}
+                                            <td className="p-3 pl-10 text-[10px] font-bold text-neutral-600 truncate border-r border-neutral-200 sticky left-0 z-10 bg-neutral-50/90 shadow-[2px_0_5px_rgba(0,0,0,0.02)] flex items-center gap-2">
+                                                <span className="text-neutral-300">└─</span>
+                                                <span className="truncate">{clienteNode.name}</span>
                                             </td>
                                             {saldoDiarioPivotStats.sortedDates.map((date: string) => {
                                                 const cell = clienteNode.dates[date];
@@ -135,11 +154,6 @@ export const DailyBalanceTabSection: React.FC<DailyBalanceTabSectionProps> = ({
                                                             <div className="flex flex-col items-center text-neutral-600 py-1 relative">
                                                                 <span className="font-mono font-bold text-xs leading-none">{total}</span>
                                                                 {cell.maxDelay > 0 && <span className="text-[9px] font-black text-neutral-400 mt-0.5 leading-none">{cell.maxDelay}h</span>}
-                                                                {cell.maxDelay >= 48 && (
-                                                                    <div className="absolute top-0 right-0">
-                                                                        <div className="h-1 w-1 rounded-full bg-red-400/50" />
-                                                                    </div>
-                                                                )}
                                                             </div>
                                                         ) : ""}
                                                     </td>

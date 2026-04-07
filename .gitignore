@@ -1,14 +1,1 @@
 node_modules
-.env
-.env.local
-.env.*.local
-
-# Logs e arquivos temporários
-*.log
-reflog.txt
-tmp_reflog.txt
-utf8.log
-
-# Cache
-.vite
-.cache

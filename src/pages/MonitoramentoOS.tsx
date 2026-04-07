@@ -38,7 +38,7 @@ export default function MonitoramentoOS() {
     const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
     const matrixTableRef = useRef<HTMLDivElement>(null);
     const analiticoSectionRef = useRef<HTMLDivElement>(null);
-    const [collapsedClients, setCollapsedClients] = React.useState<string[]>([]);
+    const [expandedClients, setExpandedClients] = React.useState<string[]>([]);
     const [analysisPeriod, setAnalysisPeriod] = React.useState<7 | 14 | 30 | 90 | 180 | 365>(7);
     const [isClearConfirmOpen, setIsClearConfirmOpen] = useState(false);
     const [analyticsLabId, setAnalyticsLabId] = useState<string>('all');
@@ -46,20 +46,19 @@ export default function MonitoramentoOS() {
     const [selectedChartClients, setSelectedChartClients] = useState<string[]>([]);
     const [selectedReviewers, setSelectedReviewers] = useState<string[]>([]);
     const [selectedConsolidatedKeys, setSelectedConsolidatedKeys] = React.useState<string[]>([]);
+    const [rankingType, setRankingType] = useState<'tomador' | 'fazenda'>('tomador');
 
     const [pinnedCells, setPinnedCells] = useState<Record<string, number>>(() => {
         const saved = localStorage.getItem('pinned_matrix_cells_v2_' + (labId || 'default'));
         return saved ? JSON.parse(saved) : {};
     });
 
-    const togglePinCell = (client: string, date: string) => {
+    const setPinLevel = (client: string, date: string, level: number) => {
         setPinnedCells((prev: Record<string, number>) => {
             const key = `${client}|${date}`;
-            const currentLevel = prev[key] || 0;
-            const nextLevel = (currentLevel + 1) % 4;
             const next = { ...prev };
-            if (nextLevel === 0) delete next[key];
-            else next[key] = nextLevel;
+            if (level === 0) delete next[key];
+            else next[key] = level;
             localStorage.setItem('pinned_matrix_cells_v2_' + (labId || 'default'), JSON.stringify(next));
             return next;
         });
@@ -82,7 +81,7 @@ export default function MonitoramentoOS() {
     };
 
     const toggleClientCollapse = (clientName: string) => {
-        setCollapsedClients(prev => prev.includes(clientName) ? prev.filter(c => c !== clientName) : [...prev, clientName]);
+        setExpandedClients(prev => prev.includes(clientName) ? prev.filter(c => c !== clientName) : [...prev, clientName]);
     };
 
     const filteredOS = React.useMemo(() => {
@@ -145,12 +144,13 @@ export default function MonitoramentoOS() {
     const clienteStats = React.useMemo(() => {
         const s: Record<string, { totalAmostras: number; totalHoras: number; count: number }> = {};
         osList.forEach((os: OSItem) => {
-            const cli = os.cliente || 'Não Informado';
-            if (!s[cli]) s[cli] = { totalAmostras: 0, totalHoras: 0, count: 0 };
-            s[cli].totalAmostras += (os.total_amostras || 0);
-            if (os.horas) { s[cli].totalHoras += os.horas; s[cli].count += 1; }
+            // Group based on selected ranking type
+            const name = (rankingType === 'fazenda' ? os.fazenda : os.tomador) || 'NÃO INFORMADO';
+            if (!s[name]) s[name] = { totalAmostras: 0, totalHoras: 0, count: 0 };
+            s[name].totalAmostras += (os.total_amostras || 0);
+            if (os.horas) { s[name].totalHoras += os.horas; s[name].count += 1; }
         });
-        return Object.entries(s)
+        const stats = Object.entries(s)
             .sort(([, a], [, b]) => b.totalAmostras - a.totalAmostras)
             .map(([name, data]) => ({
                 name,
@@ -159,9 +159,10 @@ export default function MonitoramentoOS() {
             }))
             .filter(c => {
                 const norm = c.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-                return !norm.includes('nao informado');
+                return !norm.includes('nao informado') && c.name !== '0';
             });
-    }, [osList]);
+        return stats;
+    }, [osList, rankingType]);
 
     const revisorDailyStats = React.useMemo(() => {
         if (osList.length === 0) return { data: [], keys: [], keyColors: {} };
@@ -850,7 +851,11 @@ export default function MonitoramentoOS() {
 
             const result = await parseStatusOSFileInChunks(file, async (batch: StatusOSParsed[]) => {
                 if (batch.length > 0) {
-                    const safeDate = (d: Date | null) => d ? d.toISOString() : undefined;
+                    const safeDate = (d: any) => {
+                        if (!d) return undefined;
+                        if (d instanceof Date) return d.toISOString();
+                        return d; // assume string
+                    };
                     const parsedBatch: any[] = batch.map(b => ({
                         ...b,
                         data_registro: safeDate(b.data_registro),
@@ -939,7 +944,7 @@ export default function MonitoramentoOS() {
     };
 
     return (
-        <div className="max-w-[1400px] mx-auto py-12 px-6 text-black pb-32 min-h-screen font-sans">
+        <div className="max-w-[1600px] mx-auto py-12 px-6 text-black pb-32 min-h-screen font-sans">
 
             {/* Barra de progresso ultra-sutil no topo — aparece apenas durante sincronização */}
             <div
@@ -1140,11 +1145,12 @@ export default function MonitoramentoOS() {
                     clienteStats={clienteStats}
                     selectedChartClients={selectedChartClients}
                     toggleClientSelection={toggleClientSelection}
-                    setSelectedChartClients={setSelectedChartClients}
                     carteiraClientesPivotStats={carteiraClientesPivotStats}
-                    collapsedClients={collapsedClients}
+                    expandedClients={expandedClients}
                     toggleClientCollapse={toggleClientCollapse}
                     labId={labId}
+                    rankingType={rankingType}
+                    setRankingType={setRankingType}
                 />
             )}
 
@@ -1154,10 +1160,10 @@ export default function MonitoramentoOS() {
                     handleExportPDF={handleExportPDF}
                     isGeneratingPDF={isGeneratingPDF}
                     matrixTableRef={matrixTableRef}
-                    collapsedClients={collapsedClients}
+                    expandedClients={expandedClients}
                     toggleClientCollapse={toggleClientCollapse}
                     pinnedCells={pinnedCells}
-                    togglePinCell={togglePinCell}
+                    setPinLevel={setPinLevel}
                 />
             )}
 

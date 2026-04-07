@@ -55,7 +55,7 @@ const Login = lazy(() => import("@/pages/Login"));
 const Operacao = lazy(() => import("@/pages/Operacao"));
 const MonitoramentoOS = lazy(() => import("@/pages/MonitoramentoOS"));
 const Verificacao = lazy(() => import("@/pages/Verificacao"));
-
+const ProducaoOperadores = lazy(() => import("@/pages/ProducaoOperadores"));
 
 function AppRoutes() {
     const { user, isAuthenticated, isLoading: authLoading } = useAuth();
@@ -102,6 +102,7 @@ function AppRoutes() {
                     <Route path="verificacao" element={<Verificacao />} />
                     <Route path="operacao" element={<Operacao />} />
                     <Route path="monitoramento-os" element={<MonitoramentoOS />} />
+                    <Route path="producao-operadores" element={<ProducaoOperadores />} />
                     <Route path="export" element={<Export />} />
                     <Route path="admin" element={<Admin />} />
                 </Route>

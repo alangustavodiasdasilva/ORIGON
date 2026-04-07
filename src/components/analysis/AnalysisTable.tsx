@@ -15,6 +15,14 @@ interface AnalysisTableProps {
     onDeleteSample: (id: string) => void;
     isProcessing: boolean;
     highlightedSampleId?: string | null;
+    tolerancias?: {
+        mic: number;
+        len: number;
+        unf: number;
+        str: number;
+        rd: number;
+        b: number;
+    };
 }
 
 const COLORS = [
@@ -24,7 +32,7 @@ const COLORS = [
     { value: "#f59e0b", label: "Amarelo", name: "yellow" },
 ];
 
-export default function AnalysisTable({ samples, onUpdateSample, onColorChange, onDeleteSample, isProcessing, highlightedSampleId }: AnalysisTableProps) {
+export default function AnalysisTable({ samples, onUpdateSample, onColorChange, onDeleteSample, isProcessing, highlightedSampleId, tolerancias }: AnalysisTableProps) {
     const { t } = useLanguage();
     const fields = ['mic', 'len', 'unf', 'str', 'rd', 'b'] as const;
     const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
@@ -216,7 +224,9 @@ export default function AnalysisTable({ samples, onUpdateSample, onColorChange, 
                                 </td>
                                 {fields.map((field) => {
                                     const value = (sample as any)[field];
-                                    const isOutlier = statsByField[field].outliers.includes(sample.id);
+                                    const stats = statsByField[field];
+                                    const isOutlier = stats.outliers.includes(sample.id);
+                                    
                                     const decimals = field === 'mic' || field === 'len' ? 2 : 1;
 
                                     return (
@@ -269,15 +279,23 @@ export default function AnalysisTable({ samples, onUpdateSample, onColorChange, 
                                         ) : (
                                             <button
                                                 onClick={async () => {
-                                                    const result = await HVIFileGeneratorService.generatePreviewForSample(sample, samples);
+                                                    const result = await HVIFileGeneratorService.generatePreviewForSample(sample, samples, tolerancias);
                                                     if (!result.success) {
                                                         alert(result.message);
                                                     } else if (result.data) {
                                                         setPreviewModal({ isOpen: true, data: result.data, sample });
                                                     }
                                                 }}
-                                                className="p-1 text-slate-300 hover:text-blue-600 hover:bg-blue-50 rounded transition-all"
-                                                title="Gerar arquivo HVI"
+                                                className={cn(
+                                                    "p-1 rounded transition-all",
+                                                    HVIFileGeneratorService.hasColorPrint(sample.cor) 
+                                                        ? "text-slate-400 hover:text-blue-600 hover:bg-blue-50" 
+                                                        : "text-slate-200 cursor-not-allowed"
+                                                )}
+                                                title={HVIFileGeneratorService.hasColorPrint(sample.cor) 
+                                                    ? "Gerar arquivo HVI" 
+                                                    : "Trava Ativa: Vincule o print desta cor no painel de templates primeiro"
+                                                }
                                             >
                                                 <FileDown className="h-3.5 w-3.5" />
                                             </button>

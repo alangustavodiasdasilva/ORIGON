@@ -19,6 +19,9 @@ export default function AnalystsTab() {
     const [editingAnalista, setEditingAnalista] = useState<Analista | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
+    // Flag para bloquear o realtime durante operações de delete (evita race condition)
+    const isDeleteInProgressRef = useRef(false);
+
     // Form
     const [nome, setNome] = useState("");
     const [email, setEmail] = useState("");
@@ -47,7 +50,11 @@ export default function AnalystsTab() {
         loadData();
         
         const unsubscribe = AnalistaService.subscribe(() => {
-            loadData();
+            // Se estiver no meio de um delete, ignora o evento realtime
+            // para evitar que o item deletado volte para a tela
+            if (!isDeleteInProgressRef.current) {
+                loadData();
+            }
         });
         
         return () => {
@@ -147,6 +154,9 @@ export default function AnalystsTab() {
     const handleDelete = async (id: string) => {
         if (!confirm("Tem certeza que deseja excluir este analista?")) return;
 
+        // Bloqueia realtime durante o delete para evitar race condition
+        isDeleteInProgressRef.current = true;
+
         // Atualização otimista: remove da lista imediatamente
         setAnalistas(prev => prev.filter(a => a.id !== id));
 
@@ -157,6 +167,11 @@ export default function AnalystsTab() {
             // Em caso de erro, restaura a lista do banco
             await loadData();
             alert("Erro ao excluir analista. Por favor, tente novamente.");
+        } finally {
+            // Libera o realtime após delay para garantir propagação
+            setTimeout(() => {
+                isDeleteInProgressRef.current = false;
+            }, 3000);
         }
     };
 

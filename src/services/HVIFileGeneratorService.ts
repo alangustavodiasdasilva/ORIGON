@@ -7,6 +7,15 @@
 import type { Sample } from '@/entities/Sample';
 import { MachineService, type Machine } from '@/entities/Machine';
 
+export interface HVITolerancias {
+    mic: number;
+    len: number;
+    unf: number;
+    str: number;
+    rd: number;
+    b: number;
+}
+
 export interface HVIPreviewData {
     content: string;
     filename: string;
@@ -19,6 +28,24 @@ export interface HVIPreviewData {
         rd: number;
         b: number;
     };
+}
+
+interface ColorAverage {
+    mic: number;
+    len: number;
+    unf: number;
+    str: number;
+    rd: number;
+    b: number;
+    cg?: string;
+    elg?: number;
+    area?: number;
+    count?: number;
+    mat?: number;
+    leaf?: number;
+    sfi?: number;
+    csp?: number;
+    sci?: number;
 }
 
 export class HVIFileGeneratorService {
@@ -51,19 +78,15 @@ export class HVIFileGeneratorService {
     /**
      * Get target values for generation (prioritizes Sample values, then Color Average)
      */
-    private static getSampleTargetValues(sample: Sample, allSamples: Sample[] = []): { mic: number; len: number; unf: number; str: number; rd: number; b: number } {
-        // Return Color Average strictly (Interlaboratorial rule: use average for the color)
-        return this.getColorAverage(sample.cor, allSamples);
-
-        // Fallback to Color Average (Original Logic)
+    private static getSampleTargetValues(sample: Sample, allSamples: Sample[] = []): ColorAverage {
         return this.getColorAverage(sample.cor, allSamples);
     }
 
     /**
      * Get average values based on sample color (Fallback)
      */
-    private static getColorAverage(color?: string, allSamples: Sample[] = []): { mic: number; len: number; unf: number; str: number; rd: number; b: number } {
-        const defaultValues = { mic: 4.50, len: 29.0, unf: 80.0, str: 29.0, rd: 80.0, b: 11.0 };
+    private static getColorAverage(color?: string, allSamples: Sample[] = []): ColorAverage {
+        const defaultValues: ColorAverage = { mic: 4.50, len: 29.0, unf: 80.0, str: 29.0, rd: 80.0, b: 11.0 };
 
         if (!color) return defaultValues;
 
@@ -76,7 +99,7 @@ export class HVIFileGeneratorService {
             if (colorSamples.length > 0) {
                 if (colorSamples.length > 0) {
                     // Calculate averages from real data
-                    const calculateAvg = (field: keyof Sample) => {
+                    const calculateAvg = (field: keyof Sample): number => {
                         const values = colorSamples
                             .map(s => {
                                 const val = s[field];
@@ -86,7 +109,7 @@ export class HVIFileGeneratorService {
                             })
                             .filter(v => typeof v === 'number' && !isNaN(v)) as number[];
 
-                        if (values.length === 0) return defaultValues[field as keyof typeof defaultValues];
+                        if (values.length === 0) return Number((defaultValues as any)[field] || 0);
 
                         const sum = values.reduce((acc, val) => acc + val, 0);
                         const avg = sum / values.length;
@@ -114,12 +137,24 @@ export class HVIFileGeneratorService {
 
                         // Merge: use custom if exists, otherwise use calculated
                         const result = {
-                            mic: custom.mic ?? calculatedAverages.mic,
-                            len: custom.len ?? calculatedAverages.len,
-                            unf: custom.unf ?? calculatedAverages.unf,
-                            str: custom.str ?? calculatedAverages.str,
-                            rd: custom.rd ?? calculatedAverages.rd,
-                            b: custom.b ?? calculatedAverages.b
+                            // FIBER PROPERTIES: Always use calculated averages from real LOT samples
+                            mic: Number(calculatedAverages.mic),
+                            len: Number(calculatedAverages.len),
+                            unf: Number(calculatedAverages.unf),
+                            str: Number(calculatedAverages.str),
+                            rd: Number(calculatedAverages.rd),
+                            b: Number(calculatedAverages.b),
+                            
+                            // STRUCTURAL PROPERTIES: Use custom values from the Print Template
+                            cg: String(custom.cg || ""),
+                            elg: Number(custom.elg || 0),
+                            area: Number(custom.area || 0),
+                            count: Number(custom.count || 0),
+                            mat: Number(custom.mat || 0),
+                            leaf: Number(custom.leaf || 0),
+                            sfi: Number(custom.sfi || 0),
+                            csp: Number(custom.csp || 0),
+                            sci: Number(custom.sci || 0)
                         };
                         return result;
                     }
@@ -134,6 +169,23 @@ export class HVIFileGeneratorService {
             return defaultValues;
         }
     }
+    
+    /**
+     * Check if a color has a linked print template
+     */
+    public static hasColorPrint(color?: string): boolean {
+        if (!color) return false;
+        const customAveragesStr = localStorage.getItem('custom_color_averages');
+        if (!customAveragesStr) return false;
+        try {
+            const customAverages = JSON.parse(customAveragesStr);
+            const config = customAverages[color];
+            // Strict check: must have been saved with a selected line from a print
+            return !!(config && typeof config === 'object' && 'selectedLine' in config);
+        } catch {
+            return false;
+        }
+    }
 
     /**
      * Generate random variation around a base value
@@ -141,6 +193,34 @@ export class HVIFileGeneratorService {
     private static randomVariation(base: number, variance: number, decimals: number): number {
         const variation = (Math.random() - 0.5) * 2 * variance;
         return parseFloat((base + variation).toFixed(decimals));
+    }
+
+    /**
+     * Generate a set of readings that average exactly to the target
+     */
+    private static generateBalancedReadings(target: number, count: number, tolerance: number, decimals: number): number[] {
+        // Step 1: Generate initial random readings
+        let readings = Array(count).fill(0).map(() => this.randomVariation(target, tolerance, decimals));
+        
+        // Step 2: Calculate current average
+        const currentAvg = readings.reduce((a, b) => a + b, 0) / count;
+        
+        // Step 3: Calculate difference and distribute it
+        const diff = target - currentAvg;
+        
+        // Step 4: Adjust readings to center around target
+        readings = readings.map(v => parseFloat((v + diff).toFixed(decimals)));
+        
+        // Step 5: Final touch - sometimes rounding makes the average off by 0.01. 
+        // We adjust the last reading to fix this.
+        const finalSum = readings.reduce((a, b) => a + b, 0);
+        const targetSum = target * count;
+        const correction = parseFloat((targetSum - finalSum).toFixed(decimals));
+        if (correction !== 0) {
+            readings[count - 1] = parseFloat((readings[count - 1] + correction).toFixed(decimals));
+        }
+
+        return readings;
     }
 
     /**
@@ -166,13 +246,9 @@ export class HVIFileGeneratorService {
     }
 
     /**
-     * Generate USTER format file (Interlaboratorial format)
+     * Generate ONE line of USTER format using pre-calculated balanced values
      */
-    /**
-     * Generate USTER format file (Interlaboratorial format)
-     */
-    private static generateUsterFormat(sample: Sample, allSamples: Sample[] = []): string {
-        const averages = this.getSampleTargetValues(sample, allSamples);
+    private static generateUsterOneLine(sample: Sample, averages: ColorAverage, tolerancias?: HVITolerancias): string {
 
         // Columns based on user provided sample:
         // "1279                                    " "etiqueta                                " "      " 3 0.27 030 29.72 82.2 10.4 31.4 06.4 4.07 0.85 79.8 09.7 000 000 07.5 "11-1" 23.4 49.1 128.5
@@ -212,32 +288,33 @@ export class HVIFileGeneratorService {
 
         const col4 = "3"; // Constant from example
 
-        // Values with variations
-        const area = (this.randomVariation(0.25, 0.05, 2)).toFixed(2); // e.g. 0.27
-        const cnt = Math.round(this.randomVariation(30, 5, 0)).toString().padStart(3, '0'); // e.g. 030
+        // Values with precise balanced averages
+        const area = (averages.area || 0.25).toFixed(2); 
+        const cnt = (averages.count || 30).toString().padStart(3, '0'); 
 
-        const uhml = this.randomVariation(averages.len, 0.60, 2).toFixed(2);
-        const ui = this.randomVariation(averages.unf, 1.2, 1).toFixed(1);
-        const sfi = this.randomVariation(10.0, 1.0, 1).toFixed(1).padStart(4, '0'); // e.g. 09.8 or 10.4
-        const str = this.randomVariation(averages.str, 1.5, 1).toFixed(1);
-        const elg = this.randomVariation(6.4, 0.6, 1).toFixed(1).padStart(4, '0'); // e.g. 06.4
-        const mic = this.randomVariation(averages.mic, 0.12, 2).toFixed(2);
-        const mat = this.randomVariation(0.85, 0.04, 2).toFixed(2); // e.g. 0.85
+        const uhml = averages.len.toFixed(2);
+        const ui = averages.unf.toFixed(1);
+        const sfi = (averages.sfi || 10.0).toFixed(1).padStart(4, '0'); 
+        const str = averages.str.toFixed(1);
+        const elg = (averages.elg || 6.4).toFixed(1).padStart(4, '0'); 
+        const mic = averages.mic.toFixed(2);
+        const mat = (averages.mat || 0.85).toFixed(2); 
 
-        const rd = this.randomVariation(averages.rd, 1.5, 1).toFixed(1);
-        const plusB = this.randomVariation(averages.b, 0.8, 1).toFixed(1).padStart(4, '0'); // e.g. 09.7
+        const rd = averages.rd.toFixed(1);
+        const plusB = averages.b.toFixed(1).padStart(4, '0'); // e.g. 09.7
 
         const zeros1 = "000";
         const zeros2 = "000";
-        const val18 = "07.5"; // Unknown param
+        const val18 = (this.randomVariation(7.5, 0.4, 1)).toFixed(1); 
 
-        const cg = `"11-1"`; // Color Grade
+        const cg = averages.cg ? `"${averages.cg}"` : (sample.cor === "#ef4444" ? `"31-1"` : sample.cor === "#3b82f6" ? `"21-1"` : `"11-1"`);
 
-        const temp = this.randomVariation(23.5, 1.0, 1).toFixed(1); // e.g. 23.4
-        const rh = this.randomVariation(49.0, 1.0, 1).toFixed(1); // e.g. 48.8
-        const sci = this.randomVariation(128.0, 5.0, 1).toFixed(1); // e.g. 128.5 or 128.0
+        const temp = this.randomVariation(23.5, 1.0, 1).toFixed(1); // Environment var (minor)
+        const rh = this.randomVariation(49.0, 1.5, 1).toFixed(1);   // Environment var (minor)
+        const sci = (averages.sci || 125.0).toFixed(1); 
+        const csp = averages.csp ? ` ${Math.round(averages.csp)}` : "";
 
-        return `${field1} ${field2} ${field3} ${col4} ${area} ${cnt} ${uhml} ${ui} ${sfi} ${str} ${elg} ${mic} ${mat} ${rd} ${plusB} ${zeros1} ${zeros2} ${val18} ${cg} ${temp} ${rh} ${sci}`;
+        return `${field1} ${field2} ${field3} ${col4} ${area} ${cnt} ${uhml} ${ui} ${sfi} ${str} ${elg} ${mic} ${mat} ${rd} ${plusB} ${zeros1} ${zeros2} ${val18} ${cg} ${temp} ${rh} ${sci}${csp}`;
     }
 
     /**
@@ -312,17 +389,23 @@ export class HVIFileGeneratorService {
     // }
 
     /**
-     * Generate PREMIER format file with multiple readings (Interlaboratorial format)
+     * Generate PREMIER format file with multiple readings using pre-calculated balanced values
      */
-    private static generatePremierFormatMultiple(sample: Sample, count: number, allSamples: Sample[] = []): string {
-        const averages = this.getSampleTargetValues(sample, allSamples);
+    private static generatePremierFormatMultipleBalanced(
+        sample: Sample, 
+        count: number, 
+        averages: ColorAverage, 
+        balancedReadings: Record<string, number[]>,
+        tolerancias?: HVITolerancias
+    ): string {
 
         // Date/Time formatting (Premier style)
         const now = new Date();
         const dateStr = now.toLocaleDateString('pt-BR').replace(/\//g, '-');
-        const timeStr = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+        // Include seconds for uniqueness
+        const timeStr = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true });
         const dateTimeStr = `${dateStr} ${timeStr}`;
-        const dateTimeStrHeader = `${dateStr}${timeStr.replace(' ', '')}`;
+        const dateTimeStrHeader = `${dateStr}${timeStr.replace(/[: ]/g, '')}`;
 
         const header = [
             `"System Test Report"\t"PREMIER ART3 V3.2.13 "`,
@@ -369,42 +452,45 @@ export class HVIFileGeneratorService {
         // Data Generation
         const rows: any[] = [];
         const numerics: Record<string, number[]> = {
-            uhml: [], ml: [], ui: [], elg: [], str: [], mic: [], rd: [], b: [], sfi: [], cnt: [], area: [], mat: []
+            uhml: [], ml: [], ui: [], elg: [], str: [], mic: [], rd: [], b: [], sfi: [], cnt: [], area: [], mat: [], sci: [], csp: []
         };
 
         for (let i = 0; i < count; i++) {
-            // Updated ranges based on user example
-            const uhml = this.randomVariation(averages.len, 0.60, 2);
-            const ml = this.randomVariation(averages.len * 0.75, 0.60, 2); // Corrected ratio
-            const ui = this.randomVariation(averages.unf, 1.2, 1);
-            const elg = this.randomVariation(6.2, 0.6, 1); // Closer to example 6.2
-            const str = this.randomVariation(averages.str, 1.5, 1);
-            const mic = this.randomVariation(averages.mic, 0.12, 2);
-            const rd = this.randomVariation(averages.rd, 1.5, 1);
-            const plusB = this.randomVariation(averages.b, 0.8, 1);
-            const cg = '"11-3"'; // Default from example
-            const sfi = this.randomVariation(12.0, 1.0, 1); // Closer to example 11.9
-            const grd = '"2"'; // Default from example
-            const cnt = Math.round(this.randomVariation(20, 8, 0)); // Closer to example 18
-            const area = this.randomVariation(0.30, 0.08, 2); // Closer to example 0.32
-            const mat = this.randomVariation(0.85, 0.04, 2); // Closer to example 0.84
+            const uhml = balancedReadings.uhml[i];
+            const ml = balancedReadings.ml[i]; 
+            const ui = balancedReadings.ui[i];
+            const elg = balancedReadings.elg[i];
+            const str = balancedReadings.str[i];
+            const mic = balancedReadings.mic[i];
+            const rd = balancedReadings.rd[i];
+            const plusB = balancedReadings.b[i];
+            const cg = averages.cg ? `"${averages.cg}"` : (sample.cor === "#ef4444" ? '"31-3"' : '"11-3"'); 
+            const sfi = balancedReadings.sfi[i]; 
+            const grd = `"${averages.leaf || 2}"`; 
+            const cnt = balancedReadings.count[i]; 
+            const area = balancedReadings.area[i]; 
+            const mat = balancedReadings.mat[i]; 
+            const sci = balancedReadings.sci[i];
+            const csp = balancedReadings.csp[i];
 
             // Store for stats
             numerics.uhml.push(uhml); numerics.ml.push(ml); numerics.ui.push(ui);
             numerics.elg.push(elg); numerics.str.push(str); numerics.mic.push(mic);
             numerics.rd.push(rd); numerics.b.push(plusB); numerics.sfi.push(sfi);
             numerics.cnt.push(cnt); numerics.area.push(area); numerics.mat.push(mat);
+            numerics.sci.push(sci);
+            numerics.csp.push(csp);
 
             rows.push([
                 i + 1,
                 `"${sample.etiqueta || 'SAMPLE'} "`,
                 fmt(uhml, 2), fmt(ml, 2), fmt(ui, 1), fmt(elg, 1), fmt(str, 1), fmt(mic, 2),
-                fmt(rd, 1), fmt(plusB, 1), cg, fmt(sfi, 1), grd, cnt, fmt(area, 2), fmt(mat, 2)
+                fmt(rd, 1), fmt(plusB, 1), cg, fmt(sfi, 1), grd, cnt, fmt(area, 2), fmt(mat, 2), fmt(sci, 1)
             ].join('\t'));
         }
 
         // Stats Calculation
-        const keys = ['uhml', 'ml', 'ui', 'elg', 'str', 'mic', 'rd', 'b', 'sfi', 'cnt', 'area', 'mat'];
+        const keys = ['uhml', 'ml', 'ui', 'elg', 'str', 'mic', 'rd', 'b', 'sfi', 'cnt', 'area', 'mat', 'sci', 'csp'];
         const stats: Record<string, any> = {};
 
         keys.forEach(key => {
@@ -437,7 +523,7 @@ export class HVIFileGeneratorService {
         statsRows.push([
             `"Avg"`, `"11-3"`, `"2"`,
             fMean('uhml', 2), fMean('ml', 2), fMean('ui', 1), fMean('elg', 1), fMean('str', 1), fMean('mic', 2),
-            fMean('rd', 1), fMean('b', 1), fMean('sfi', 1), fMean('cnt', 0), fMean('area', 2), fMean('mat', 2)
+            fMean('rd', 1), fMean('b', 1), fMean('sfi', 1), fMean('cnt', 0), fMean('area', 2), fMean('mat', 2), fMean('sci', 1)
         ].join('\t'));
 
         // Gap
@@ -455,27 +541,27 @@ export class HVIFileGeneratorService {
 
         statsRows.push(prefix("Median") + [
             fMed('uhml', 2), fMed('ml', 2), fMed('ui', 1), fMed('elg', 1), fMed('str', 1), fMed('mic', 2),
-            fMed('rd', 1), fMed('b', 1), fMed('sfi', 1), fMed('cnt', 0), fMed('area', 2), fMed('mat', 2)
+            fMed('rd', 1), fMed('b', 1), fMed('sfi', 1), fMed('cnt', 0), fMed('area', 2), fMed('mat', 2), fMed('sci', 1)
         ].join('\t'));
 
         statsRows.push(prefix("SD") + [
             fSD('uhml', 2), fSD('ml', 2), fSD('ui', 1), fSD('elg', 1), fSD('str', 1), fSD('mic', 2),
-            fSD('rd', 1), fSD('b', 1), fSD('sfi', 2), fSD('cnt', 2), fSD('area', 2), fSD('mat', 2) // SD decimals from user example (often 2)
+            fSD('rd', 1), fSD('b', 1), fSD('sfi', 2), fSD('cnt', 2), fSD('area', 2), fSD('mat', 2), fSD('sci', 2) // SD decimals from user example (often 2)
         ].join('\t'));
 
         statsRows.push(prefix("CV%") + [
             fCV('uhml'), fCV('ml'), fCV('ui'), fCV('elg'), fCV('str'), fCV('mic'),
-            fCV('rd'), fCV('b'), fCV('sfi'), fCV('cnt'), fCV('area'), fCV('mat')
+            fCV('rd'), fCV('b'), fCV('sfi'), fCV('cnt'), fCV('area'), fCV('mat'), fCV('sci')
         ].join('\t'));
 
         statsRows.push(prefix("Min") + [
             fMin('uhml', 2), fMin('ml', 2), fMin('ui', 1), fMin('elg', 1), fMin('str', 1), fMin('mic', 2),
-            fMin('rd', 1), fMin('b', 1), fMin('sfi', 1), fMin('cnt', 0), fMin('area', 2), fMin('mat', 2)
+            fMin('rd', 1), fMin('b', 1), fMin('sfi', 1), fMin('cnt', 0), fMin('area', 2), fMin('mat', 2), fMin('sci', 1)
         ].join('\t'));
 
         statsRows.push(prefix("Max") + [
             fMax('uhml', 2), fMax('ml', 2), fMax('ui', 1), fMax('elg', 1), fMax('str', 1), fMax('mic', 2),
-            fMax('rd', 1), fMax('b', 1), fMax('sfi', 1), fMax('cnt', 0), fMax('area', 2), fMax('mat', 2)
+            fMax('rd', 1), fMax('b', 1), fMax('sfi', 1), fMax('cnt', 0), fMax('area', 2), fMax('mat', 2), fMax('sci', 1)
         ].join('\t'));
 
         statsRows.push(``);
@@ -490,9 +576,25 @@ export class HVIFileGeneratorService {
      */
     static async generatePreviewForSample(
         sample: Sample,
-        allSamples: Sample[] = []
+        allSamples: Sample[] = [],
+        tolerancias?: HVITolerancias
     ): Promise<{ success: boolean; message?: string; data?: HVIPreviewData }> {
         try {
+            // Check if color has linked print template (STRICT LOCK)
+            if (!sample.cor || !this.hasColorPrint(sample.cor)) {
+                const colorNames: Record<string, string> = {
+                    "#3b82f6": "Azul",
+                    "#ef4444": "Vermelho",
+                    "#10b981": "Verde",
+                    "#f59e0b": "Amarelo"
+                };
+                const colorLabel = colorNames[sample.cor || ""] || "não definida";
+                return {
+                    success: false,
+                    message: `Amostra da cor ${colorLabel} não possui print vinculado. O arquivo TXT só pode ser gerado após configurar o print no painel 'Metas por Cor'.`
+                };
+            }
+
             // Check if sample has HVI number
             if (!sample.hvi) {
                 return {
@@ -523,18 +625,71 @@ export class HVIFileGeneratorService {
                 b: averages.b
             };
 
-            // For file content: generate 6 readings with variation
+            // For file content: generate 6 readings with balanced variation
+            const count = 6;
+            const tols = tolerancias || { mic: 0.05, len: 0.25, unf: 0.50, str: 0.75, rd: 0.50, b: 0.25 };
+            
+            // Generate balanced arrays for ALL metrics to match print perfectly
+            const micReadings = this.generateBalancedReadings(averages.mic, count, tols.mic, 2);
+            const lenReadings = this.generateBalancedReadings(averages.len, count, tols.len, 2);
+            const unfReadings = this.generateBalancedReadings(averages.unf, count, tols.unf, 1);
+            const strReadings = this.generateBalancedReadings(averages.str, count, tols.str, 1);
+            const rdReadings = this.generateBalancedReadings(averages.rd, count, tols.rd, 1);
+            const bReadings = this.generateBalancedReadings(averages.b, count, tols.b, 1);
+            
+            // Structural parameters: very tight variances
+            const sfiReadings = this.generateBalancedReadings(averages.sfi || 10.5, count, 0.2, 1);
+            const sciReadings = this.generateBalancedReadings(averages.sci || 125.0, count, 1.0, 1);
+            const cspReadings = this.generateBalancedReadings(averages.csp || 1600, count, 5, 0);
+            const elgReadings = this.generateBalancedReadings(averages.elg || 6.2, count, 0.1, 1);
+            const areaReadings = this.generateBalancedReadings(averages.area || 0.25, count, 0.02, 2);
+            const cntReadings = this.generateBalancedReadings(averages.count || 30, count, 1, 0);
+            const matReadings = this.generateBalancedReadings(averages.mat || 0.85, count, 0.01, 2);
+            const mlReadings = lenReadings.map(v => parseFloat((v * 0.75).toFixed(2)));
+
             let content: string;
             let extension: string;
 
             if (machine.model === 'USTER') {
-                // Generate 6 Uster format lines
-                const lines = Array(6).fill(null).map(() => this.generateUsterFormat(sample, allSamples));
-                content = lines.join('\n');
+                const usterLines = [];
+                for (let i = 0; i < count; i++) {
+                    const rowAverages = {
+                        ...averages,
+                        mic: micReadings[i],
+                        len: lenReadings[i],
+                        unf: unfReadings[i],
+                        str: strReadings[i],
+                        rd: rdReadings[i],
+                        b: bReadings[i],
+                        elg: elgReadings[i],
+                        area: areaReadings[i],
+                        count: cntReadings[i],
+                        mat: matReadings[i],
+                        sfi: sfiReadings[i],
+                        sci: sciReadings[i],
+                        csp: cspReadings[i]
+                    };
+                    usterLines.push(this.generateUsterOneLine(sample, rowAverages, tols));
+                }
+                content = usterLines.join('\n');
                 extension = 'txt';
             } else {
-                // Generate Premier format with 6 readings
-                content = this.generatePremierFormatMultiple(sample, 6, allSamples);
+                content = this.generatePremierFormatMultipleBalanced(sample, count, averages, {
+                    mic: micReadings, 
+                    uhml: lenReadings, 
+                    ml: mlReadings,
+                    ui: unfReadings, 
+                    str: strReadings, 
+                    rd: rdReadings, 
+                    b: bReadings,
+                    elg: elgReadings,
+                    area: areaReadings,
+                    count: cntReadings,
+                    mat: matReadings,
+                    sfi: sfiReadings,
+                    sci: sciReadings,
+                    csp: cspReadings
+                }, tols);
                 extension = 'txt';
             }
 

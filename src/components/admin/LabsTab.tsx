@@ -147,9 +147,10 @@ export default function LabsTab() {
         } finally {
             setIsDeleting(false);
             // Libera o realtime após delay para garantir propagação
+            // Usa 5s pois o delete em cascata (máquinas + analistas + lab) pode demorar mais
             setTimeout(() => {
                 isDeleteInProgressRef.current = false;
-            }, 3000);
+            }, 5000);
         }
     };
 

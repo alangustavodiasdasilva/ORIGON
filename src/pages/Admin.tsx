@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
 import { Activity, Database, Server, ShieldCheck, Users, Trash2, Edit, LogOut } from "lucide-react";
 import { Navigate } from "react-router-dom";
@@ -264,6 +264,9 @@ function SystemConfigTab() {
     const [machines, setMachines] = useState<Machine[]>([]);
     const [labs, setLabs] = useState<Lab[]>([]);
 
+    // Flag para bloquear o realtime durante operações de delete (evita race condition)
+    const isDeleteInProgressRef = useRef(false);
+
     // Form State
     const [editingId, setEditingId] = useState<string | null>(null);
     const [formMachineId, setFormMachineId] = useState("");
@@ -275,9 +278,11 @@ function SystemConfigTab() {
         const targetLabId = (currentLab?.id || (user?.acesso === 'admin_lab' ? user.lab_id : "")) || "";
         setFormLabId(targetLabId);
         loadData();
-        // Subscribe to real-time changes
+        // Subscribe to real-time changes — ignora eventos durante delete
         const unsubscribe = MachineService.subscribe(() => {
-            loadData();
+            if (!isDeleteInProgressRef.current) {
+                loadData();
+            }
         });
         return () => unsubscribe();
     }, [user, currentLab]);
@@ -305,6 +310,8 @@ function SystemConfigTab() {
                 data = await MachineService.list();
             }
 
+            // Ordenar por machineId (ex: HVI 01, HVI 02, HVI 10...)
+            data.sort((a, b) => a.machineId.localeCompare(b.machineId, undefined, { numeric: true, sensitivity: 'base' }));
             setMachines(data);
         } catch (error) {
             console.error("Failed to load machines:", error);
@@ -362,16 +369,28 @@ function SystemConfigTab() {
     };
 
     const handleRemoveMachine = async (id: string) => {
-        if (confirm("Remover esta máquina?")) {
-            try {
-                await MachineService.delete(id);
-                addToast({ title: "Máquina Removida", type: "info" });
-                loadData();
-                if (editingId === id) resetForm();
-            } catch (error) {
-                console.error("Error deleting machine", error);
-                addToast({ title: "Erro ao remover máquina", type: "error" });
-            }
+        if (!confirm("Remover esta máquina?")) return;
+
+        // Bloqueia realtime durante o delete para evitar race condition
+        isDeleteInProgressRef.current = true;
+
+        // Atualização otimista: remove da lista imediatamente
+        setMachines(prev => prev.filter(m => m.id !== id));
+        if (editingId === id) resetForm();
+
+        try {
+            await MachineService.delete(id);
+            addToast({ title: "Máquina Removida", type: "info" });
+        } catch (error) {
+            console.error("Error deleting machine", error);
+            addToast({ title: "Erro ao remover máquina", type: "error" });
+            // Em caso de erro, restaura a lista do banco
+            await loadData();
+        } finally {
+            // Libera o realtime após delay para garantir propagação
+            setTimeout(() => {
+                isDeleteInProgressRef.current = false;
+            }, 3000);
         }
     };
 

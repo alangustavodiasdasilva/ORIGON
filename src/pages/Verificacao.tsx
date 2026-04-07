@@ -1,4 +1,5 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
+import React from "react";
 import {
     Search,
     Upload,
@@ -18,6 +19,7 @@ import { useToast } from "@/contexts/ToastContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { LabService } from "@/entities/Lab";
 import { verificacaoService } from "@/services/verificacao.service";
+import { cn } from "@/lib/utils";
 import {
     LineChart,
     Line,
@@ -85,6 +87,16 @@ interface Analise {
     anomalousFields?: string[];
 }
 
+// Constantes de Padrão Inicial
+const DEFAULT_VERIFICACAO_TOLS = {
+    mic: 0.10,
+    len: 0.5,
+    unf: 1.0,
+    str: 1.5,
+    rd: 1.0,
+    maisB: 0.5
+};
+
 export default function Verificacao() {
     const { addToast } = useToast();
     const { user, currentLab, selectLab } = useAuth();
@@ -106,9 +118,11 @@ export default function Verificacao() {
     const [filtroTurno, setFiltroTurno] = useState("");
     const [dataInicio, setDataInicio] = useState("");
     const [dataFim, setDataFim] = useState("");
-
     const [isLoading, setIsLoading] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    // Tolerâncias Editáveis (Apenas Admin)
+    const [toleranciasConfig, setToleranciasConfig] = useState(DEFAULT_VERIFICACAO_TOLS);
 
     const clearFilters = () => {
         setFiltroReferencia("");
@@ -388,63 +402,86 @@ export default function Verificacao() {
         return true;
     });
 
-    const analisesAtuaisRaw = analises.filter((a: Analise) => {
-        if (amostraSelecionada) {
-            if (a.amostraId !== amostraSelecionada) return false;
-        } else {
-            if (!amostrasFiltradas.some(am => am.id === a.amostraId)) return false;
-        }
-
-        if (filtroHVI && !a.hvi.toLowerCase().includes(filtroHVI.toLowerCase())) return false;
-        if (filtroTurno && a.turno !== filtroTurno) return false;
-
-        if (dataInicio || dataFim) {
-            try {
-                // A data no Excel geralmente vem como DD/MM/YYYY HH:mm ou DD/MM/YYYY
-                const [datePart] = a.data.split(' ');
-                const [dd, mm, yyyy] = datePart.split('/');
-                const dataPlanilha = new Date(`${yyyy}-${mm}-${dd}T00:00:00`);
-
-                if (dataInicio) {
-                    const dtI = new Date(`${dataInicio}T00:00:00`);
-                    if (dataPlanilha < dtI) return false;
-                }
-                if (dataFim) {
-                    const dtF = new Date(`${dataFim}T00:00:00`);
-                    if (dataPlanilha > dtF) return false;
-                }
-            } catch {
-                // Se o formato de data fugir do padrão brasileiro, ignora o filtro e nao crasha
+    // Lógica de cálculo de anomalias baseada em tolerâncias dinâmicas
+    const { analisesAtuais } = useMemo(() => {
+        const unfiltered = analises.filter((a: Analise) => {
+            if (amostraSelecionada) {
+                if (a.amostraId !== amostraSelecionada) return false;
+            } else {
+                if (!amostrasFiltradas.some(am => am.id === a.amostraId)) return false;
             }
-        }
 
-        return true;
-    });
+            if (filtroHVI && !a.hvi.toLowerCase().includes(filtroHVI.toLowerCase())) return false;
+            if (filtroTurno && a.turno !== filtroTurno) return false;
 
-    const analisesAtuais: Analise[] = [];
-    let mediaAtual: Analise | null = null;
-    let blocoAnalises: Analise[] = [];
+            if (dataInicio || dataFim) {
+                try {
+                    const [datePart] = a.data.split(' ');
+                    const [dd, mm, yyyy] = datePart.split('/');
+                    const dataPlanilha = new Date(`${yyyy}-${mm}-${dd}T00:00:00`);
 
-    analisesAtuaisRaw.forEach((an) => {
-        if (an.tipo?.toLowerCase() === 'média') {
-            // Se encontrar uma média nova, descarrega a anterior com as análises referentes a ela
-            if (mediaAtual) {
-                analisesAtuais.push(...blocoAnalises, mediaAtual);
-            } else if (blocoAnalises.length > 0) {
-                analisesAtuais.push(...blocoAnalises);
+                    if (dataInicio) {
+                        const dtI = new Date(`${dataInicio}T00:00:00`);
+                        if (dataPlanilha < dtI) return false;
+                    }
+                    if (dataFim) {
+                        const dtF = new Date(`${dataFim}T00:00:00`);
+                        if (dataPlanilha > dtF) return false;
+                    }
+                } catch { }
             }
-            mediaAtual = an;
-            blocoAnalises = [];
-        } else {
-            blocoAnalises.push(an);
-        }
-    });
+            return true;
+        }).map(an => {
+            // Recalcula anomalias com base nas tolerâncias atuais
+            const ref = amostras.find(am => am.id === an.amostraId);
+            if (!ref) return an;
 
-    if (mediaAtual) {
-        analisesAtuais.push(...blocoAnalises, mediaAtual);
-    } else if (blocoAnalises.length > 0) {
-        analisesAtuais.push(...blocoAnalises);
-    }
+            const anomalousFields: string[] = [];
+            const check = (field: keyof typeof toleranciasConfig) => {
+                const valHVI = Number(an[field as keyof Analise] || 0);
+                const valRef = Number(ref[field as keyof Amostra] || 0);
+                const tol = toleranciasConfig[field];
+                if (Math.abs(valHVI - valRef) > tol) {
+                    anomalousFields.push(field);
+                }
+            };
+
+            check('mic');
+            check('len');
+            check('unf');
+            check('str');
+            check('rd');
+            check('maisB');
+
+            return {
+                ...an,
+                isAnomalous: anomalousFields.length > 0,
+                anomalousFields
+            };
+        });
+
+        const displayed: Analise[] = [];
+        let mediaAtual: Analise | null = null;
+        let blocoAnalises: Analise[] = [];
+
+        unfiltered.forEach((an) => {
+            if (an.tipo?.toLowerCase() === 'média') {
+                if (mediaAtual) displayed.push(...blocoAnalises, mediaAtual);
+                else if (blocoAnalises.length > 0) displayed.push(...blocoAnalises);
+                mediaAtual = an;
+                blocoAnalises = [];
+            } else {
+                blocoAnalises.push(an);
+            }
+        });
+
+        if (mediaAtual) displayed.push(...blocoAnalises, mediaAtual);
+        else if (blocoAnalises.length > 0) displayed.push(...blocoAnalises);
+
+        return { analisesAtuais: displayed };
+    }, [analises, amostraSelecionada, amostrasFiltradas, filtroHVI, filtroTurno, dataInicio, dataFim, toleranciasConfig, amostras]);
+
+    // Helpers de CSS para consistência com o ORIGO
 
     // Helpers de CSS para consistência com o ORIGO
     const headerClasses = "border border-neutral-200/50 py-3 px-3 text-[10px] font-bold text-center bg-[#1c3664] text-white uppercase tracking-wider";
@@ -480,42 +517,86 @@ export default function Verificacao() {
     };
 
     // Dados para os graficos (Agrupando e plotando somente as médias)
-    const chartData = analisesAtuais.filter((a: Analise) => a.tipo === 'Média').map((an: Analise, idx: number) => ({
-        name: `T${idx + 1}`,
-        time: an.data.split(' ')[0] || an.data,
-        hvi: an.hvi,
-        mic: an.mic,
-        len: an.len,
-        unf: an.unf,
-        str: an.str,
-        rd: an.rd,
-        maisB: an.maisB,
-        area: an.area,
-        count: an.count,
-        elg: an.elg,
-        sfi: an.sfi,
-        mat: an.mat,
-        isAnomalous: an.isAnomalous,
-        anomalousFields: an.anomalousFields
-    }));
+    const chartData = useMemo(() => {
+        return analisesAtuais
+            .filter((a: Analise) => a.tipo === 'Média')
+            .map((an: Analise) => ({
+                dataOriginal: an.data,
+                time: an.data.split(' ')[0] || an.data,
+                hvi: an.hvi,
+                mic: an.mic,
+                len: an.len,
+                unf: an.unf,
+                str: an.str,
+                rd: an.rd,
+                maisB: an.maisB,
+                area: an.area,
+                count: an.count,
+                elg: an.elg,
+                sfi: an.sfi,
+                mat: an.mat,
+                isAnomalous: an.isAnomalous,
+                anomalousFields: an.anomalousFields
+            }))
+            .sort((a, b) => {
+                const getT = (s: string) => {
+                    try {
+                        const [date, timePart] = s.split(' ');
+                        const [d, m, y] = date.split('/');
+                        return new Date(`${y}-${m}-${d}T${timePart || '00:00'}:00`).getTime();
+                    } catch { return 0; }
+                };
+                return getT(a.dataOriginal) - getT(b.dataOriginal);
+            })
+            .map((item, idx) => ({
+                ...item,
+                name: `T${idx + 1}`
+            }));
+    }, [analisesAtuais]);
     const amostraRefData = amostras.find((a: Amostra) => a.id === amostraSelecionada);
     const maquinasHVI = Array.from(new Set(analises.map(a => a.hvi))).filter(Boolean).sort();
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const CustomTooltip = ({ active, payload, label }: any) => {
+    const CustomTooltip = ({ active, payload }: any) => {
         if (active && payload && payload.length) {
+            const metricValue = payload[0].value;
+            const refValue = amostraRefData ? (amostraRefData[metricaGraficoSelecionada as keyof Amostra] as number) : null;
+            const deviation = (refValue !== null && typeof metricValue === 'number' && typeof refValue === 'number') ? metricValue - refValue : null;
+            const tolerance = toleranciasConfig[metricaGraficoSelecionada as keyof typeof toleranciasConfig];
+
             return (
                 <div className="bg-white border border-neutral-200 p-3 rounded-md shadow-lg text-[11px]">
-                    <p className="font-bold text-[#1c3664] mb-2 border-b border-neutral-100 pb-1">{label}</p>
-                    <div className="flex flex-col gap-1">
-                        <p className="font-semibold text-neutral-600">
-                            Máquina (HVI): <span className="text-black font-bold uppercase">{payload[0].payload.hvi || 'N/A'}</span>
+                    <p className="font-bold text-[#1c3664] mb-2 border-b border-neutral-100 pb-1">{payload[0].payload.dataOriginal || payload[0].payload.time}</p>
+                    <div className="flex flex-col gap-1.5">
+                        <p className="font-semibold text-neutral-500">
+                            Máquina (HVI): <span className="text-black font-black uppercase tracking-tight">{payload[0].payload.hvi || 'N/A'}</span>
                         </p>
                         {payload.map((entry: { name: string; value: string | number }, index: number) => (
-                            <p key={index} className="font-semibold text-neutral-600">
-                                {entry.name}: <span className="text-black font-bold">{entry.value}</span>
+                            <p key={index} className="font-semibold text-neutral-500">
+                                {entry.name}: <span className="text-black font-black">{typeof entry.value === 'number' ? entry.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : entry.value}</span>
                             </p>
                         ))}
+                        
+                        {refValue !== null && (
+                            <div className="mt-1 pt-1 border-t border-dotted border-neutral-200 flex flex-col gap-1.5">
+                                <p className="font-semibold text-neutral-500">
+                                    Referência: <span className="text-blue-700 font-black">{refValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                </p>
+                                <p className="font-semibold text-neutral-500">
+                                    Tolerância: <span className="text-neutral-900 font-black">{tolerance.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 2 })}</span>
+                                </p>
+                                {deviation !== null && (
+                                    <p className="font-semibold text-neutral-500">
+                                        Desvio: <span className={cn(
+                                            "font-black text-[12px]",
+                                            Math.abs(deviation) <= tolerance ? "text-emerald-500" : "text-red-500"
+                                        )}>
+                                            {deviation > 0 ? "+" : ""}{deviation.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                        </span>
+                                    </p>
+                                )}
+                            </div>
+                        )}
                     </div>
                 </div>
             );
@@ -700,26 +781,58 @@ export default function Verificacao() {
                 ) : (
                     <div className="space-y-6 flex-1 flex flex-col">
 
-                        {/* SELETOR DE AMOSTRA CONSOLIDADA */}
+                        {/* SELETOR DE AMOSTRA CONSOLIDADA E TOLERÂNCIAS */}
                         {amostras.length > 0 && (
-                            <div className="w-full flex items-center bg-white rounded-xl border border-neutral-200/60 p-4 shadow-sm gap-4">
-                                <label className="text-[11px] font-extrabold text-[#1c3664] uppercase tracking-widest flex items-center gap-2 whitespace-nowrap">
-                                    <Table2 className="h-4 w-4" /> Amostra Consolidada
-                                </label>
+                            <div className="w-full flex flex-col md:flex-row items-stretch md:items-center bg-white rounded-xl border border-neutral-200/60 p-4 shadow-sm gap-6">
+                                <div className="flex items-center gap-4 flex-1">
+                                    <label className="text-[11px] font-extrabold text-[#1c3664] uppercase tracking-widest flex items-center gap-2 whitespace-nowrap">
+                                        <Table2 className="h-4 w-4" /> Amostra Consolidada
+                                    </label>
 
-                                <div className="relative flex-1 max-w-sm">
-                                    <select
-                                        title="Selecione a Referência da Amostra"
-                                        value={amostraSelecionada || ""}
-                                        onChange={(e) => setAmostraSelecionada(e.target.value || null)}
-                                        className="h-10 w-full border border-neutral-300 rounded-lg text-sm font-bold text-[#1c3664] focus:border-[#1c3664] focus:ring-[#1c3664] bg-white appearance-none pl-4 pr-10 shadow-sm transition-all"
-                                    >
-                                        <option value="">Selecione pela Referência...</option>
-                                        {amostras.map(am => (
-                                            <option value={am.id} key={am.id}>{am.referencia}</option>
-                                        ))}
-                                    </select>
-                                    <ChevronDown className="absolute right-3 top-3 h-4 w-4 text-[#1c3664] pointer-events-none" />
+                                    <div className="relative flex-1 max-w-sm">
+                                        <select
+                                            title="Selecione a Referência da Amostra"
+                                            value={amostraSelecionada || ""}
+                                            onChange={(e) => setAmostraSelecionada(e.target.value || null)}
+                                            className="h-10 w-full border border-neutral-300 rounded-lg text-sm font-bold text-[#1c3664] focus:border-[#1c3664] focus:ring-[#1c3664] bg-white appearance-none pl-4 pr-10 shadow-sm transition-all"
+                                        >
+                                            <option value="">Selecione pela Referência...</option>
+                                            {amostras.map(am => (
+                                                <option value={am.id} key={am.id}>{am.referencia}</option>
+                                            ))}
+                                        </select>
+                                        <ChevronDown className="absolute right-3 top-3 h-4 w-4 text-[#1c3664] pointer-events-none" />
+                                    </div>
+                                </div>
+
+                                {/* Seção de Tolerâncias conforme Screenshot */}
+                                <div className="flex flex-wrap items-center gap-4 border-l border-neutral-100 pl-6">
+                                    <span className="text-[10px] font-black text-neutral-400 uppercase tracking-widest vertical-text mr-2">Tolerâncias</span>
+                                    {[
+                                        { id: 'mic', label: 'Mic' },
+                                        { id: 'len', label: 'Len' },
+                                        { id: 'unf', label: 'Unf' },
+                                        { id: 'str', label: 'Str' },
+                                        { id: 'rd', label: 'Rd' },
+                                        { id: 'maisB', label: '+b' }
+                                    ].map((tol) => (
+                                        <div key={tol.id} className="flex flex-col items-center gap-1 group">
+                                            <label className="text-[10px] font-black text-[#1c3664] uppercase">{tol.label}</label>
+                                            <input
+                                                type="number"
+                                                step="0.01"
+                                                disabled={user?.acesso !== 'admin_global'}
+                                                value={toleranciasConfig[tol.id as keyof typeof toleranciasConfig]}
+                                                onChange={(e) => {
+                                                    const val = parseFloat(e.target.value);
+                                                    if (!isNaN(val)) {
+                                                        setToleranciasConfig(prev => ({ ...prev, [tol.id]: val }));
+                                                    }
+                                                }}
+                                                className="w-16 h-8 text-center border border-neutral-200 rounded text-xs font-bold text-[#1c3664] bg-white shadow-sm focus:border-blue-500 outline-none disabled:opacity-50"
+                                            />
+                                        </div>
+                                    ))}
                                 </div>
                             </div>
                         )}
@@ -884,11 +997,11 @@ export default function Verificacao() {
                                                 </div>
                                             ) : (
                                                 <div className="w-full mt-4 flex-1 min-h-[350px]">
-                                                    <ResponsiveContainer width="100%" height={350}>
+                                                    <ResponsiveContainer width="100%" height={420}>
                                                         <LineChart data={chartData} margin={{ top: 20, right: 30, left: 10, bottom: 20 }}>
                                                             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E5E5" />
                                                             <XAxis
-                                                                dataKey="time"
+                                                                dataKey="name"
                                                                 tickLine={false}
                                                                 axisLine={false}
                                                                 tick={{ fontSize: 10, fill: '#737373' }}

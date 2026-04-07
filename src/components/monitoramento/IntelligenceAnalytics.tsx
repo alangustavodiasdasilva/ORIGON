@@ -1,5 +1,5 @@
 import React from "react";
-import { AlertCircle, BarChart3, Loader2, Printer, TrendingDown, TrendingUp } from "lucide-react";
+import { BarChart3 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface IntelligenceAnalyticsProps {
@@ -105,15 +105,7 @@ const SimpleWeekAverage = ({
 
 export const IntelligenceAnalytics: React.FC<IntelligenceAnalyticsProps> = ({
     innerRef,
-    analysisMetrics,
-    analysisPeriod,
-    setAnalysisPeriod,
-    handleExportAnaliticoPDF,
-    isGeneratingPDF,
-    labs,
-    globalLabId,
-    analyticsLabId,
-    setAnalyticsLabId
+    analysisMetrics
 }) => {
 
     const chartData = [...analysisMetrics.smoothedData];
@@ -121,129 +113,17 @@ export const IntelligenceAnalytics: React.FC<IntelligenceAnalyticsProps> = ({
     return (
         <div ref={innerRef} className="space-y-6 mb-12 animate-fade-in transition-all duration-700 bg-white/50 p-6 rounded-[3rem] border border-neutral-100 mt-8">
             <div className="flex flex-col lg:flex-row items-stretch gap-6">
-                {/* KPI Cards Secundários - Análise Analítica */}
-                <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <div className="bg-white border border-neutral-100 p-6 rounded-3xl shadow-sm hover:shadow-md transition-all">
-                        <div className="flex items-center justify-between mb-4">
-                            <span className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Eficiência de Absorção</span>
-                            <div className={cn(
-                                "px-2 py-1 rounded-full text-[9px] font-bold flex items-center gap-1",
-                                analysisMetrics.absorptionRate >= 1 ? "bg-emerald-50 text-emerald-600" : "bg-amber-50 text-amber-600"
-                            )}>
-                                <div key={analysisMetrics.absorptionRate >= 1 ? "up" : "down"} className="shrink-0 flex items-center">
-                                    {analysisMetrics.absorptionRate >= 1 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-                                </div>
-                                <span>{(analysisMetrics.absorptionRate * 100).toFixed(1)}%</span>
-                            </div>
-                        </div>
-                        <div className="text-xl font-serif text-black">{analysisMetrics.currentProduced.toLocaleString('pt-BR')}</div>
-                        <div className="text-[10px] font-bold text-neutral-400 mt-1">Produzido nos últimos {analysisPeriod}d</div>
-                    </div>
-
-                    <div className="bg-white border border-neutral-100 p-6 rounded-3xl shadow-sm hover:shadow-md transition-all">
-                        <div className="flex items-center justify-between mb-4">
-                            <span className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Eficiência Ponderada</span>
-                            <div className={cn(
-                                "h-2 w-16 bg-neutral-100 rounded-full overflow-hidden"
-                            )}>
-                                <div
-                                    className={cn("h-full transition-all duration-1000", analysisMetrics.weightedEfficiencyIndex > 0.9 ? "bg-emerald-500" : analysisMetrics.weightedEfficiencyIndex > 0.65 ? "bg-amber-400" : "bg-red-400")}
-                                    style={{ width: `${Math.min(100, analysisMetrics.weightedEfficiencyIndex * 100)}%` }}
-                                />
-                            </div>
-                        </div>
-                        <div className="text-xl font-serif text-black">{(analysisMetrics.weightedEfficiencyIndex * 100).toFixed(1)}%</div>
-                        <div className="text-[10px] font-bold text-neutral-400 mt-1">Índice Ponderado de O.S. Finalizadas</div>
-                    </div>
-
-                    <div className="bg-white border border-neutral-100 p-6 rounded-3xl shadow-sm hover:shadow-md transition-all">
-                        <div className="flex items-center justify-between mb-4">
-                            <span className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Taxa de Revisão</span>
-                            <div className={cn(
-                                "px-2 py-1 rounded-full text-[9px] font-bold flex items-center gap-1",
-                                analysisMetrics.revisionRate >= 0.85 ? "bg-emerald-50 text-emerald-600" : "bg-amber-50 text-amber-600"
-                            )}>
-                                <span>{(analysisMetrics.revisionRate * 100).toFixed(1)}%</span>
-                            </div>
-                        </div>
-                        <div className="text-xl font-serif text-black">{analysisMetrics.currentReceived.toLocaleString('pt-BR')}</div>
-                        <div className="text-[10px] font-bold text-neutral-400 mt-1">Amostras Recebidas · {(analysisMetrics.revisionRate * 100).toFixed(1)}% revisadas</div>
-                    </div>
-                </div>
-
-                {/* Alertas e Insights */}
-                {analysisMetrics.alerts.length > 0 && (
-                    <div className="lg:w-1/3 bg-neutral-900 rounded-2xl p-5 shadow-xl relative overflow-hidden">
-                        <div className="relative z-10">
-                            <div className="flex items-center gap-2 mb-4">
-                                <AlertCircle className="h-4 w-4 text-amber-400" />
-                                <span className="text-[10px] font-black uppercase tracking-widest text-white/50">Insights e Alertas</span>
-                            </div>
-                            <div className="space-y-3">
-                                {analysisMetrics.alerts.map((alert: any) => (
-                                    <div key={alert.message} className="flex items-start gap-3 bg-white/5 border border-white/10 p-3 rounded-xl">
-                                        <div className={cn("h-2 w-2 rounded-full mt-1.5 shrink-0", alert.type === 'warning' ? "bg-amber-500" : "bg-blue-500")} />
-                                        <p className="text-[10px] leading-relaxed text-neutral-300 font-bold">{alert.message}</p>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    </div>
-                )}
             </div>
 
             {/* Novo Gráfico Cascata (Gantt) - Balanço Operacional */}
             <div className="bg-white border border-neutral-200 rounded-3xl p-6 shadow-sm">
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8 border-b border-neutral-100 pb-6">
                     <div>
                         <h3 className="text-xl font-serif text-black leading-tight flex items-center gap-2">
                             <BarChart3 className="h-5 w-5 text-neutral-400" />
-                            Balanço Operacional Dinâmico (Últimos {analysisPeriod} Dias)
+                            Balanço Operacional Dinâmico (Últimos 7 Dias)
                         </h3>
                         <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400 mt-1">Comparação de volumes com média diária ponderada</p>
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-2 bg-neutral-100/50 p-1.5 rounded-2xl border border-neutral-200">
-                        {[7, 14, 30, 90, 180, 365].map((period) => (
-                            <button
-                                key={period}
-                                onClick={() => setAnalysisPeriod(period)}
-                                className={cn(
-                                    "px-4 py-2 rounded-xl text-[10px] font-black tracking-widest transition-all",
-                                    analysisPeriod === period
-                                        ? "bg-black text-white shadow-lg scale-105"
-                                        : "text-neutral-400 hover:text-black hover:bg-white"
-                                )}
-                            >
-                                {period === 365 ? '1 ANO' : period === 180 ? 'SAFRA' : `${period}D`}
-                            </button>
-                        ))}
-                    </div>
-
-                    <div className="flex items-center gap-3">
-                        {globalLabId === 'all' && labs && (
-                            <select
-                                title="Filtrar por Laboratório"
-                                value={analyticsLabId}
-                                onChange={(e) => setAnalyticsLabId(e.target.value)}
-                                className="px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest bg-yellow-50 text-yellow-800 border-2 border-yellow-200 outline-none hover:bg-yellow-100 transition-colors cursor-pointer shadow-sm min-w-[200px]"
-                            >
-                                <option value="all">TODOS OS LABORATÓRIOS</option>
-                                {labs.map(l => (
-                                    <option key={l.id} value={l.id}>{l.nome}</option>
-                                ))}
-                            </select>
-                        )}
-                        <button
-                            onClick={handleExportAnaliticoPDF}
-                            disabled={isGeneratingPDF}
-                            className="flex items-center gap-2 bg-black text-white px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-neutral-800 transition-all shadow-lg"
-                        >
-                            <div key={isGeneratingPDF ? "generating" : "idle"} className="shrink-0 flex items-center">
-                                {isGeneratingPDF ? <Loader2 className="h-3 w-3 animate-spin" /> : <Printer className="h-3 w-3" />}
-                            </div>
-                            <span>Gerar Relatório Analítico</span>
-                        </button>
                     </div>
                 </div>
 
