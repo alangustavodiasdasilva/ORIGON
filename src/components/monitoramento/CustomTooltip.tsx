@@ -15,7 +15,9 @@ export const CustomTooltip = ({ active, payload, label }: any) => {
                     {sortedPayload.map((entry: any) => (
                         <div key={entry.name} className="flex items-center justify-between gap-8">
                             <div className="flex items-center gap-2">
-                                <div className="h-2 w-2 rounded-full bg-dynamic" style={{ '--bg-color': entry.color } as React.CSSProperties} />
+                                <svg width="8" height="8" viewBox="0 0 8 8" className="shadow-sm">
+                                    <circle cx="4" cy="4" r="4" fill={entry.color} />
+                                </svg>
                                 <span className={cn("text-[11px] font-medium", entry.name === 'Total Recebido' ? "text-black font-black" : "text-neutral-600")}>{entry.name}</span>
                             </div>
                             <span className={cn("text-[11px] font-mono", entry.name === 'Total Recebido' ? "text-black font-black" : "font-bold text-black")}>{entry.value.toLocaleString('pt-BR')}</span>

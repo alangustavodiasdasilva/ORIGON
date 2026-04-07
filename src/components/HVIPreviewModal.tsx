@@ -56,6 +56,7 @@ export default function HVIPreviewModal({
                     <button
                         onClick={onClose}
                         className="p-2 hover:bg-neutral-100 rounded transition-colors"
+                        title="Fechar visualização"
                     >
                         <X className="h-5 w-5" />
                     </button>
@@ -107,10 +108,9 @@ export default function HVIPreviewModal({
                                 <div className="mt-4 pt-3 border-t-2 border-blue-200">
                                     <div className="flex items-center gap-2">
                                         {originalSample.cor && (
-                                            <div
-                                                className="h-6 w-6 rounded border border-neutral-300"
-                                                style={{ backgroundColor: originalSample.cor }}
-                                            />
+                                            <svg width="24" height="24" viewBox="0 0 24 24" className="rounded border border-neutral-300">
+                                                <rect width="24" height="24" fill={originalSample.cor} />
+                                            </svg>
                                         )}
                                         <span className="text-xs text-neutral-500">
                                             Cor: {originalSample.cor || 'Não definida'}

@@ -106,24 +106,24 @@ export const ReviewerPerformanceSection: React.FC<ReviewerPerformanceSectionProp
                                         key={rev}
                                         onClick={() => toggleReviewerSelection(rev)}
                                         className={cn(
-                                            "flex items-center gap-3 px-4 py-2.5 rounded-xl border-2 transition-all shrink-0 min-w-fit",
+                                            "flex items-center gap-3 px-4 py-2.5 rounded-xl border-2 transition-all shrink-0 min-w-fit relative overflow-hidden",
                                             selectedReviewers.includes(rev)
-                                                ? "text-white border-transparent bg-dynamic shadow-dynamic"
+                                                ? "text-white border-transparent"
                                                 : "bg-neutral-50/50 text-neutral-400 border-transparent hover:bg-white hover:border-neutral-200"
                                         )}
-                                        style={selectedReviewers.includes(rev) ? {
-                                            '--bg-color': revisorDailyStats.keyColors[rev],
-                                            '--dynamic-shadow': `0 4px 12px ${revisorDailyStats.keyColors[rev]}33`
-                                        } as React.CSSProperties : {}}
                                     >
-                                        <div
-                                            className="h-1.5 w-1.5 rounded-full bg-dynamic"
-                                            style={{
-                                                '--bg-color': selectedReviewers.includes(rev) ? 'white' : (revisorDailyStats.keyColors[rev] || '#e5e5e5')
-                                            } as React.CSSProperties}
-                                        />
-                                        <span className="text-[9px] font-black uppercase tracking-wider">{rev}</span>
-                                        <span className="text-[10px] font-mono font-bold opacity-80 pl-2 border-l border-white/20">{totalRev.toLocaleString('pt-BR')}</span>
+                                        {selectedReviewers.includes(rev) && (
+                                            <svg className="absolute inset-0 w-full h-full" preserveAspectRatio="none">
+                                                <rect width="100%" height="100%" fill={revisorDailyStats.keyColors[rev]} />
+                                            </svg>
+                                        )}
+                                        <div className="relative z-10 flex items-center gap-3 pointer-events-none">
+                                            <svg width="6" height="6" viewBox="0 0 6 6" className="shrink-0 pointer-events-none">
+                                                <circle cx="3" cy="3" r="3" fill={selectedReviewers.includes(rev) ? 'white' : (revisorDailyStats.keyColors[rev] || '#e5e5e5')} />
+                                            </svg>
+                                            <span className="text-[9px] font-black uppercase tracking-wider">{rev}</span>
+                                            <span className="text-[10px] font-mono font-bold opacity-80 pl-2 border-l border-white/20">{totalRev.toLocaleString('pt-BR')}</span>
+                                        </div>
                                     </button>
                                 );
                             })}

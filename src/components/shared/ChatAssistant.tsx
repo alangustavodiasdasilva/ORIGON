@@ -201,7 +201,6 @@ export default function ChatAssistant() {
                                             "flex flex-col gap-1.5 animate-slide-up",
                                             isMe ? "items-end" : "items-start"
                                         )}
-                                        style={{ animationDelay: `${idx * 0.05}s` }}
                                     >
                                         <div className="flex items-center gap-2 mb-1 px-1">
                                             {!isMe && <span className="text-[8px] font-black uppercase tracking-widest text-blue-600 italic">{msg.sender_name}</span>}

@@ -51,11 +51,10 @@ export const ReviewersTable: React.FC<ReviewersTableProps> = ({
                                 <td className="p-4 text-right font-mono font-bold">{stat.total.toLocaleString('pt-BR')}</td>
                                 <td className="p-4">
                                     <div className="flex items-center gap-3">
-                                        <div className="h-1.5 bg-neutral-100 rounded-full flex-1 overflow-hidden">
-                                            <div
-                                                className="h-full bg-black rounded-full transition-all w-dynamic"
-                                                style={{ '--dynamic-width': `${(stat.total / (revisorStats[0]?.total || 1)) * 100}%` } as React.CSSProperties}
-                                            />
+                                        <div className="flex-1">
+                                            <svg width="100%" height="6" className="rounded-full bg-neutral-100 overflow-hidden">
+                                                <rect width={`${(stat.total / (revisorStats[0]?.total || 1)) * 100}%`} height="100%" fill="black" rx="3" className="transition-all duration-500" />
+                                            </svg>
                                         </div>
                                     </div>
                                 </td>

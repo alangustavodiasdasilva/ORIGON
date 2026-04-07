@@ -43,7 +43,6 @@ export default function GlobalStats() {
                 <div
                     key={card.label}
                     className="p-6 bg-white rounded-[2rem] border border-slate-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 group"
-                    style={{ animationDelay: `${idx * 0.1}s` }}
                 >
                     <div className="flex items-center gap-4">
                         <div className={`w-12 h-12 ${card.bg} rounded-2xl flex items-center justify-center transition-transform group-hover:rotate-6`}>

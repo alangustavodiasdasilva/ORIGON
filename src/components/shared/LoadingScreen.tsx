@@ -45,10 +45,9 @@ export default function LoadingScreen() {
                 {/* Loading Indicator */}
                 <div className="w-64 space-y-3">
                     <div className="h-[2px] w-full bg-neutral-100 overflow-hidden">
-                        <div
-                            className="h-full bg-black transition-all duration-300 ease-out w-dynamic"
-                            style={{ '--dynamic-width': `${progress}%` } as React.CSSProperties}
-                        />
+                        <svg width="100%" height="2" className="block">
+                            <rect width={`${progress}%`} height="100%" fill="black" className="transition-all duration-300 ease-out" />
+                        </svg>
                     </div>
                     <div className="flex justify-between text-[9px] font-mono uppercase tracking-widest text-neutral-400">
                         <span>Loading Modules</span>
