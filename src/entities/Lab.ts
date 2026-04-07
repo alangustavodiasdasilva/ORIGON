@@ -113,8 +113,11 @@ export const LabService = {
 
     async delete(id: string): Promise<void> {
         if (isSupabaseEnabled()) {
-            const { error } = await supabase.from('laboratorios').delete().eq('id', id);
+            const { data, error } = await supabase.from('laboratorios').delete().eq('id', id).select();
             if (error) throw error;
+            if (!data || data.length === 0) {
+                throw new Error("Permissão negada pelo servidor ou laboratório já excluído.");
+            }
         }
         // SEMPRE limpa do localStorage — independente do Supabase estar ativo ou não
         // Isso evita o "ghost lab" que voltava após atualização de página

@@ -146,8 +146,11 @@ export const MachineService = {
 
     async delete(id: string): Promise<void> {
         if (isSupabaseEnabled()) {
-            const { error } = await supabase.from('maquinas').delete().eq('id', id);
+            const { data, error } = await supabase.from('maquinas').delete().eq('id', id).select();
             if (error) throw error;
+            if (!data || data.length === 0) {
+                throw new Error("Permissão negada pelo servidor ou máquina já excluída.");
+            }
         }
         // SEMPRE limpa do localStorage — independente do Supabase estar ativo ou não
         // Isso evita que dados deletados reapareçam via fallback

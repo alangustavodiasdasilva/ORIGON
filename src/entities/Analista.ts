@@ -139,8 +139,11 @@ export const AnalistaService = {
 
     async delete(id: string): Promise<void> {
         if (isSupabaseEnabled()) {
-            const { error } = await supabase.from('analistas').delete().eq('id', id);
+            const { data, error } = await supabase.from('analistas').delete().eq('id', id).select();
             if (error) throw error;
+            if (!data || data.length === 0) {
+                throw new Error("Permissão negada pelo servidor ou analista já excluído.");
+            }
         }
         // SEMPRE sincroniza o localStorage após deletar — evita o "fantasma"
         // que voltava quando o Supabase estava lento ou era o fallback
