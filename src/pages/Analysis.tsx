@@ -360,6 +360,14 @@ export default function Analysis() {
                         </div>
                         <div className="ml-auto shrink-0 flex items-center gap-4">
 
+                            <Button 
+                                variant="outline" 
+                                onClick={() => setIsTemplatesModalOpen(true)}
+                                className="h-10 rounded-none border-black flex items-center gap-2 uppercase text-[10px] font-bold tracking-widest hover:bg-neutral-50"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                                Parâmetros do Print
+                            </Button>
                             <div className="px-3 py-1.5 bg-blue-50 border border-blue-200 rounded text-[9px] font-bold text-blue-700 uppercase tracking-tight">
                                 <span className="opacity-70 mr-1 italic">Objetivo:</span> 
                                 Calibrar variação das sub-medições no arquivo TXT

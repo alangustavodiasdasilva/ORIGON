@@ -56,11 +56,17 @@ export default function ColorTemplatesModal({ isOpen, onClose, specificColor }: 
     const [previews, setPreviews] = useState<Record<string, string>>({});
     const [selectedLines, setSelectedLines] = useState<Record<string, number>>({});
     const [scannedRows, setScannedRows] = useState<ColorTemplate[]>([]);
-
     useEffect(() => {
-        // Initialize scannedRows with defaults if empty
-        if (scannedRows.length === 0) {
+        const storedScanned = localStorage.getItem('custom_print_scanned_rows');
+        if (storedScanned) {
+            setScannedRows(JSON.parse(storedScanned));
+        } else if (scannedRows.length === 0) {
             setScannedRows(PRINT_ROWS.map(r => ({ ...r, elg: r.elg || 0, area: r.area || 0, count: r.count || 0, mat: r.mat || 0, leaf: r.leaf || 0, sfi: r.sfi || 0, csp: r.csp || 0, sci: r.sci || 0 })));
+        }
+
+        const storedPreviews = localStorage.getItem('custom_print_previews');
+        if (storedPreviews) {
+            setPreviews(JSON.parse(storedPreviews));
         }
         const stored = localStorage.getItem('custom_color_averages');
         if (stored) {
@@ -97,6 +103,8 @@ export default function ColorTemplatesModal({ isOpen, onClose, specificColor }: 
         });
 
         localStorage.setItem('custom_color_averages', JSON.stringify(finalTemplates));
+        localStorage.setItem('custom_print_scanned_rows', JSON.stringify(scannedRows));
+        localStorage.setItem('custom_print_previews', JSON.stringify(previews));
         onClose();
     };
 
@@ -133,6 +141,7 @@ export default function ColorTemplatesModal({ isOpen, onClose, specificColor }: 
         
         newRows[rowIndex] = row;
         setScannedRows(newRows);
+        localStorage.setItem('custom_print_scanned_rows', JSON.stringify(newRows));
     };
 
     const applyPrintRow = (color: string, rowIndex: number) => {
@@ -197,6 +206,7 @@ export default function ColorTemplatesModal({ isOpen, onClose, specificColor }: 
                                                         setPreviews(prev => {
                                                             const n = { ...prev };
                                                             delete n[colorObj.hex];
+                                                            localStorage.setItem('custom_print_previews', JSON.stringify(n));
                                                             return n;
                                                         });
                                                     }}
@@ -267,10 +277,16 @@ export default function ColorTemplatesModal({ isOpen, onClose, specificColor }: 
                                             onChange={(e) => {
                                                 const file = e.target.files?.[0];
                                                 if (file) {
-                                                    const url = URL.createObjectURL(file);
-                                                    const color = colorObj.hex;
-                                                    setPreviews(prev => ({ ...prev, [color]: url }));
-                                                    applyPrintRow(color, 0); 
+                                                    const reader = new FileReader();
+                                                    reader.onloadend = () => {
+                                                        const base64String = reader.result as string;
+                                                        const color = colorObj.hex;
+                                                        const newPreviews = { ...previews, [color]: base64String };
+                                                        setPreviews(newPreviews);
+                                                        localStorage.setItem('custom_print_previews', JSON.stringify(newPreviews));
+                                                        applyPrintRow(color, 0); 
+                                                    };
+                                                    reader.readAsDataURL(file);
                                                 }
                                             }}
                                         />
