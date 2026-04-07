@@ -16,7 +16,7 @@ import type { Lote } from "@/entities/Lote";
 import { SampleService } from "@/entities/Sample";
 import { LoteService } from "@/entities/Lote";
 import AnalysisTable from "@/components/analysis/AnalysisTable";
-import StatisticsPanel from "@/components/analysis/StatisticsPanel";
+
 import MovingAverageChart from "@/components/analysis/MovingAverageChart";
 import PatternAnalysisModal from "@/components/analysis/PatternAnalysisModal";
 import ColorTemplatesModal from "@/components/analysis/ColorTemplatesModal";
@@ -25,13 +25,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import HVIStatisticalReportModal from "@/components/analysis/HVIStatisticalReportModal";
 import { cn } from "@/lib/utils";
 
-interface ColorAverage {
-    mic: number;
-    len: number;
-    unf: number;
-    str: number;
-    rd: number;
-    b: number;
+interface ColorSummary {
     samples: number;
 }
 
@@ -475,7 +469,6 @@ export default function Analysis() {
                     setRefreshTrigger(prev => prev + 1); // FORCE UI UPDATE AFTER SAVING PRINT
                 }}
                 specificColor={activeColorForTemplate || undefined}
-                currentMetrics={metricsByColor}
             />
 
             <HVIStatisticalReportModal

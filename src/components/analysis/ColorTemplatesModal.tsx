@@ -3,17 +3,6 @@ import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { X, Save, Palette, Info, ImagePlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-
-interface ColorAverage {
-    mic: number;
-    len: number;
-    unf: number;
-    str: number;
-    rd: number;
-    b: number;
-    samples: number;
-}
 
 interface ColorTemplate {
     mic: number;
@@ -49,14 +38,20 @@ const PRINT_ROWS = [
     { mic: 4.11, len: 28.90, unf: 78.7, str: 25.4, elg: 6.1, rd: 80.9, b: 11.1, cg: "12-1", leaf: 3, area: 0.28, count: 33, csp: 0, sci: 0, mat: 0.85, sfi: 9.8 },
 ];
 
+const COLORS = [
+    { hex: "#10b981", label: "VERDE (Elite)" },
+    { hex: "#ef4444", label: "VERMELHO (Abaixo)" },
+    { hex: "#3b82f6", label: "AZUL (Premium)" },
+    { hex: "#f59e0b", label: "AMARELO (Alerta)" },
+];
+
 interface ColorTemplatesModalProps {
     isOpen: boolean;
     onClose: () => void;
     specificColor?: string;
-    currentMetrics?: Record<string, ColorAverage>;
 }
 
-export default function ColorTemplatesModal({ isOpen, onClose, specificColor, currentMetrics }: ColorTemplatesModalProps) {
+export default function ColorTemplatesModal({ isOpen, onClose, specificColor }: ColorTemplatesModalProps) {
     const [templates, setTemplates] = useState<Record<string, ColorTemplate>>(DEFAULT_TEMPLATES);
     const [previews, setPreviews] = useState<Record<string, string>>({});
     const [selectedLines, setSelectedLines] = useState<Record<string, number>>({});
@@ -105,30 +100,7 @@ export default function ColorTemplatesModal({ isOpen, onClose, specificColor, cu
         onClose();
     };
 
-    const updateField = (color: string, field: keyof ColorTemplate, value: string) => {
-        let numVal: number | string = value.replace(',', '.');
-        if (field === 'cg') {
-            setTemplates(prev => ({
-                ...prev,
-                [color]: { ...prev[color], [field]: value }
-            }));
-        } else {
-            const parsed = parseFloat(numVal as string);
-            setTemplates(prev => ({
-                ...prev,
-                [color]: { ...prev[color], [field]: isNaN(parsed) ? 0 : parsed }
-            }));
-        }
-    };
-
     if (!isOpen) return null;
-
-    const COLORS = [
-        { hex: "#10b981", label: "VERDE (Elite)" },
-        { hex: "#ef4444", label: "VERMELHO (Abaixo)" },
-        { hex: "#3b82f6", label: "AZUL (Premium)" },
-        { hex: "#f59e0b", label: "AMARELO (Alerta)" },
-    ];
 
     const FIELDS: { id: keyof ColorTemplate; label: string; step: string; type?: string }[] = [
         { id: 'mic', label: 'MIC', step: '0.01' },
@@ -196,7 +168,7 @@ export default function ColorTemplatesModal({ isOpen, onClose, specificColor, cu
                             </div>
                         </div>
                     </div>
-                    <button onClick={onClose} className="p-2 hover:bg-neutral-100 transition-all rounded-full">
+                    <button onClick={onClose} className="p-2 hover:bg-neutral-100 transition-all rounded-full" title="Fechar" aria-label="Fechar">
                         <X className="h-5 w-5" />
                     </button>
                 </div>
@@ -269,6 +241,8 @@ export default function ColorTemplatesModal({ isOpen, onClose, specificColor, cu
                                                                 <td key={f.id} className="p-0.5">
                                                                     <input 
                                                                         type={f.type || "number"}
+                                                                        title={`Editar ${f.label}`}
+                                                                        aria-label={`Editar ${f.label}`}
                                                                         step={f.step === '0' ? undefined : f.step}
                                                                         value={row[f.id] ?? ""}
                                                                         onChange={(e) => updateScannedRow(idx, f.id, e.target.value)}
@@ -286,6 +260,8 @@ export default function ColorTemplatesModal({ isOpen, onClose, specificColor, cu
                                     <div className="flex flex-col items-center justify-center py-12 border-2 border-dashed border-neutral-200 bg-white/50 group-hover:border-black transition-colors cursor-pointer relative overflow-hidden">
                                         <input 
                                             type="file" 
+                                            title="Carregar Print"
+                                            aria-label="Carregar Print"
                                             accept="image/*" 
                                             className="absolute inset-0 opacity-0 cursor-pointer z-10"
                                             onChange={(e) => {

@@ -819,6 +819,8 @@ export default function Verificacao() {
                                         <div key={tol.id} className="flex flex-col items-center gap-1 group">
                                             <label className="text-[10px] font-black text-[#1c3664] uppercase">{tol.label}</label>
                                             <input
+                                                title={`Tolerância ${tol.label}`}
+                                                aria-label={`Tolerância ${tol.label}`}
                                                 type="number"
                                                 step="0.01"
                                                 disabled={user?.acesso !== 'admin_global'}

@@ -248,7 +248,7 @@ export class HVIFileGeneratorService {
     /**
      * Generate ONE line of USTER format using pre-calculated balanced values
      */
-    private static generateUsterOneLine(sample: Sample, averages: ColorAverage, tolerancias?: HVITolerancias): string {
+    private static generateUsterOneLine(sample: Sample, averages: ColorAverage): string {
 
         // Columns based on user provided sample:
         // "1279                                    " "etiqueta                                " "      " 3 0.27 030 29.72 82.2 10.4 31.4 06.4 4.07 0.85 79.8 09.7 000 000 07.5 "11-1" 23.4 49.1 128.5
@@ -395,8 +395,7 @@ export class HVIFileGeneratorService {
         sample: Sample, 
         count: number, 
         averages: ColorAverage, 
-        balancedReadings: Record<string, number[]>,
-        tolerancias?: HVITolerancias
+        balancedReadings: Record<string, number[]>
     ): string {
 
         // Date/Time formatting (Premier style)
@@ -669,7 +668,7 @@ export class HVIFileGeneratorService {
                         sci: sciReadings[i],
                         csp: cspReadings[i]
                     };
-                    usterLines.push(this.generateUsterOneLine(sample, rowAverages, tols));
+                    usterLines.push(this.generateUsterOneLine(sample, rowAverages));
                 }
                 content = usterLines.join('\n');
                 extension = 'txt';
@@ -689,7 +688,7 @@ export class HVIFileGeneratorService {
                     sfi: sfiReadings,
                     sci: sciReadings,
                     csp: cspReadings
-                }, tols);
+                });
                 extension = 'txt';
             }
 
