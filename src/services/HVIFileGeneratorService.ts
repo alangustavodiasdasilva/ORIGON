@@ -306,20 +306,18 @@ export class HVIFileGeneratorService {
      */
     private static generateUsterOneLine(sample: Sample, averages: ColorAverage): string {
         // Pad helper to match old machine fixed-width logic (40 chars inside quotes)
-        const pad40 = (text: string) => `"${text.padEnd(40, ' ')}"`;
-        const pad1 = () => `" "`;
-
+        const pad40 = (text: string) => `"${text.substring(0, 40).padEnd(40, ' ')}"`;
+        
         // 1. Mala (ex: "12")
         const field1 = pad40(sample.mala || '');
-        // 2. Separator
-        const field2 = pad1();
-        // 3. Amostra ID / Etiqueta (ex: "1007...")
-        const field3 = pad40(sample.amostra_id || '');
-        // 4. Separator
-        const field4 = pad1();
+        // 2. Amostra ID / Etiqueta (ex: "1007...")
+        const field2 = pad40(sample.amostra_id || '');
+        // 3. Bloco fixo de 6 espaços
+        const field3 = `"      "`;
+        
+        const col4 = "3"; // Constante da máquina
 
-        // Valores técnicos do bloco de dados
-        const leaf  = (averages.leaf || 3).toString().padStart(2);
+        // Valores técnicos do bloco de dados (alinhados conforme o exemplo)
         const area  = (averages.area || 0.25).toFixed(2).padStart(4);
         const count = (averages.count || 30).toString().padStart(3, '0');
         const uhml  = averages.len.toFixed(2).padStart(5);
@@ -339,17 +337,18 @@ export class HVIFileGeneratorService {
         const temp  = (23 + (Math.random() * 1.5)).toFixed(1).padStart(4);
         const rh    = (48 + (Math.random() * 2)).toFixed(1).padStart(4);
         
-        // CORREÇÃO DOS NEGATIVOS: Se o SCI/CSP do template for 0, usa o padrão estável de máquina
-        const sciVal = (averages.sci && averages.sci > 10) ? averages.sci : 125.0;
+        // Valores estáveis para SCI e CSP
+        const sciVal = (averages.sci && averages.sci > 10) ? averages.sci : 124.6;
         const cspVal = (averages.csp && averages.csp > 100) ? averages.csp : 1600;
         
         const sci   = sciVal.toFixed(1).padStart(5);
         const csp   = Math.round(cspVal).toString().padStart(4);
 
-        const dataPart = `" 3 ${area} ${count} ${uhml} ${ui} ${sfi} ${str} ${elg} ${mic} ${mat} ${rd} ${plusB} ${zeros} ${val18} ${cg} ${temp} ${rh} ${sci} ${csp}"`;
-
-        return `${field1} ${field2} ${field3} ${field4} ${dataPart}`;
+        // Montagem final exatamente como o exemplo:
+        // "Mala" "ID" "      " 3 0.28 026 ... "CG" Temp RH SCI CSP
+        return `${field1} ${field2} ${field3} ${col4} ${area} ${count} ${uhml} ${ui} ${sfi} ${str} ${elg} ${mic} ${mat} ${rd} ${plusB} ${zeros} ${val18} ${cg} ${temp} ${rh} ${sci} ${csp}`;
     }
+
 
 
 
