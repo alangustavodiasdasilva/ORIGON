@@ -540,12 +540,12 @@ export class HVIFileGeneratorService {
                 i + 1,
                 `"${sample.etiqueta || 'SAMPLE'} "`,
                 fmt(uhml, 2), fmt(ml, 2), fmt(ui, 1), fmt(elg, 1), fmt(str, 1), fmt(mic, 2),
-                fmt(rd, 1), fmt(plusB, 1), cg, fmt(sfi, 1), grd, cnt, fmt(area, 2), fmt(mat, 2), fmt(sci, 1)
+                fmt(rd, 1), fmt(plusB, 1), cg, fmt(sfi, 1), grd, cnt, fmt(area, 2), fmt(mat, 2)
             ].join('\t'));
         }
 
         // Stats Calculation
-        const keys = ['uhml', 'ml', 'ui', 'elg', 'str', 'mic', 'rd', 'b', 'sfi', 'cnt', 'area', 'mat', 'sci', 'csp'];
+        const keys = ['uhml', 'ml', 'ui', 'elg', 'str', 'mic', 'rd', 'b', 'sfi', 'cnt', 'area', 'mat'];
         const stats: Record<string, any> = {};
 
         keys.forEach(key => {
@@ -565,7 +565,7 @@ export class HVIFileGeneratorService {
         // Formatting Helpers
         const fMean = (k: string, d: number) => fmt(stats[k].mean, d);
         const fMed = (k: string, d: number) => fmt(stats[k].median, d);
-        const fSD = (k: string, d: number) => fmt(stats[k].sd, d); // SD usually same decimals or +1? User example: 0.24 (2 decimals) for UHML.
+        const fSD = (k: string, d: number) => fmt(stats[k].sd, d);
         const fCV = (k: string) => fmt(stats[k].cv, 2);
         const fMin = (k: string, d: number) => fmt(stats[k].min, d);
         const fMax = (k: string, d: number) => fmt(stats[k].max, d);
@@ -580,7 +580,7 @@ export class HVIFileGeneratorService {
             averages.cg ? `"${averages.cg}"` : (sample.cor === "#ef4444" ? '"31-3"' : '"11-3"'),
             `"${averages.leaf || 2}"`,
             fMean('uhml', 2), fMean('ml', 2), fMean('ui', 1), fMean('elg', 1), fMean('str', 1), fMean('mic', 2),
-            fMean('rd', 1), fMean('b', 1), fMean('sfi', 1), fMean('cnt', 0), fMean('area', 2), fMean('mat', 2), fMean('sci', 1)
+            fMean('rd', 1), fMean('b', 1), fMean('sfi', 1), fMean('cnt', 0), fMean('area', 2), fMean('mat', 2)
         ].join('\t'));
 
         // Gap
@@ -591,35 +591,36 @@ export class HVIFileGeneratorService {
         statsRows.push(``);
         statsRows.push(``);
         statsRows.push(``);
-        statsRows.push(``); // User example has multiple empty lines
+        statsRows.push(``);
 
-        // Other Stats: "Label"\t\t\t...
+        // Other Stats
         const prefix = (label: string) => `"${label}"\t\t\t`;
 
         statsRows.push(prefix("Median") + [
             fMed('uhml', 2), fMed('ml', 2), fMed('ui', 1), fMed('elg', 1), fMed('str', 1), fMed('mic', 2),
-            fMed('rd', 1), fMed('b', 1), fMed('sfi', 1), fMed('cnt', 0), fMed('area', 2), fMed('mat', 2), fMed('sci', 1)
+            fMed('rd', 1), fMed('b', 1), fMed('sfi', 1), fMed('cnt', 0), fMed('area', 2), fMed('mat', 2)
         ].join('\t'));
 
         statsRows.push(prefix("SD") + [
             fSD('uhml', 2), fSD('ml', 2), fSD('ui', 1), fSD('elg', 1), fSD('str', 1), fSD('mic', 2),
-            fSD('rd', 1), fSD('b', 1), fSD('sfi', 2), fSD('cnt', 2), fSD('area', 2), fSD('mat', 2), fSD('sci', 2) // SD decimals from user example (often 2)
+            fSD('rd', 1), fSD('b', 1), fSD('sfi', 2), fSD('cnt', 2), fSD('area', 2), fSD('mat', 2)
         ].join('\t'));
 
         statsRows.push(prefix("CV%") + [
             fCV('uhml'), fCV('ml'), fCV('ui'), fCV('elg'), fCV('str'), fCV('mic'),
-            fCV('rd'), fCV('b'), fCV('sfi'), fCV('cnt'), fCV('area'), fCV('mat'), fCV('sci')
+            fCV('rd'), fCV('b'), fCV('sfi'), fCV('cnt'), fCV('area'), fCV('mat')
         ].join('\t'));
 
         statsRows.push(prefix("Min") + [
             fMin('uhml', 2), fMin('ml', 2), fMin('ui', 1), fMin('elg', 1), fMin('str', 1), fMin('mic', 2),
-            fMin('rd', 1), fMin('b', 1), fMin('sfi', 1), fMin('cnt', 0), fMin('area', 2), fMin('mat', 2), fMin('sci', 1)
+            fMin('rd', 1), fMin('b', 1), fMin('sfi', 1), fMin('cnt', 0), fMin('area', 2), fMin('mat', 2)
         ].join('\t'));
 
         statsRows.push(prefix("Max") + [
             fMax('uhml', 2), fMax('ml', 2), fMax('ui', 1), fMax('elg', 1), fMax('str', 1), fMax('mic', 2),
-            fMax('rd', 1), fMax('b', 1), fMax('sfi', 1), fMax('cnt', 0), fMax('area', 2), fMax('mat', 2), fMax('sci', 1)
+            fMax('rd', 1), fMax('b', 1), fMax('sfi', 1), fMax('cnt', 0), fMax('area', 2), fMax('mat', 2)
         ].join('\t'));
+
 
         statsRows.push(``);
         statsRows.push(``);
