@@ -305,12 +305,20 @@ export class HVIFileGeneratorService {
      * Generate ONE line of USTER format using pre-calculated balanced values
      */
     private static generateUsterOneLine(sample: Sample, averages: ColorAverage): string {
-        // Formatação exata baseada na imagem "Original da Máquina"
-        const mala = `"${sample.mala || ''}"`;
-        const spacing = `" "`;
-        const barcode = `"${sample.amostra_id || ''}"`;
-        
-        // Valores técnicos
+        // Pad helper to match old machine fixed-width logic (40 chars inside quotes)
+        const pad40 = (text: string) => `"${text.padEnd(40, ' ')}"`;
+        const pad1 = () => `" "`;
+
+        // 1. Mala (ex: "12")
+        const field1 = pad40(sample.mala || '');
+        // 2. Separator
+        const field2 = pad1();
+        // 3. Amostra ID / Etiqueta (ex: "1007...")
+        const field3 = pad40(sample.amostra_id || '');
+        // 4. Separator
+        const field4 = pad1();
+
+        // Valores técnicos do bloco de dados
         const leaf  = (averages.leaf || 3).toString().padStart(2);
         const area  = (averages.area || 0.25).toFixed(2).padStart(4);
         const count = (averages.count || 30).toString().padStart(3, '0');
@@ -318,26 +326,31 @@ export class HVIFileGeneratorService {
         const ui    = averages.unf.toFixed(1).padStart(4);
         const sfi   = (averages.sfi || 10.0).toFixed(1).padStart(4);
         const str   = averages.str.toFixed(1).padStart(4);
-        const elg   = (averages.elg || 6.4).toFixed(1).padStart(4, '0'); // Ex: 06.4
+        const elg   = (averages.elg || 6.4).toFixed(1).padStart(4, '0');
         const mic   = averages.mic.toFixed(2).padStart(4);
         const mat   = (averages.mat || 0.85).toFixed(2).padStart(4);
         const rd    = averages.rd.toFixed(1).padStart(4);
-        const plusB = averages.b.toFixed(1).padStart(4, '0'); // Ex: 09.7
+        const plusB = averages.b.toFixed(1).padStart(4, '0');
         
         const zeros = "000 000";
-        const val18 = "7.3"; // Valor constante do exemplo ou calculado? Mantendo 7.3 ou próximo
+        const val18 = "7.3"; 
         
         const cg    = averages.cg ? `"${averages.cg}"` : `"11-1"`;
-        const temp  = (23 + Math.random()).toFixed(1).padStart(4);
-        const rh    = (48 + Math.random() * 2).toFixed(1).padStart(4);
-        const sci   = (averages.sci || 125.0).toFixed(1).padStart(5);
-        const csp   = (averages.csp || 1600).toString().padStart(4);
+        const temp  = (23 + (Math.random() * 1.5)).toFixed(1).padStart(4);
+        const rh    = (48 + (Math.random() * 2)).toFixed(1).padStart(4);
+        
+        // CORREÇÃO DOS NEGATIVOS: Se o SCI/CSP do template for 0, usa o padrão estável de máquina
+        const sciVal = (averages.sci && averages.sci > 10) ? averages.sci : 125.0;
+        const cspVal = (averages.csp && averages.csp > 100) ? averages.csp : 1600;
+        
+        const sci   = sciVal.toFixed(1).padStart(5);
+        const csp   = Math.round(cspVal).toString().padStart(4);
 
-        // Montagem da linha com o prefixo " 3 " que aparece no original
-        const dataPart = ` 3 ${area} ${count} ${uhml} ${ui} ${sfi} ${str} ${elg} ${mic} ${mat} ${rd} ${plusB} ${zeros} ${val18} ${cg} ${temp} ${rh} ${sci} ${csp}`;
+        const dataPart = `" 3 ${area} ${count} ${uhml} ${ui} ${sfi} ${str} ${elg} ${mic} ${mat} ${rd} ${plusB} ${zeros} ${val18} ${cg} ${temp} ${rh} ${sci} ${csp}"`;
 
-        return `${mala} ${spacing} ${barcode} ${spacing} "${dataPart}"`;
+        return `${field1} ${field2} ${field3} ${field4} ${dataPart}`;
     }
+
 
 
     /**
