@@ -308,10 +308,10 @@ export class HVIFileGeneratorService {
         // Pad helper to match old machine fixed-width logic (40 chars inside quotes)
         const pad40 = (text: string) => `"${text.substring(0, 40).padEnd(40, ' ')}"`;
         
-        // 1. Etiqueta / Label (ex: "12")
-        const field1 = pad40(sample.etiqueta || '');
-        // 2. Amostra ID / Barcode (ex: "1007...")
-        const field2 = pad40(sample.amostra_id || '');
+        // 1. Amostra ID / Etiqueta Longa (ex: "1007...")
+        const field1 = pad40(sample.amostra_id || '');
+        // 2. Mala / Número Curto (ex: "21")
+        const field2 = pad40(sample.mala || '');
         // 3. Bloco fixo de 6 espaços
         const field3 = `"      "`;
         
