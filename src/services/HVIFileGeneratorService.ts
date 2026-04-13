@@ -305,73 +305,40 @@ export class HVIFileGeneratorService {
      * Generate ONE line of USTER format using pre-calculated balanced values
      */
     private static generateUsterOneLine(sample: Sample, averages: ColorAverage): string {
+        // Formatação exata baseada na imagem "Original da Máquina"
+        const mala = `"${sample.mala || ''}"`;
+        const spacing = `" "`;
+        const barcode = `"${sample.amostra_id || ''}"`;
+        
+        // Valores técnicos
+        const leaf  = (averages.leaf || 3).toString().padStart(2);
+        const area  = (averages.area || 0.25).toFixed(2).padStart(4);
+        const count = (averages.count || 30).toString().padStart(3, '0');
+        const uhml  = averages.len.toFixed(2).padStart(5);
+        const ui    = averages.unf.toFixed(1).padStart(4);
+        const sfi   = (averages.sfi || 10.0).toFixed(1).padStart(4);
+        const str   = averages.str.toFixed(1).padStart(4);
+        const elg   = (averages.elg || 6.4).toFixed(1).padStart(4, '0'); // Ex: 06.4
+        const mic   = averages.mic.toFixed(2).padStart(4);
+        const mat   = (averages.mat || 0.85).toFixed(2).padStart(4);
+        const rd    = averages.rd.toFixed(1).padStart(4);
+        const plusB = averages.b.toFixed(1).padStart(4, '0'); // Ex: 09.7
+        
+        const zeros = "000 000";
+        const val18 = "7.3"; // Valor constante do exemplo ou calculado? Mantendo 7.3 ou próximo
+        
+        const cg    = averages.cg ? `"${averages.cg}"` : `"11-1"`;
+        const temp  = (23 + Math.random()).toFixed(1).padStart(4);
+        const rh    = (48 + Math.random() * 2).toFixed(1).padStart(4);
+        const sci   = (averages.sci || 125.0).toFixed(1).padStart(5);
+        const csp   = (averages.csp || 1600).toString().padStart(4);
 
-        // Columns based on user provided sample:
-        // "1279                                    " "etiqueta                                " "      " 3 0.27 030 29.72 82.2 10.4 31.4 06.4 4.07 0.85 79.8 09.7 000 000 07.5 "11-1" 23.4 49.1 128.5
-        // Analysis:
-        // 1. ID (padded with spaces, inside quotes)
-        // 2. Label (padded, quotes)
-        // 3. Spacing? "      "
-        // 4. "3" (Maybe Machine ID or constant?) - User example has 3.
-        // 5. Area (0.27)
-        // 6. Count (030 - padded 3 digits)
-        // 7. UHML (29.72)
-        // 8. UI (82.2)
-        // 9. SFI (10.4) - Wait, previous had different order. Let's map carefully.
-        // 10. STR (31.4)
-        // 11. ELG (06.4)
-        // 12. MIC (4.07)
-        // 13. MAT (0.85) - Maturity ratio?
-        // 14. RD (79.8)
-        // 15. +b (09.7)
-        // 16. "000"
-        // 17. "000"
-        // 18. "07.5"
-        // 19. "11-1" (Color Grade)
-        // 20. "23.4" (Temp?)
-        // 21. "48.8" (RH?)
-        // 22. "128.5" (SCI?)
+        // Montagem da linha com o prefixo " 3 " que aparece no original
+        const dataPart = ` 3 ${area} ${count} ${uhml} ${ui} ${sfi} ${str} ${elg} ${mic} ${mat} ${rd} ${plusB} ${zeros} ${val18} ${cg} ${temp} ${rh} ${sci} ${csp}`;
 
-        // Pad with SPACE for strings in quotes
-        const padS = (val: string, width: number) => `"${val.padEnd(width, ' ')}"`;
-
-        // ID
-        const field1 = padS((sample.amostra_id || '').substring(0, 40), 40);
-        // Label
-        const field2 = padS((sample.etiqueta || '').substring(0, 40), 40);
-        // Empty field
-        const field3 = `"      "`;
-
-        const col4 = "3"; // Constant from example
-
-        // Values with precise balanced averages
-        const area = (averages.area !== undefined ? averages.area : 0.25).toFixed(2); 
-        const cnt = (averages.count !== undefined ? averages.count : 30).toString().padStart(3, '0'); 
-
-        const uhml = averages.len.toFixed(2);
-        const ui = averages.unf.toFixed(1);
-        const sfi = (averages.sfi !== undefined ? averages.sfi : 10.0).toFixed(1).padStart(4, '0'); 
-        const str = averages.str.toFixed(1);
-        const elg = (averages.elg !== undefined ? averages.elg : 6.4).toFixed(1).padStart(4, '0'); 
-        const mic = averages.mic.toFixed(2);
-        const mat = (averages.mat !== undefined ? averages.mat : 0.85).toFixed(2); 
-
-        const rd = averages.rd.toFixed(1);
-        const plusB = averages.b.toFixed(1).padStart(4, '0'); // e.g. 09.7
-
-        const zeros1 = "000";
-        const zeros2 = "000";
-        const val18 = (this.randomVariation(7.5, 0.4, 1)).toFixed(1); 
-
-        const cg = averages.cg ? `"${averages.cg}"` : (sample.cor === "#ef4444" ? `"31-1"` : sample.cor === "#3b82f6" ? `"21-1"` : `"11-1"`);
-
-        const temp = this.randomVariation(23.5, 1.0, 1).toFixed(1); 
-        const rh = this.randomVariation(49.0, 1.5, 1).toFixed(1);   
-        const sci = (averages.sci !== undefined ? averages.sci : 125.0).toFixed(1); 
-        const csp = averages.csp !== undefined ? ` ${Math.round(averages.csp)}` : "";
-
-        return `${field1} ${field2} ${field3} ${col4} ${area} ${cnt} ${uhml} ${ui} ${sfi} ${str} ${elg} ${mic} ${mat} ${rd} ${plusB} ${zeros1} ${zeros2} ${val18} ${cg} ${temp} ${rh} ${sci}${csp}`;
+        return `${mala} ${spacing} ${barcode} ${spacing} "${dataPart}"`;
     }
+
 
     /**
      * Generate PREMIER format file (Interlaboratorial format)
