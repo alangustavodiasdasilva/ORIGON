@@ -1,0 +1,12 @@
+﻿
+> fibertech-hvi@0.0.0 build
+> tsc -b && vite build
+
+src/components/history/AuditTimeline.tsx(1,8): error TS6133: 'React' is declared but its value is never read.
+src/components/history/AuditTimeline.tsx(70,35): error TS6133: 'index' is declared but its value is never read.
+src/components/realtime/PresenceIndicators.tsx(1,1): error TS6133: 'React' is declared but its value is never read.
+src/components/realtime/TypingIndicator.tsx(1,1): error TS6133: 'React' is declared but its value is never read.
+src/components/settings/NotificationSettings.tsx(1,8): error TS6133: 'React' is declared but its value is never read.
+src/components/settings/NotificationSettings.tsx(20,21): error TS6133: 'error' is declared but its value is never read.
+src/components/shared/Layout.tsx(25,32): error TS6133: 'Analista' is declared but its value is never read.
+src/hooks/usePresence.ts(2,27): error TS1484: 'PresenceState' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.

@@ -1,0 +1,36 @@
+﻿
+> fibertech-hvi@0.0.0 build
+> tsc -b && vite build
+
+src/components/analysis/HVIStatisticalReportModal.tsx(5,1): error TS6133: 'Button' is declared but its value is never read.
+src/components/GlobalSearch.tsx(2,29): error TS6133: 'Calendar' is declared but its value is never read.
+src/components/GlobalSearch.tsx(2,39): error TS6133: 'User' is declared but its value is never read.
+src/components/GlobalSearch.tsx(9,1): error TS6133: 'Button' is declared but its value is never read.
+src/components/NotificationCenter.tsx(5,1): error TS6133: 'Button' is declared but its value is never read.
+src/components/shared/ChatAssistant.tsx(2,34): error TS6133: 'User' is declared but its value is never read.
+src/components/ui/dialog.tsx(2,1): error TS6133: 'X' is declared but its value is never read.
+src/components/ui/switch.tsx(1,1): error TS6133: 'React' is declared but its value is never read.
+src/pages/Home.tsx(12,1): error TS6192: All imports in import declaration are unused.
+src/pages/Icac.tsx(1,31): error TS6133: 'useRef' is declared but its value is never read.
+src/pages/Inicio.tsx(2,50): error TS6133: 'ChevronRight' is declared but its value is never read.
+src/pages/Quality.tsx(2,23): error TS6133: 'Lock' is declared but its value is never read.
+src/pages/Registro.tsx(7,5): error TS6133: 'CloudUpload' is declared but its value is never read.
+src/pages/Registro.tsx(8,5): error TS6133: 'Zap' is declared but its value is never read.
+src/pages/Registro.tsx(9,5): error TS6133: 'Save' is declared but its value is never read.
+src/pages/Registro.tsx(10,5): error TS6133: 'Tag' is declared but its value is never read.
+src/pages/Registro.tsx(11,5): error TS6133: 'Calendar' is declared but its value is never read.
+src/pages/Registro.tsx(12,5): error TS6133: 'Clock' is declared but its value is never read.
+src/pages/Registro.tsx(13,5): error TS6133: 'Box' is declared but its value is never read.
+src/pages/Registro.tsx(14,5): error TS6133: 'Hash' is declared but its value is never read.
+src/pages/Registro.tsx(16,5): error TS6133: 'ClipboardCheck' is declared but its value is never read.
+src/pages/Registro.tsx(17,5): error TS6133: 'ScanLine' is declared but its value is never read.
+src/pages/Registro.tsx(18,5): error TS6133: 'Loader2' is declared but its value is never read.
+src/pages/Registro.tsx(19,5): error TS6133: 'ChevronLeft' is declared but its value is never read.
+src/pages/Registro.tsx(20,5): error TS6133: 'ChevronRight' is declared but its value is never read.
+src/pages/Registro.tsx(21,5): error TS6133: 'Cpu' is declared but its value is never read.
+src/pages/Registro.tsx(36,40): error TS6133: 'HVIPreviewData' is declared but its value is never read.
+src/pages/Registro.tsx(37,1): error TS6133: 'HVIPreviewModal' is declared but its value is never read.
+src/pages/Registro.tsx(339,11): error TS6133: 'toggleRowSelection' is declared but its value is never read.
+src/services/DeepSeekService.ts(34,19): error TS6133: 'firstGroup' is declared but its value is never read.
+src/services/DeepSeekService.ts(92,13): error TS6133: 'valsForSelected' is declared but its value is never read.
+src/services/DeepSeekService.ts(137,19): error TS6133: 'currentVal' is declared but its value is never read.
