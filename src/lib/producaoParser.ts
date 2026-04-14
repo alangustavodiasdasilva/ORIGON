@@ -117,8 +117,8 @@ export const parseProducaoFileInChunks = async (
                     const firstCell = String(row[0] || "").toUpperCase().trim();
                     const secondCell = String(row[1] || "").toUpperCase().trim();
 
-                    if (firstCell.includes("TURNO")) currentTurnoLabel = firstCell;
-                    else if (secondCell.includes("TURNO")) currentTurnoLabel = secondCell;
+                    if (firstCell.includes("TURNO") || firstCell === "COMERCIAL" || firstCell.includes("COMERCIAL")) currentTurnoLabel = firstCell;
+                    else if (secondCell.includes("TURNO") || secondCell === "COMERCIAL" || secondCell.includes("COMERCIAL")) currentTurnoLabel = secondCell;
 
                     // 3. If we have date + turno, process data columns
                     if (currentBlockDate && currentTurnoLabel) {
