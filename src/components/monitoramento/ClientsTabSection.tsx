@@ -19,6 +19,13 @@ interface ClientsTabSectionProps {
     setRankingType: (type: 'tomador' | 'fazenda') => void;
 }
 
+const PERIOD_OPTIONS = [
+    { label: '30 dias', value: 30 },
+    { label: '60 dias', value: 60 },
+    { label: '90 dias', value: 90 },
+    { label: 'Todos', value: 99999 },
+];
+
 export const ClientsTabSection: React.FC<ClientsTabSectionProps> = ({
     clienteDailyStats,
     clienteStats,
@@ -31,6 +38,8 @@ export const ClientsTabSection: React.FC<ClientsTabSectionProps> = ({
     rankingType,
     setRankingType
 }) => {
+    const [periodoExibicao, setPeriodoExibicao] = React.useState(99999);
+    const datesParaExibir = carteiraClientesPivotStats.sortedDates.slice(-periodoExibicao);
     return (
         <div key="content-clientes" className="space-y-8 animate-fade-in pb-32">
             
@@ -63,7 +72,7 @@ export const ClientsTabSection: React.FC<ClientsTabSectionProps> = ({
                     </div>
                 </div>
 
-                <div className="h-[380px] w-full bg-neutral-50/30 rounded-2xl p-2">
+                <div className="h-[300px] w-full min-w-0 max-w-full bg-neutral-50/30 rounded-2xl p-2">
                     <ResponsiveContainer key={`client-chart-${labId}`} width="100%" height="100%">
                         <LineChart data={clienteDailyStats.data} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
                             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
@@ -90,22 +99,44 @@ export const ClientsTabSection: React.FC<ClientsTabSectionProps> = ({
 
 
             {/* 3. Matriz de Detalhamento por Data (Com Totais solicitado) */}
-            <div className="bg-white border border-neutral-200 rounded-[2rem] overflow-hidden shadow-[0_8px_30px_rgb(0,0,0,0.04)] mt-12 w-full">
-                <div className="p-8 pb-4 border-b border-neutral-100 flex items-center gap-4">
-                    <div className="h-10 w-10 bg-neutral-100 text-neutral-500 rounded-xl flex items-center justify-center">
-                        <Database className="h-5 w-5" />
+            <div className="bg-white border border-neutral-200 rounded-[2rem] overflow-hidden shadow-[0_8px_30px_rgb(0,0,0,0.04)] mt-12 w-full max-w-full min-w-0">
+                <div className="p-8 pb-4 border-b border-neutral-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div className="flex items-center gap-4">
+                        <div className="h-10 w-10 bg-neutral-100 text-neutral-500 rounded-xl flex items-center justify-center">
+                            <Database className="h-5 w-5" />
+                        </div>
+                        <div>
+                            <h3 className="text-xl font-serif text-black leading-tight">Recebimento Diário (Detalhamento Completo)</h3>
+                            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400 mt-0.5">
+                                Visão matricial por dia de trabalho &mdash; <span className="text-black">{datesParaExibir.length}</span> de {carteiraClientesPivotStats.sortedDates.length} datas
+                            </p>
+                        </div>
                     </div>
-                    <div>
-                        <h3 className="text-xl font-serif text-black leading-tight">Recebimento Diário (Detalhamento Completo)</h3>
-                        <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400 mt-0.5">Visão matricial por dia de trabalho</p>
+                    {/* Seletor de período */}
+                    <div className="flex items-center gap-2 shrink-0">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Período:</span>
+                        {PERIOD_OPTIONS.map(opt => (
+                            <button
+                                key={opt.value}
+                                onClick={() => setPeriodoExibicao(opt.value)}
+                                className={cn(
+                                    "px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all border",
+                                    periodoExibicao === opt.value
+                                        ? "bg-black text-white border-black"
+                                        : "bg-white text-neutral-500 border-neutral-200 hover:border-black hover:text-black"
+                                )}
+                            >
+                                {opt.label}
+                            </button>
+                        ))}
                     </div>
                 </div>
-                <div className="overflow-x-auto no-scrollbar max-h-[1000px] overflow-y-auto w-full relative">
-                    <table className="w-full text-[10px] text-left border-collapse">
+                <div className="overflow-x-auto custom-scrollbar w-full max-w-full min-w-0 relative pb-2">
+                    <table className="w-full min-w-max text-[10px] text-left border-collapse table-auto">
                         <thead className="sticky top-0 bg-neutral-50 z-30 shadow-sm border-b border-neutral-200">
                             <tr>
                                 <th className="p-3 bg-neutral-50 border-r border-neutral-100 font-bold uppercase tracking-widest text-[10px] sticky left-0 z-40">Clientes</th>
-                                {carteiraClientesPivotStats.sortedDates.slice(-15).map((d: string) => (
+                                {datesParaExibir.map((d: string) => (
                                     <th key={d} className="p-3 text-center border-r border-neutral-100 min-w-[70px] uppercase text-[10px] tracking-tighter">{format(new Date(d + 'T12:00:00'), 'dd/MM', { locale: ptBR })}</th>
                                 ))}
                                 <th className="p-3 text-right bg-neutral-50 font-bold uppercase tracking-widest text-[10px] sticky right-0 z-30">Total Geral</th>
@@ -125,9 +156,9 @@ export const ClientsTabSection: React.FC<ClientsTabSectionProps> = ({
                                                     <PlusSquare className="h-4.5 w-4.5 text-neutral-300" />
                                                 }
                                             </div>
-                                            <span className="truncate uppercase text-[12px] tracking-tight">{client.clientName}</span>
+                                            <span className="uppercase text-[12px] tracking-tight break-words whitespace-normal leading-tight">{client.clientName}</span>
                                         </td>
-                                        {carteiraClientesPivotStats.sortedDates.slice(-15).map((date: string) => (
+                                        {datesParaExibir.map((date: string) => (
                                             <td key={date} className="p-4 text-center border-r border-neutral-100 font-bold text-neutral-900 text-[13px] bg-white">
                                                 {client.dates[date]?.total || "-"}
                                             </td>
@@ -140,9 +171,9 @@ export const ClientsTabSection: React.FC<ClientsTabSectionProps> = ({
                                         <tr key={`${client.clientName}-${clienteNode.name}`} className="bg-neutral-50/10 hover:bg-neutral-50/50 transition-colors border-b border-neutral-200">
                                             <td className="p-2.5 pl-12 text-[10px] text-neutral-600 bg-neutral-50/80 sticky left-0 z-10 border-r border-neutral-200 min-w-[300px] max-w-[400px] font-medium flex items-center gap-2 border-l-2 border-l-neutral-200">
                                                 <span className="text-neutral-400">└─</span>
-                                                <span className="truncate">{clienteNode.name}</span>
+                                                <span className="break-words whitespace-normal leading-tight flex-1">{clienteNode.name}</span>
                                             </td>
-                                            {carteiraClientesPivotStats.sortedDates.slice(-15).map((date: string) => (
+                                            {datesParaExibir.map((date: string) => (
                                                 <td key={date} className="p-2.5 text-center border-r border-neutral-100/50 text-neutral-500 text-[11px] font-bold">
                                                     {clienteNode.dates[date]?.total || "-"}
                                                 </td>
@@ -158,7 +189,7 @@ export const ClientsTabSection: React.FC<ClientsTabSectionProps> = ({
                         <tfoot className="sticky bottom-0 bg-black text-white font-bold z-50">
                             <tr>
                                 <td className="p-2 pl-4 sticky left-0 bg-black z-10 border-r border-neutral-800 uppercase text-[8px] tracking-widest">Total do Dia</td>
-                                {carteiraClientesPivotStats.sortedDates.slice(-15).map((date: string) => {
+                                {datesParaExibir.map((date: string) => {
                                     const totalDia = carteiraClientesPivotStats.sortedClients.reduce((sum: number, c: any) => sum + (c.dates[date]?.total || 0), 0);
                                     return <td key={date} className="p-2 text-center border-r border-neutral-800">{totalDia > 0 ? totalDia.toLocaleString('pt-BR') : "-"}</td>
                                 })}

@@ -259,7 +259,7 @@ export default function Layout() {
             </aside>
 
             {/* Main Content */}
-            <div className="lg:ml-72 flex-1 flex flex-col min-h-screen relative z-10">
+            <div className="lg:ml-72 flex-1 flex flex-col min-h-screen min-w-0 relative z-10">
                 <header className="sticky top-0 z-40 h-16 lg:h-20 bg-white/80 backdrop-blur-sm border-b border-neutral-100 flex items-center justify-between px-4 lg:px-10">
                     <div className="flex items-center gap-4 lg:gap-8">
                         {/* Mobile Menu Trigger */}
@@ -343,8 +343,8 @@ export default function Layout() {
                     </div>
                 </header>
 
-                <main className="flex-1 relative w-full">
-                    <div className="p-4 lg:p-10 w-full">
+                <main className="flex-1 relative w-full min-w-0">
+                    <div className="p-4 lg:p-10 w-full min-w-0">
                         <Outlet />
                     </div>
                 </main>

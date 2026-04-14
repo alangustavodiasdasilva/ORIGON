@@ -944,7 +944,7 @@ export default function MonitoramentoOS() {
     };
 
     return (
-        <div className="max-w-[1600px] mx-auto py-12 px-6 text-black pb-32 min-h-screen font-sans">
+        <div className="w-full min-w-0 max-w-[1600px] overflow-hidden mx-auto py-12 px-6 text-black pb-32 min-h-screen font-sans">
 
             {/* Barra de progresso ultra-sutil no topo — aparece apenas durante sincronização */}
             <div
@@ -1112,7 +1112,7 @@ export default function MonitoramentoOS() {
             )}
 
             {(activeTab === 'geral' || activeTab === 'revisores') && labId !== 'all' && (
-                <div key={`content-${activeTab}`} className="space-y-6 animate-in fade-in duration-300">
+                <div key={`content-${activeTab}`} className="space-y-6 animate-in fade-in duration-300 w-full max-w-full min-w-0 flex-1">
                     <ReviewerPerformanceSection
                         activeTab={activeTab}
                         toggleReviewerSelection={toggleReviewerSelection}
@@ -1133,33 +1133,37 @@ export default function MonitoramentoOS() {
             )
             }
             {activeTab === 'geral' && analysisMetrics && (
-                <IntelligenceAnalytics
-                    innerRef={analiticoSectionRef}
-                    analysisMetrics={analysisMetrics}
-                    analysisPeriod={analysisPeriod}
-                    setAnalysisPeriod={(p: any) => setAnalysisPeriod(p)}
-                    handleExportAnaliticoPDF={handleExportAnaliticoPDF}
-                    isGeneratingPDF={isGeneratingPDF}
-                    labs={labs}
-                    globalLabId={labId}
-                    analyticsLabId={analyticsLabId}
-                    setAnalyticsLabId={setAnalyticsLabId}
-                />
+                <div className="w-full max-w-full min-w-0 flex-1">
+                    <IntelligenceAnalytics
+                        innerRef={analiticoSectionRef}
+                        analysisMetrics={analysisMetrics}
+                        analysisPeriod={analysisPeriod}
+                        setAnalysisPeriod={(p: any) => setAnalysisPeriod(p)}
+                        handleExportAnaliticoPDF={handleExportAnaliticoPDF}
+                        isGeneratingPDF={isGeneratingPDF}
+                        labs={labs}
+                        globalLabId={labId}
+                        analyticsLabId={analyticsLabId}
+                        setAnalyticsLabId={setAnalyticsLabId}
+                    />
+                </div>
             )}
 
             {activeTab === 'clientes' && (
-                <ClientsTabSection
-                    clienteDailyStats={clienteDailyStats}
-                    clienteStats={clienteStats}
-                    selectedChartClients={selectedChartClients}
-                    toggleClientSelection={toggleClientSelection}
-                    carteiraClientesPivotStats={carteiraClientesPivotStats}
-                    expandedClients={expandedClients}
-                    toggleClientCollapse={toggleClientCollapse}
-                    labId={labId}
-                    rankingType={rankingType}
-                    setRankingType={setRankingType}
-                />
+                <div className="w-full max-w-full min-w-0 flex-1">
+                    <ClientsTabSection
+                        clienteDailyStats={clienteDailyStats}
+                        clienteStats={clienteStats}
+                        selectedChartClients={selectedChartClients}
+                        toggleClientSelection={toggleClientSelection}
+                        carteiraClientesPivotStats={carteiraClientesPivotStats}
+                        expandedClients={expandedClients}
+                        toggleClientCollapse={toggleClientCollapse}
+                        labId={labId}
+                        rankingType={rankingType}
+                        setRankingType={setRankingType}
+                    />
+                </div>
             )}
 
             {activeTab === 'saldo_diario' && (

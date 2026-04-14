@@ -132,8 +132,8 @@ export const ReviewerPerformanceSection: React.FC<ReviewerPerformanceSectionProp
                 )}
             </div>
 
-            <div className="h-[300px] w-full bg-neutral-50/30 rounded-2xl p-4">
-                <ResponsiveContainer key={`reviewer-chart-${activeTab}-${labId}`} width="100%" height="100%">
+            <div className="h-[300px] w-full min-w-0 max-w-full bg-neutral-50/30 rounded-2xl p-4">
+                <ResponsiveContainer key={`reviewer-chart-${activeTab}-${labId}-${revisorDailyStats.data.length}-${selectedReviewers.join(',')}`} width="100%" height="100%">
                     <LineChart data={revisorDailyStats.data} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
                         <XAxis

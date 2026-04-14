@@ -43,11 +43,11 @@ export const MachineService = {
                 labId: m.lab_id,
                 created_at: m.created_at
             }))
-            // FILTRO DE SEGURANÇA: Somente do 1 ao 7
-            .filter(m => {
-                const num = parseInt(m.machineId.replace(/\D/g, ''), 10);
-                return !isNaN(num) && num >= 1 && num <= 7;
-            });
+                // FILTRO DE SEGURANÇA: Somente do 1 ao 7
+                .filter(m => {
+                    const num = parseInt(m.machineId.replace(/\D/g, ''), 10);
+                    return !isNaN(num) && num >= 1 && num <= 7;
+                });
 
             saveStoredMachines(machines);
             return machines;
@@ -75,11 +75,11 @@ export const MachineService = {
                 labId: m.lab_id,
                 created_at: m.created_at
             }))
-            // FILTRO DE SEGURANÇA: Somente do 1 ao 7
-            .filter(m => {
-                const num = parseInt(m.machineId.replace(/\D/g, ''), 10);
-                return !isNaN(num) && num >= 1 && num <= 7;
-            });
+                // FILTRO DE SEGURANÇA: Somente do 1 ao 7
+                .filter(m => {
+                    const num = parseInt(m.machineId.replace(/\D/g, ''), 10);
+                    return !isNaN(num) && num >= 1 && num <= 7;
+                });
         }
         return getStoredMachines()
             .filter(m => m.labId === labId)
@@ -206,7 +206,7 @@ export const MachineService = {
 
     async cleanupGhostMachines(): Promise<number> {
         if (!isSupabaseEnabled()) return 0;
-        
+
         const { data, error } = await supabase.from('maquinas').select('id, identificacao');
         if (error) throw error;
 
@@ -222,9 +222,9 @@ export const MachineService = {
             .from('maquinas')
             .delete()
             .in('id', ghosts.map(g => g.id));
-            
+
         if (delError) throw delError;
-        
+
         return ghosts.length;
     }
 };
