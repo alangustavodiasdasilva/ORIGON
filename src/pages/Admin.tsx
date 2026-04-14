@@ -24,6 +24,7 @@ export default function Admin() {
     const { addToast } = useToast();
     const [activeTab, setActiveTab] = useState("dashboard");
     const [onlineAnalysts, setOnlineAnalysts] = useState<Analista[]>([]);
+    const [labs, setLabs] = useState<Lab[]>([]);
     const [isSyncing, setIsSyncing] = useState(false);
 
     // Segurança: Redireciona usuários comuns para a Home, permite admin_global e admin_lab
@@ -50,6 +51,10 @@ export default function Admin() {
             const onlineList = data.filter(a =>
                 a.last_active && (Math.abs(now - new Date(a.last_active).getTime()) < 60000)
             );
+            
+            // Carregar labs se ainda n tiver
+            const labsList = await LabService.list();
+            setLabs(labsList);
 
             setOnlineAnalysts(onlineList);
         };
@@ -177,7 +182,7 @@ export default function Admin() {
 
             {/* Content */}
             <div className="min-h-[400px]">
-                {activeTab === "dashboard" && <DashboardTab onlineAnalysts={onlineAnalysts} />}
+                {activeTab === "dashboard" && <DashboardTab onlineAnalysts={onlineAnalysts} labs={labs} />}
                 {activeTab === "labs" && <LabsTab />}
                 {activeTab === "analysts" && <AnalystsTab />}
                 {activeTab === "machines" && <SystemConfigTab />}
@@ -187,7 +192,7 @@ export default function Admin() {
 }
 
 // Subcomponents
-function DashboardTab({ onlineAnalysts }: { onlineAnalysts: Analista[] }) {
+function DashboardTab({ onlineAnalysts, labs }: { onlineAnalysts: Analista[], labs: Lab[] }) {
     return (
         <div className="grid gap-8 md:grid-cols-3">
             {/* Stat Card */}
@@ -199,14 +204,22 @@ function DashboardTab({ onlineAnalysts }: { onlineAnalysts: Analista[] }) {
                 <div className="flex flex-col h-full justify-end pb-2">
                     <span className="text-6xl font-serif leading-none mb-4">{onlineAnalysts.length}</span>
                     <div className="flex-1 overflow-y-auto pr-2 space-y-2 scrollbar-hide">
-                        {onlineAnalysts.map(analyst => (
-                            <div key={analyst.id} className="flex items-center gap-2 group/item">
-                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.5)]"></span>
-                                <span className="text-xs font-bold uppercase tracking-wider text-neutral-600 group-hover/item:text-black transition-colors truncate">
-                                    {analyst.nome}
-                                </span>
-                            </div>
-                        ))}
+                        {onlineAnalysts.map(analyst => {
+                            const labName = labs.find(l => String(l.id) === String(analyst.lab_id))?.nome || 'Admin Global / Não Atr.';
+                            return (
+                                <div key={analyst.id} className="flex flex-col justify-center gap-0 group/item border-b border-neutral-100 last:border-0 pb-1">
+                                    <div className="flex items-center gap-2">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.5)]"></span>
+                                        <span className="text-xs font-bold uppercase tracking-wider text-neutral-600 group-hover/item:text-black transition-colors truncate">
+                                            {analyst.nome}
+                                        </span>
+                                    </div>
+                                    <span className="text-[9px] uppercase font-mono tracking-widest text-neutral-400 pl-3.5">
+                                        {labName}
+                                    </span>
+                                </div>
+                            );
+                        })}
                         {onlineAnalysts.length === 0 && (
                             <span className="text-[10px] uppercase tracking-widest text-neutral-400">No active sessions</span>
                         )}

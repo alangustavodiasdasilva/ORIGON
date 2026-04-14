@@ -380,6 +380,7 @@ body.dark,
 
 .ctm-overlay {
   background: rgba(0,0,0,0.78);
+  -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
 }
 
@@ -416,6 +417,17 @@ body.dark,
 .ctm-content {
   scrollbar-width: thin;
   scrollbar-color: #2a2a2a transparent;
+}
+.ctm-content::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.ctm-content::-webkit-scrollbar-thumb {
+  background-color: #2a2a2a;
+  border-radius: 4px;
+}
+.ctm-content::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 .ctm-color-card {

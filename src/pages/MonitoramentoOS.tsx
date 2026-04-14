@@ -98,7 +98,7 @@ export default function MonitoramentoOS() {
     useEffect(() => {
         if (!labId) return;
 
-        let debounceTimer: NodeJS.Timeout;
+        let debounceTimer: ReturnType<typeof setTimeout>;
 
         const handleRealtimeChange = (payload: any) => {
             console.log("REALTIME ACTIVITY DETECTED:", payload);

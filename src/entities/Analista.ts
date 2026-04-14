@@ -180,20 +180,21 @@ export const AnalistaService = {
             }
 
             if (isSupabaseEnabled()) {
-                await supabase.from('analistas').update(updateData).eq('id', id);
-                return;
+                const { error } = await supabase.from('analistas').update(updateData).eq('id', id);
+                if (error) console.warn("[AnalistaService] Nuvem recusou Ping RLS:", error.message);
+                // Nao damos return. O Ping deve SEMPRE ressoar no Storage Local pro Admin pegar e sincronizar em rede hibrida
             }
 
+            // Fallback obrigatório / Local Network Cache Sync
             const analistas = getStoredAnalistas();
             const index = analistas.findIndex(a => a.id === id);
             if (index !== -1) {
-                analistas[index].last_active = new Date().toISOString();
-                if (loteId !== undefined) analistas[index].current_lote_id = loteId;
+                analistas[index].last_active = updateData.last_active;
+                if (loteId !== undefined) analistas[index].current_lote_id = updateData.current_lote_id;
                 saveStoredAnalistas(analistas);
             }
         } catch (error) {
-            // Suppress heartburn errors, just log warning
-            console.warn("Failed to update user presence", error);
+            console.warn("Got unexpected error updating user heartbeat:", error);
         }
     }
 };
