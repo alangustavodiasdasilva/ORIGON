@@ -42,13 +42,16 @@ export const producaoService = {
         if (data.length === 0) return true;
 
         if (isSupabaseEnabled()) {
+            let fullSuccess = true;
             try {
-                // Chunking upload (batches of 1000)
-                const BATCH_SIZE = 1000;
+                // Diminuido para 250 para evitar estourar o limite de payload do PostgREST/Vercel
+                const BATCH_SIZE = 250;
+                let inserted = 0;
+
                 for (let i = 0; i < data.length; i += BATCH_SIZE) {
                     const chunk = data.slice(i, i + BATCH_SIZE).map(d => ({
                         ...d,
-                        created_at: new Date().toISOString() // Ensure fresh timestamp on upload
+                        created_at: new Date().toISOString()
                     }));
 
                     const { error } = await supabase
@@ -58,12 +61,21 @@ export const producaoService = {
                             ignoreDuplicates: false
                         });
 
-                    if (error) throw error;
+                    if (error) {
+                        console.error(`[ProducaoService] Falha num lote de produção (A partir de: ${i}):`, error.message);
+                        fullSuccess = false;
+                        // Não dá throw, para permitir que o resto dos lotes tentem subir mesmo assim
+                    } else {
+                        inserted += chunk.length;
+                    }
                 }
-                return true; // Success
-            } catch (err) {
-                console.warn("Supabase upload failed, falling back to local:", err);
+                
+                if (inserted > 0) return true; // Se ao menos algo subiu, retornamos sucesso parcial.
+                
+            } catch (err: any) {
+                console.error("Supabase upload error fatal:", err);
             }
+            if (!fullSuccess) console.warn("Upload de Produção ocorreu com erros parciais.");
         }
 
         // FALLBACK: Local Storage
