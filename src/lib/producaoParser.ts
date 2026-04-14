@@ -117,6 +117,16 @@ export const parseProducaoFileInChunks = async (
                     const firstCell = String(row[0] || "").toUpperCase().trim();
                     const secondCell = String(row[1] || "").toUpperCase().trim();
 
+                    const isSummaryRow = firstCell.includes("TOTAL") || secondCell.includes("TOTAL") || 
+                                         firstCell.includes("SOMA") || secondCell.includes("SOMA") ||
+                                         firstCell.includes("MÉDIA") || secondCell.includes("MÉDIA") ||
+                                         firstCell.includes("RESUMO") || secondCell.includes("RESUMO") ||
+                                         firstCell.includes("GERAL") || secondCell.includes("GERAL");
+
+                    if (isSummaryRow) {
+                        continue;
+                    }
+
                     if (firstCell.includes("TURNO") || firstCell === "COMERCIAL" || firstCell.includes("COMERCIAL")) currentTurnoLabel = firstCell;
                     else if (secondCell.includes("TURNO") || secondCell === "COMERCIAL" || secondCell.includes("COMERCIAL")) currentTurnoLabel = secondCell;
 
