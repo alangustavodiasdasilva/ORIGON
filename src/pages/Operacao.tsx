@@ -63,19 +63,12 @@ export default function Operacao() {
     const [ocrData, setOcrData] = useState<OCRResult | null>(null);
     const [isClearConfirmOpen, setIsClearConfirmOpen] = useState(false);
     const [chartData, setChartData] = useState<IOperacaoItem[]>([]);
-    const [filterDate, setFilterDate] = useState<string>("");
     const [totalProduzido, setTotalProduzido] = useState(0);
-    const [showDataDebugger, setShowDataDebugger] = useState(false);
 
-    const displayData = filterDate ? chartData.filter(d => d.data_producao === filterDate) : chartData;
-
-    const turno1Total = displayData.filter((d: IOperacaoItem) => d.turno.toUpperCase().includes('TURNO 1')).reduce((acc: number, curr: IOperacaoItem) => acc + curr.peso, 0);
-    const turno2Total = displayData.filter((d: IOperacaoItem) => d.turno.toUpperCase().includes('TURNO 2')).reduce((acc: number, curr: IOperacaoItem) => acc + curr.peso, 0);
-    const turno3Total = displayData.filter((d: IOperacaoItem) => d.turno.toUpperCase().includes('TURNO 3')).reduce((acc: number, curr: IOperacaoItem) => acc + curr.peso, 0);
-    const turnoComercialTotal = displayData.filter((d: IOperacaoItem) => d.turno.toUpperCase().includes('COMERCIAL')).reduce((acc: number, curr: IOperacaoItem) => acc + curr.peso, 0);
-    
-    // Lista de datas únicas para o filtro
-    const availableDates = Array.from(new Set(chartData.map(d => d.data_producao))).sort().reverse();
+    const turno1Total = chartData.filter((d: IOperacaoItem) => d.turno.toUpperCase().includes('1')).reduce((acc: number, curr: IOperacaoItem) => acc + curr.peso, 0);
+    const turno2Total = chartData.filter((d: IOperacaoItem) => d.turno.toUpperCase().includes('2')).reduce((acc: number, curr: IOperacaoItem) => acc + curr.peso, 0);
+    const turno3Total = chartData.filter((d: IOperacaoItem) => d.turno.toUpperCase().includes('3')).reduce((acc: number, curr: IOperacaoItem) => acc + curr.peso, 0);
+    const turnoComercialTotal = chartData.filter((d: IOperacaoItem) => d.turno.toUpperCase().includes('COMERCIAL')).reduce((acc: number, curr: IOperacaoItem) => acc + curr.peso, 0);
 
     useEffect(() => {
         loadStats();
@@ -123,16 +116,7 @@ export default function Operacao() {
             if (data) {
                 const validData: IOperacaoItem[] = data.map((d: ProducaoData) => ({ ...d, peso: d.peso || 0 }));
                 setChartData(validData);
-                
-                // Se não tiver data filtrada, pega a mais recente automaticamente
-                if (!filterDate && validData.length > 0) {
-                    const latest = [...validData].sort((a,b) => b.data_producao.localeCompare(a.data_producao))[0].data_producao;
-                    setFilterDate(latest);
-                }
-
-                const currentTotal = (filterDate ? validData.filter(d => d.data_producao === filterDate) : validData)
-                    .reduce((acc: number, curr: IOperacaoItem) => acc + curr.peso, 0);
-                setTotalProduzido(currentTotal);
+                setTotalProduzido(validData.reduce((acc: number, curr: IOperacaoItem) => acc + curr.peso, 0));
             }
         } catch (error) {
             console.error("Failed load:", error);
@@ -421,22 +405,6 @@ export default function Operacao() {
                             {labs.map(l => <option key={l.id} value={l.id}>{l.nome}</option>)}
                         </select>
                     )}
-                    
-                    <select
-                        title="Filtrar por Data"
-                        aria-label="Filtrar por Data"
-                        className="bg-white border-2 border-neutral-200 text-black text-[10px] font-bold uppercase tracking-widest rounded-xl px-4 py-2 hover:border-black transition-all cursor-pointer outline-none"
-                        value={filterDate}
-                        onChange={(e) => setFilterDate(e.target.value)}
-                    >
-                        <option value="">TODAS AS DATAS</option>
-                        {availableDates.map(date => (
-                            <option key={date} value={date}>
-                                {new Date(date + 'T00:00:00').toLocaleDateString('pt-BR')}
-                            </option>
-                        ))}
-                    </select>
-
                     <Button variant="outline" onClick={() => loadStats(false)} disabled={isLoading} className="text-black border-neutral-200 hover:bg-neutral-50 px-4">
                         <RefreshCw className={cn("h-4 w-4 mr-2", isLoading && "animate-spin")} />
                         Sincronizar
@@ -451,9 +419,10 @@ export default function Operacao() {
                     </div>
                 </div>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
+            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6 mb-12 animate-in fade-in slide-in-from-bottom-4 duration-700">
                 {isLoading ? (
                     <>
+                        <Skeleton className="h-[180px] rounded-[2rem]" />
                         <Skeleton className="h-[180px] rounded-[2rem]" />
                         <Skeleton className="h-[180px] rounded-[2rem]" />
                         <Skeleton className="h-[180px] rounded-[2rem]" />
@@ -461,63 +430,56 @@ export default function Operacao() {
                     </>
                 ) : (
                     <>
-                        <div className="group bg-white border border-neutral-200 p-8 rounded-[2rem] shadow-[0_10px_30px_rgba(0,0,0,0.02)] hover:shadow-[0_20px_50px_rgba(0,0,0,0.05)] transition-all duration-500 hover:-translate-y-1">
-                            <div className="flex items-center justify-between mb-6">
+                        <div className="group bg-white border border-neutral-200 p-6 rounded-[2rem] shadow-[0_10px_30px_rgba(0,0,0,0.02)] hover:shadow-[0_20px_50px_rgba(0,0,0,0.05)] transition-all duration-500 hover:-translate-y-1">
+                            <div className="flex items-center justify-between mb-4">
                                 <span className="text-[10px] font-black uppercase tracking-widest text-neutral-400 group-hover:text-amber-500 transition-colors">Turno 1</span>
                                 <div className="h-8 w-8 rounded-full bg-amber-50 flex items-center justify-center group-hover:scale-110 transition-transform"><Sun className="h-4 w-4 text-amber-500" /></div>
                             </div>
-                            <div className="text-4xl font-serif text-black mb-1 tabular-nums">{turno1Total.toLocaleString()}</div>
-                            <div className="text-[10px] font-bold text-neutral-400 uppercase tracking-tight">Carga de Amostras</div>
+                            <div className="text-3xl font-serif text-black mb-1 tabular-nums">{turno1Total.toLocaleString()}</div>
+                            <div className="text-[9px] font-bold text-neutral-400 uppercase tracking-tight">Amostras</div>
                         </div>
 
-                        <div className="group bg-white border border-neutral-200 p-8 rounded-[2rem] shadow-[0_10px_30px_rgba(0,0,0,0.02)] hover:shadow-[0_20px_50px_rgba(0,0,0,0.05)] transition-all duration-500 hover:-translate-y-1">
-                            <div className="flex items-center justify-between mb-6">
+                        <div className="group bg-white border border-neutral-200 p-6 rounded-[2rem] shadow-[0_10px_30px_rgba(0,0,0,0.02)] hover:shadow-[0_20px_50px_rgba(0,0,0,0.05)] transition-all duration-500 hover:-translate-y-1">
+                            <div className="flex items-center justify-between mb-4">
                                 <span className="text-[10px] font-black uppercase tracking-widest text-neutral-400 group-hover:text-orange-500 transition-colors">Turno 2</span>
                                 <div className="h-8 w-8 rounded-full bg-orange-50 flex items-center justify-center group-hover:scale-110 transition-transform"><Sunset className="h-4 w-4 text-orange-500" /></div>
                             </div>
-                            <div className="text-4xl font-serif text-black mb-1 tabular-nums">{turno2Total.toLocaleString()}</div>
-                            <div className="text-[10px] font-bold text-neutral-400 uppercase tracking-tight">Carga de Amostras</div>
+                            <div className="text-3xl font-serif text-black mb-1 tabular-nums">{turno2Total.toLocaleString()}</div>
+                            <div className="text-[9px] font-bold text-neutral-400 uppercase tracking-tight">Amostras</div>
                         </div>
 
-                        <div className="group bg-white border border-neutral-200 p-8 rounded-[2rem] shadow-[0_10px_30px_rgba(0,0,0,0.02)] hover:shadow-[0_20px_50px_rgba(0,0,0,0.05)] transition-all duration-500 hover:-translate-y-1">
-                            <div className="flex items-center justify-between mb-6">
+                        <div className="group bg-white border border-neutral-200 p-6 rounded-[2rem] shadow-[0_10px_30px_rgba(0,0,0,0.02)] hover:shadow-[0_20px_50px_rgba(0,0,0,0.05)] transition-all duration-500 hover:-translate-y-1">
+                            <div className="flex items-center justify-between mb-4">
                                 <span className="text-[10px] font-black uppercase tracking-widest text-neutral-400 group-hover:text-indigo-500 transition-colors">Turno 3</span>
                                 <div className="h-8 w-8 rounded-full bg-indigo-50 flex items-center justify-center group-hover:scale-110 transition-transform"><Moon className="h-4 w-4 text-indigo-500" /></div>
                             </div>
-                            <div className="text-4xl font-serif text-black mb-1 tabular-nums">{turno3Total.toLocaleString()}</div>
-                            <div className="text-[10px] font-bold text-neutral-400 uppercase tracking-tight">Carga de Amostras</div>
+                            <div className="text-3xl font-serif text-black mb-1 tabular-nums">{turno3Total.toLocaleString()}</div>
+                            <div className="text-[9px] font-bold text-neutral-400 uppercase tracking-tight">Amostras</div>
                         </div>
 
-                        <div className="group bg-white border border-neutral-200 p-8 rounded-[2rem] shadow-[0_10px_30px_rgba(0,0,0,0.02)] hover:shadow-[0_20px_50px_rgba(0,0,0,0.05)] transition-all duration-500 hover:-translate-y-1">
-                            <div className="flex items-center justify-between mb-6">
-                                <span className="text-[10px] font-black uppercase tracking-widest text-neutral-400 group-hover:text-teal-500 transition-colors">Comercial</span>
-                                <div className="h-8 w-8 rounded-full bg-teal-50 flex items-center justify-center group-hover:scale-110 transition-transform"><Briefcase className="h-4 w-4 text-teal-500" /></div>
+                        <div className="group bg-white border border-neutral-200 p-6 rounded-[2rem] shadow-[0_10px_30px_rgba(0,0,0,0.02)] hover:shadow-[0_20px_50px_rgba(0,0,0,0.05)] transition-all duration-500 hover:-translate-y-1">
+                            <div className="flex items-center justify-between mb-4">
+                                <span className="text-[10px] font-black uppercase tracking-widest text-neutral-400 group-hover:text-blue-500 transition-colors">Comercial</span>
+                                <div className="h-8 w-8 rounded-full bg-blue-50 flex items-center justify-center group-hover:scale-110 transition-transform"><Briefcase className="h-4 w-4 text-blue-500" /></div>
                             </div>
-                            <div className="text-4xl font-serif text-black mb-1 tabular-nums">{turnoComercialTotal.toLocaleString()}</div>
-                            <div className="text-[10px] font-bold text-neutral-400 uppercase tracking-tight">Carga de Amostras</div>
+                            <div className="text-3xl font-serif text-black mb-1 tabular-nums">{turnoComercialTotal.toLocaleString()}</div>
+                            <div className="text-[9px] font-bold text-neutral-400 uppercase tracking-tight">Amostras</div>
                         </div>
 
-                        <div className="group bg-black p-8 rounded-[2rem] shadow-[0_10px_30px_rgba(0,0,0,0.15)] relative overflow-hidden transition-all duration-500 hover:-translate-y-2 lg:col-span-4">
+                        <div className="group bg-black p-6 rounded-[2rem] shadow-[0_10px_30px_rgba(0,0,0,0.15)] relative overflow-hidden transition-all duration-500 hover:-translate-y-2">
                             <div className="absolute -right-8 -bottom-8 opacity-10 group-hover:opacity-20 transition-opacity rotate-12 group-hover:rotate-0 duration-700">
-                                <BarChart3 className="h-40 w-40 text-white" />
+                                <BarChart3 className="h-32 w-32 text-white" />
                             </div>
-                            <div className="flex items-center justify-between mb-6 relative z-10">
-                                <div className="flex flex-col">
-                                    <span className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Carga Diária Produzida</span>
-                                    <span className="text-[14px] font-bold text-white uppercase tracking-tighter">
-                                        {filterDate ? new Date(filterDate + 'T00:00:00').toLocaleDateString('pt-BR') : 'Geral'}
-                                    </span>
-                                </div>
-                                <div className="h-10 w-10 rounded-full bg-white/10 flex items-center justify-center group-hover:bg-white/20 transition-colors"><BarChart3 className="h-5 w-5 text-white" /></div>
+                            <div className="flex items-center justify-between mb-4 relative z-10">
+                                <span className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Total</span>
+                                <div className="h-8 w-8 rounded-full bg-white/10 flex items-center justify-center group-hover:bg-white/20 transition-colors"><BarChart3 className="h-4 w-4 text-white" /></div>
                             </div>
-                            <div className="text-6xl font-serif text-white mb-2 relative z-10 tabular-nums">{totalProduzido.toLocaleString()}</div>
-                            <div className="text-[10px] font-bold text-neutral-500 uppercase tracking-tight relative z-10">Quantidade Total de Amostras Processadas</div>
+                            <div className="text-3xl font-serif text-white mb-1 relative z-10 tabular-nums">{totalProduzido.toLocaleString()}</div>
+                            <div className="text-[9px] font-bold text-neutral-500 uppercase tracking-tight relative z-10">Geral</div>
                         </div>
                     </>
                 )}
             </div>
-
-
             <ProductionTrendChart data={chartData} />
             {pastedImage && (
                 <div className="fixed inset-0 bg-white/95 z-50 p-8 overflow-y-auto animate-fade-in">
