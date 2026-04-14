@@ -83,30 +83,43 @@ export const producaoService = {
     async list(labId?: string): Promise<ProducaoData[]> {
         if (isSupabaseEnabled()) {
             try {
-                // Background cleanup: DISABLED so older records don't get deleted automatically
-                // supabase
-                //     .from('operacao_producao')
-                //     .delete()
-                //     .lt('created_at', twentyFourHoursAgo)
-                //     .then(({ error }) => {
-                //         if (error) console.warn("Background cleanup error (producao):", error);
-                //     });
+                let allData: ProducaoData[] = [];
+                let from = 0;
+                const limit = 1000;
+                let hasMore = true;
 
-                let query = supabase
-                    .from('operacao_producao')
-                    .select('*');
+                while (hasMore) {
+                    let query = supabase
+                        .from('operacao_producao')
+                        .select('*');
 
-                if (labId !== 'all') {
-                    query = query.eq('lab_id', labId);
+                    if (labId && labId !== 'all') {
+                        query = query.eq('lab_id', labId);
+                    }
+
+                    const { data, error } = await query
+                        .order('data_producao', { ascending: true })
+                        .range(from, from + limit - 1);
+
+                    if (error) throw error;
+                    
+                    if (data && data.length > 0) {
+                        allData = [...allData, ...data];
+                        if (data.length < limit) {
+                            hasMore = false;
+                        } else {
+                            from += limit;
+                            if (from > 5000000) hasMore = false;
+                        }
+                    } else {
+                        hasMore = false;
+                    }
                 }
-
-                const { data, error } = await query.order('data_producao', { ascending: true });
-                if (error) throw error;
                 
                 // Limpa o cache local pois o Supabase é a fonte oficial
                 localStorage.removeItem(STORAGE_KEY);
                 
-                return data || [];
+                return allData;
             } catch (err) {
                 console.warn("Supabase list failed, falling back to local:", err);
             }
