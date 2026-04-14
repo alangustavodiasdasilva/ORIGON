@@ -19,13 +19,18 @@ export interface ProducaoParsed {
 
 const parseDate = (cell: any): string | null => {
     if (!cell) return null;
-    if (typeof cell === 'number' && cell > 40000) {
+    if (typeof cell === 'number' && cell > 30000) {
         const date = XLSX.SSF.parse_date_code(cell);
         return `${date.y}-${String(date.m).padStart(2, '0')}-${String(date.d).padStart(2, '0')}`;
     }
     if (typeof cell === 'string') {
-        const match = cell.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
-        if (match) return `${match[3]}-${match[2].padStart(2, '0')}-${match[1].padStart(2, '0')}`;
+        // Aceitar formatos: DD/MM/AAAA, DD-MM-AAAA, DD/MM/AA, etc.
+        const match = cell.match(/(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,4})/);
+        if (match) {
+            let year = parseInt(match[3], 10);
+            if (year < 100) year += 2000;
+            return `${year}-${match[2].padStart(2, '0')}-${match[1].padStart(2, '0')}`;
+        }
     }
     return null;
 };
