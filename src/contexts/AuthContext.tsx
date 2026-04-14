@@ -79,7 +79,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
     }, [currentLab, isLoading]);
 
+    // Heartbeat para manter usuário ONLINE
+    useEffect(() => {
+        if (!user || isLoading) return;
 
+        // Bate o ponto inicial
+        AnalistaService.updateLastActive(user.id).catch(() => {});
+
+        // Continua batendo a cada 10 segundos
+        const heartBeat = setInterval(() => {
+            AnalistaService.updateLastActive(user.id).catch(() => {});
+        }, 10000);
+
+        return () => clearInterval(heartBeat);
+    }, [user, isLoading]);
 
     const refreshUser = async () => {
         if (!user) return;
