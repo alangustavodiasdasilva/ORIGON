@@ -72,7 +72,7 @@ export default function Operacao() {
     useEffect(() => {
         loadStats();
         const unsubscribe = producaoService.subscribe(() => {
-            loadStats();
+            loadStats(true);
         });
         return () => {
             unsubscribe();
@@ -106,10 +106,10 @@ export default function Operacao() {
         return () => window.removeEventListener('paste', handlePaste);
     }, [currentLab]);
 
-    const loadStats = async () => {
+    const loadStats = async (silent = false) => {
         const targetLabId = currentLab?.id || user?.lab_id;
         if (!targetLabId) return;
-        setIsLoading(true);
+        if (!silent) setIsLoading(true);
         try {
             const data = await producaoService.list(targetLabId);
             if (data) {
@@ -119,9 +119,9 @@ export default function Operacao() {
             }
         } catch (error) {
             console.error("Failed load:", error);
-            addToast({ title: "Erro de Carregamento", type: "error" });
+            if (!silent) addToast({ title: "Erro de Carregamento", type: "error" });
         } finally {
-            setIsLoading(false);
+            if (!silent) setIsLoading(false);
         }
     };
 
@@ -404,7 +404,7 @@ export default function Operacao() {
                             {labs.map(l => <option key={l.id} value={l.id}>{l.nome}</option>)}
                         </select>
                     )}
-                    <Button variant="outline" onClick={loadStats} disabled={isLoading} className="text-black border-neutral-200 hover:bg-neutral-50 px-4">
+                    <Button variant="outline" onClick={() => loadStats(false)} disabled={isLoading} className="text-black border-neutral-200 hover:bg-neutral-50 px-4">
                         <RefreshCw className={cn("h-4 w-4 mr-2", isLoading && "animate-spin")} />
                         Sincronizar
                     </Button>
