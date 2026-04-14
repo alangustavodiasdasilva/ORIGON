@@ -12,6 +12,7 @@ import { LabService } from "@/entities/Lab";
 import type { Lab } from "@/entities/Lab";
 import { MigrationService } from "@/services/MigrationService";
 import { Loader2 } from "lucide-react";
+import { usePresence } from "@/hooks/usePresence";
 
 const isSupabaseEnabled = () => {
     const url = import.meta.env.VITE_SUPABASE_URL;
@@ -23,7 +24,9 @@ export default function Admin() {
     const { user, currentLab, deselectLab } = useAuth();
     const { addToast } = useToast();
     const [activeTab, setActiveTab] = useState("dashboard");
+    const [allAnalysts, setAllAnalysts] = useState<Analista[]>([]);
     const [onlineAnalysts, setOnlineAnalysts] = useState<Analista[]>([]);
+    const { onlineUsers } = usePresence();
     const [labs, setLabs] = useState<Lab[]>([]);
     const [isSyncing, setIsSyncing] = useState(false);
 
@@ -56,13 +59,21 @@ export default function Admin() {
             const labsList = await LabService.list();
             setLabs(labsList);
 
-            setOnlineAnalysts(onlineList);
+            setAllAnalysts(data); // Salva o mestre pra fazer o cruzamento com WebSocket
         };
 
         loadCount();
-        const interval = setInterval(loadCount, 10000);
-        return () => clearInterval(interval);
     }, [user, currentLab]);
+
+    // O presence effect escuta o websocket global e atualiza em tempo real
+    useEffect(() => {
+        if (allAnalysts.length === 0) return;
+        
+        const onlineIds = onlineUsers.map(u => u.user_id);
+        const actualOnline = allAnalysts.filter(a => onlineIds.includes(a.id));
+        
+        setOnlineAnalysts(actualOnline);
+    }, [onlineUsers, allAnalysts]);
 
     const handleSync = async () => {
         if (!isSupabaseEnabled()) {
