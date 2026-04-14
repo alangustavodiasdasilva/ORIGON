@@ -24,8 +24,9 @@ const parseDate = (cell: any): string | null => {
         return `${date.y}-${String(date.m).padStart(2, '0')}-${String(date.d).padStart(2, '0')}`;
     }
     if (typeof cell === 'string') {
-        // Aceitar formatos: DD/MM/AAAA, DD-MM-AAAA, DD/MM/AA, etc.
-        const match = cell.match(/(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,4})/);
+        const trimmed = cell.trim();
+        // Aceitar apenas se a célula for essencialmente a data
+        const match = trimmed.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,4})$/);
         if (match) {
             let year = parseInt(match[3], 10);
             if (year < 100) year += 2000;
