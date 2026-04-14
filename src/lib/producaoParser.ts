@@ -115,53 +115,67 @@ export const parseProducaoFileInChunks = async (
                     const row = rows[i];
                     if (!row || row.length === 0) continue;
 
-                    // 1. Ignorar linhas vazias ou de resumos (TOTAL, SOMA, etc) - CHECAGEM PROFUNDA
+                    // 1. Ignorar linhas de resumos (TOTAL, SOMA, etc) - CHECAGEM PROFUNDA
                     const rowString = row.join(" ").toUpperCase();
                     const isSummaryRow = rowString.includes("TOTAL") || rowString.includes("SOMA") || 
                                          rowString.includes("MÉDIA") || rowString.includes("RESUMO") ||
-                                         rowString.includes("GERAL");
+                                         rowString.includes("GERAL") || rowString.includes("CONTAGEM");
 
                     if (isSummaryRow) continue;
 
                     // 2. Extrair Data e Turno (comum a ambos os modos)
                     const potentialDate = row.map(parseDate).find(d => d !== null);
-                    if (potentialDate) currentBlockDate = potentialDate;
+                    if (potentialDate) {
+                        currentBlockDate = potentialDate;
+                        currentTurnoLabel = ""; // Reset turno ao mudar de data para evitar sujeira
+                    }
 
-                    const turnoLabel = row
-                        .map(c => String(c || "").toUpperCase().trim())
-                        .find(s => {
-                            const isShift = (s.includes("TURNO") || s === "COMERCIAL");
-                            const isNotSummary = !s.includes("TOTAL") && !s.includes("SOMA") && !s.includes("RESUMO") && !s.includes("MÉDIA") && !s.includes("GERAL");
-                            return isShift && isNotSummary;
-                        });
-                    
-                    if (turnoLabel) currentTurnoLabel = turnoLabel;
+                    const rawTurno = row.map(c => String(c || "").toUpperCase().trim()).find(s => s.includes("TURNO") || s === "COMERCIAL" || /^[ABC123]$/.test(s));
+                    if (rawTurno) {
+                        // Normalização de Turno (A->1, B->2, C->3, Manhã->1, etc)
+                        let normalized = rawTurno;
+                        if (normalized.includes("MANHÃ") || normalized.endsWith(" A") || normalized === "A") normalized = "TURNO 1";
+                        if (normalized.includes("TARDE") || normalized.endsWith(" B") || normalized === "B") normalized = "TURNO 2";
+                        if (normalized.includes("NOITE") || normalized.endsWith(" C") || normalized === "C") normalized = "TURNO 3";
+                        if (normalized === "1") normalized = "TURNO 1";
+                        if (normalized === "2") normalized = "TURNO 2";
+                        if (normalized === "3") normalized = "TURNO 3";
+                        
+                        currentTurnoLabel = normalized.replace(":", "").trim();
+                    }
 
-                    if (!currentBlockDate || !currentTurnoLabel) continue;
+                    if (!currentBlockDate || !currentTurnoLabel || currentTurnoLabel === "") continue;
 
                     // 3. Processamento de Dados baseado no Modo
                     if (isListMode) {
                         // MODO LISTA: Uma linha = Um registro
-                        const cell = row[listColIndex] || row[listColIndex - 1]; // Fallback for shifted Excel rows
+                        // Tenta achar o peso (número > 0) nas colunas próximas ao header detectado
                         let val = NaN;
-                        if (typeof cell === 'number') val = cell;
-                        else if (typeof cell === 'string' && cell.trim() !== "") {
-                            const clean = cell.replace(/\./g, "").replace(",", ".");
-                            if (!isNaN(parseFloat(clean))) val = parseFloat(clean);
+                        const cellCandidates = [row[listColIndex], row[listColIndex-1], row[listColIndex+1]];
+                        
+                        for(const cell of cellCandidates) {
+                            if (typeof cell === 'number') { val = cell; break; }
+                            if (typeof cell === 'string' && cell.trim() !== "") {
+                                const clean = cell.replace(/\./g, "").replace(",", ".");
+                                const parsed = parseFloat(clean);
+                                if (!isNaN(parsed) && !String(cell).includes("/")) { val = parsed; break; }
+                            }
                         }
 
                         if (!isNaN(val) && val > 0) {
                             const operator = String(row[listOperatorIndex] || "").trim() || "N/A";
                             currentBatch.push({
                                 lab_id: labId,
-                                identificador_unico: `${currentBlockDate}-${currentTurnoLabel.replace(/[^A-Z0-9]/g, "")}-ROW${i}-${val}`,
+                                identificador_unico: `${currentBlockDate}-${currentTurnoLabel.replace(/[^A-Z0-9]/g, "")}-${i}-${val}`,
                                 data_producao: currentBlockDate,
-                                turno: currentTurnoLabel.replace(":", "").trim(),
+                                turno: currentTurnoLabel,
                                 produto: operator,
                                 peso: val,
                                 metadata: { source: 'excel_list_mode' }
                             });
                             result.totalValidos++;
+                        } else {
+                            result.erros.push(`Linha ${i}: Não foi possível extrair peso válido.`);
                         }
                     } else {
                         // MODO MATRIZ: Colunas de Máquinas
