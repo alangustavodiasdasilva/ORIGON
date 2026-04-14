@@ -146,27 +146,29 @@ export const parseProducaoFileInChunks = async (
 
                     if (!currentBlockDate || !currentTurnoLabel || currentTurnoLabel === "") continue;
 
+                    // 3. Ignorar linhas de resumo numérico silêncioso em Modo Matriz
+                    // Se não for modo lista, as linhas válidas de dados sempre contêm o rótulo do turno ou a data na col 0 ou 1
+                    if (!isListMode) {
+                        const cell0 = String(row[0] || "").trim();
+                        const cell1 = String(row[1] || "").trim();
+                        if (!cell0 && !cell1) {
+                            continue; // Ignora a linha de resumo sem texto (total do dia/turno)
+                        }
+                    }
+
+                    // 4. Processamento de Dados baseado no Modo
                     if (isListMode) {
                         // MODO LISTA: Uma linha = Um registro
-                        // O peso (Amostras) pode ter se movido de coluna. Vamos procurar qualquer número válido na linha.
+                        // Tenta achar o peso (número > 0) nas colunas próximas ao header detectado
                         let val = NaN;
+                        const cellCandidates = [row[listColIndex], row[listColIndex-1], row[listColIndex+1]];
                         
-                        // Busca ampla por qualquer número na linha que não seja na coluna de operador
-                        for (let col = 0; col < row.length; col++) {
-                            if (col === listOperatorIndex) continue; // Pula a coluna com o nome do operador
-                            
-                            const cell = row[col];
-                            if (typeof cell === 'number' && cell > 0 && cell < 30000) { // Ignora números enormes que parecem datas
-                                val = cell;
-                                break;
-                            } else if (typeof cell === 'string' && cell.trim() !== "") {
+                        for(const cell of cellCandidates) {
+                            if (typeof cell === 'number') { val = cell; break; }
+                            if (typeof cell === 'string' && cell.trim() !== "") {
                                 const clean = cell.replace(/\./g, "").replace(",", ".");
                                 const parsed = parseFloat(clean);
-                                // Aceita se for um número válido, maior que zero, menor que limiar gigante e não for data
-                                if (!isNaN(parsed) && parsed > 0 && parsed < 30000 && !String(cell).includes("/")) {
-                                    val = parsed;
-                                    break;
-                                }
+                                if (!isNaN(parsed) && !String(cell).includes("/")) { val = parsed; break; }
                             }
                         }
 
@@ -188,8 +190,11 @@ export const parseProducaoFileInChunks = async (
                     } else {
                         // MODO MATRIZ: Colunas de Máquinas
                         const machineIndices = Object.keys(machineMap).map(Number);
-                        for (const colIdx of machineIndices) {
-                            const cell = row[colIdx];
+                        for (const headerCol of machineIndices) {
+                            // O Excel pode usar células mescladas onde o cabeçalho fica em N, mas o dado cai em N-1
+                            const dataCol = row[headerCol] !== null && row[headerCol] !== undefined && row[headerCol] !== "" ? headerCol : headerCol - 1;
+                            const cell = row[dataCol];
+
                             if (cell === null || cell === "" || cell === undefined) continue;
 
                             let val = NaN;
@@ -200,12 +205,12 @@ export const parseProducaoFileInChunks = async (
                             }
 
                             if (!isNaN(val) && val > 0) {
-                                const mNum = machineMap[colIdx];
+                                const mNum = machineMap[headerCol];
                                 currentBatch.push({
                                     lab_id: labId,
                                     identificador_unico: `${currentBlockDate}-${currentTurnoLabel.replace(/[^A-Z0-9]/g, "")}-MQ${mNum}`,
                                     data_producao: currentBlockDate,
-                                    turno: currentTurnoLabel.replace(":", "").trim(),
+                                    turno: currentTurnoLabel,
                                     produto: `Máquina ${mNum}`,
                                     peso: val,
                                     metadata: { source: 'excel_matrix_mode' }
