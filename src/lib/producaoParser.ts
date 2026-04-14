@@ -127,7 +127,6 @@ export const parseProducaoFileInChunks = async (
                     const potentialDate = row.map(parseDate).find(d => d !== null);
                     if (potentialDate) {
                         currentBlockDate = potentialDate;
-                        currentTurnoLabel = ""; // Reset turno ao mudar de data para evitar sujeira
                     }
 
                     const rawTurno = row.map(c => String(c || "").toUpperCase().trim()).find(s => s.includes("TURNO") || s === "COMERCIAL" || /^[ABC123]$/.test(s));
