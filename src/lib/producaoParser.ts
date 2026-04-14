@@ -53,35 +53,56 @@ export const parseProducaoFileInChunks = async (
 
                 const rows: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: "" });
 
-                // 1. Detect Header Row for Machine Mapping
+                // 1. Detect Mode: Matrix (Machine Cols) or List (Operator Rows)
                 let machineMap: Record<number, number> = {};
+                let listColIndex = -1;
+                let listOperatorIndex = -1;
                 let headerRowIndex = -1;
+                let isListMode = false;
 
-                for (let i = 0; i < Math.min(rows.length, 50); i++) {
+                for (let i = 0; i < Math.min(rows.length, 60); i++) {
                     const row = rows[i];
-                    let foundNumbers = 0;
+                    let foundMachines = 0;
                     const tempMap: Record<number, number> = {};
 
                     row.forEach((cell, colIdx) => {
-                        const val = parseInt(String(cell));
-                        if (!isNaN(val) && val > 0 && val < 1000) {
+                        const sVal = String(cell).toUpperCase().trim();
+                        
+                        // Machine Column Check (1, 2, 3...)
+                        const val = parseInt(sVal);
+                        if (!isNaN(val) && val > 0 && val < 1000 && !sVal.includes("/")) {
                             tempMap[colIdx] = val;
-                            foundNumbers++;
+                            foundMachines++;
+                        }
+
+                        // List Mode Header Detection
+                        if (sVal === "AMOSTRAS" || sVal.includes("TOTAL AMOSTRAS") || sVal === "PRODUÇÃO") {
+                            listColIndex = colIdx;
+                        }
+                        if (sVal === "OPERADOR" || sVal === "ANALISTA" || sVal.includes("NOME")) {
+                            listOperatorIndex = colIdx;
                         }
                     });
 
-                    if (foundNumbers > 5) {
+                    if (foundMachines > 5) {
                         machineMap = tempMap;
                         headerRowIndex = i;
+                        isListMode = false;
+                        break;
+                    }
+
+                    if (listColIndex !== -1) {
+                        headerRowIndex = i;
+                        isListMode = true;
+                        // Se não achou index de operador, assume um padrão
+                        if (listOperatorIndex === -1) listOperatorIndex = Math.max(0, listColIndex - 1);
                         break;
                     }
                 }
 
                 if (headerRowIndex === -1) {
-                    throw new Error("Não foi possível detectar o cabeçalho das máquinas (1, 2, 3...) nas primeiras 50 linhas.");
+                    throw new Error("Não foi possível detectar o formato da planilha (Colunas de Máquinas ou Lista de Amostras) nas primeiras 60 linhas.");
                 }
-
-                console.log(`Detected machines at row ${headerRowIndex}:`, machineMap);
 
                 let currentBlockDate: string | null = null;
                 let currentTurnoLabel: string = "";
@@ -92,117 +113,82 @@ export const parseProducaoFileInChunks = async (
                     if (i === headerRowIndex) continue;
 
                     const row = rows[i];
-                    if (!row || row.length === 0) {
-                        // Reset turno on empty row to avoid importing trailing summary/total rows
-                        currentTurnoLabel = "";
-                        continue;
-                    }
+                    if (!row || row.length === 0) continue;
 
-                    // Check for valid content in row (not just nulls/empty strings)
-                    const hasContent = row.some(cell => cell !== null && cell !== "" && cell !== undefined);
-                    if (!hasContent) {
-                        currentTurnoLabel = "";
-                        continue;
-                    }
+                    // 1. Ignorar linhas vazias ou de resumos (TOTAL, SOMA, etc) - CHECAGEM PROFUNDA
+                    const rowString = row.join(" ").toUpperCase();
+                    const isSummaryRow = rowString.includes("TOTAL") || rowString.includes("SOMA") || 
+                                         rowString.includes("MÉDIA") || rowString.includes("RESUMO") ||
+                                         rowString.includes("GERAL");
 
-                    // 1. Check for date in columns 0 or 1
-                    const potentialDate = parseDate(row[0]) || parseDate(row[1]);
-                    if (potentialDate) {
-                        currentBlockDate = potentialDate;
-                        // Important: if this is JUST a date row (no turno or data yet), 
-                        // we might reset turno or wait for the next row to tell us.
-                    }
+                    if (isSummaryRow) continue;
 
-                    // 2. Check for turno label in columns 0 or 1
-                    const firstCell = String(row[0] || "").toUpperCase().trim();
-                    const secondCell = String(row[1] || "").toUpperCase().trim();
+                    // 2. Extrair Data e Turno (comum a ambos os modos)
+                    const potentialDate = row.map(parseDate).find(d => d !== null);
+                    if (potentialDate) currentBlockDate = potentialDate;
 
-                    const isSummaryRow = firstCell.includes("TOTAL") || secondCell.includes("TOTAL") || 
-                                         firstCell.includes("SOMA") || secondCell.includes("SOMA") ||
-                                         firstCell.includes("MÉDIA") || secondCell.includes("MÉDIA") ||
-                                         firstCell.includes("RESUMO") || secondCell.includes("RESUMO") ||
-                                         firstCell.includes("GERAL") || secondCell.includes("GERAL");
+                    const turnoLabel = row.map(c => String(c || "").toUpperCase().trim()).find(s => s.includes("TURNO") || s === "COMERCIAL");
+                    if (turnoLabel) currentTurnoLabel = turnoLabel;
 
-                    if (isSummaryRow) {
-                        continue;
-                    }
+                    if (!currentBlockDate || !currentTurnoLabel) continue;
 
-                    if (firstCell.includes("TURNO") || firstCell === "COMERCIAL" || firstCell.includes("COMERCIAL")) currentTurnoLabel = firstCell;
-                    else if (secondCell.includes("TURNO") || secondCell === "COMERCIAL" || secondCell.includes("COMERCIAL")) currentTurnoLabel = secondCell;
+                    // 3. Processamento de Dados baseado no Modo
+                    if (isListMode) {
+                        // MODO LISTA: Uma linha = Um registro
+                        const cell = row[listColIndex] || row[listColIndex - 1]; // Fallback for shifted Excel rows
+                        let val = NaN;
+                        if (typeof cell === 'number') val = cell;
+                        else if (typeof cell === 'string' && cell.trim() !== "") {
+                            const clean = cell.replace(/\./g, "").replace(",", ".");
+                            if (!isNaN(parseFloat(clean))) val = parseFloat(clean);
+                        }
 
-                    // 3. If we have date + turno, process data columns
-                    if (currentBlockDate && currentTurnoLabel) {
-                        let foundInRow = 0;
-
-                        // Iterate through ALL columns that might have data
-                        // We use the machineMap as reference indices
+                        if (!isNaN(val) && val > 0) {
+                            const operator = String(row[listOperatorIndex] || "").trim() || "N/A";
+                            currentBatch.push({
+                                lab_id: labId,
+                                identificador_unico: `${currentBlockDate}-${currentTurnoLabel.replace(/[^A-Z0-9]/g, "")}-ROW${i}-${val}`,
+                                data_producao: currentBlockDate,
+                                turno: currentTurnoLabel.replace(":", "").trim(),
+                                produto: operator,
+                                peso: val,
+                                metadata: { source: 'excel_list_mode' }
+                            });
+                            result.totalValidos++;
+                        }
+                    } else {
+                        // MODO MATRIZ: Colunas de Máquinas
                         const machineIndices = Object.keys(machineMap).map(Number);
-
-                        // We also check columns immediately to the LEFT of machine labels (offset handling)
-                        const colsToCheck = new Set<number>();
-                        machineIndices.forEach(idx => {
-                            colsToCheck.add(idx);
-                            if (idx > 0) colsToCheck.add(idx - 1);
-                        });
-
-                        const sortedCols = Array.from(colsToCheck).sort((a, b) => a - b);
-
-                        for (const colIdx of sortedCols) {
+                        for (const colIdx of machineIndices) {
                             const cell = row[colIdx];
                             if (cell === null || cell === "" || cell === undefined) continue;
 
                             let val = NaN;
                             if (typeof cell === 'number') val = cell;
-                            else if (typeof cell === 'string' && cell.trim() !== "") {
+                            else if (typeof cell === 'string') {
                                 const clean = cell.replace(/\./g, "").replace(",", ".");
-                                if (!clean.includes("/") && !isNaN(parseFloat(clean))) {
-                                    val = parseFloat(clean);
-                                }
+                                if (!isNaN(parseFloat(clean))) val = parseFloat(clean);
                             }
 
-                            result.totalLido++;
-
-                            if (isNaN(val) || val < 0) {
-                                result.totalRejeitados++;
-                                if (result.erros.length < 15) result.erros.push(`Linha ${i + 1}, Mq ${machineMap[colIdx] || '?' }: peso inválido (${cell})`);
-                                continue;
-                            }
-                            if (!currentBlockDate) {
-                                result.totalRejeitados++;
-                                if (result.erros.length < 15) result.erros.push(`Linha ${i + 1}: Data de produção não identificada pelo bloco.`);
-                                continue;
-                            }
-                            if (!currentTurnoLabel) {
-                                result.totalRejeitados++;
-                                if (result.erros.length < 15) result.erros.push(`Linha ${i + 1}: Turno não identificado.`);
-                                continue;
-                            }
-
-                            // Find which machine this column belongs to
-                            // Rule: Exact match first, then offset +1
-                            let machineNumber: number | undefined = machineMap[colIdx];
-                            if (machineNumber === undefined && machineMap[colIdx + 1] !== undefined) {
-                                machineNumber = machineMap[colIdx + 1];
-                            }
-
-                            if (machineNumber !== undefined) {
+                            if (!isNaN(val) && val > 0) {
+                                const mNum = machineMap[colIdx];
                                 currentBatch.push({
                                     lab_id: labId,
-                                    identificador_unico: `${currentBlockDate}-${currentTurnoLabel.replace(/[^A-Z0-9]/g, "")}-MQ${machineNumber}`,
+                                    identificador_unico: `${currentBlockDate}-${currentTurnoLabel.replace(/[^A-Z0-9]/g, "")}-MQ${mNum}`,
                                     data_producao: currentBlockDate,
                                     turno: currentTurnoLabel.replace(":", "").trim(),
-                                    produto: `Linha/Mq ${machineNumber}`,
+                                    produto: `Máquina ${mNum}`,
                                     peso: val,
-                                    metadata: { source: 'excel_upload_streaming_robust' }
+                                    metadata: { source: 'excel_matrix_mode' }
                                 });
                                 result.totalValidos++;
                             }
                         }
+                    }
 
-                        if (currentBatch.length >= batchSize) {
-                            await onBatch(currentBatch);
-                            currentBatch = [];
-                        }
+                    if (currentBatch.length >= batchSize) {
+                        await onBatch(currentBatch);
+                        currentBatch = [];
                     }
                 }
 
