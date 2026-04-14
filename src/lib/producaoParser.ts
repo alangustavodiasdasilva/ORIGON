@@ -135,25 +135,34 @@ export const parseProducaoFileInChunks = async (
                     // 3. Processamento de Dados baseado no Modo
                     if (isListMode) {
                         // MODO LISTA: Uma linha = Um registro
-                        const cell = row[listColIndex] || row[listColIndex - 1]; // Fallback for shifted Excel rows
+                        const cell = row[listColIndex] !== "" && row[listColIndex] !== undefined ? row[listColIndex] : row[listColIndex - 1];
                         let val = NaN;
                         if (typeof cell === 'number') val = cell;
                         else if (typeof cell === 'string' && cell.trim() !== "") {
-                            const clean = cell.replace(/\./g, "").replace(",", ".");
-                            if (!isNaN(parseFloat(clean))) val = parseFloat(clean);
+                            // Limpeza agressiva: remove tudo que não é número ou vírgula/ponto, depois resolve o decimal
+                            const clean = cell.replace(/[^\d.,]/g, "").replace(",", ".");
+                            // Se tiver múltiplos pontos (ex: 1.200.50), remove os anteriores
+                            const parts = clean.split(".");
+                            const finalNum = parts.length > 2 ? parts.slice(0, -1).join("") + "." + parts.slice(-1) : clean;
+                            val = parseFloat(finalNum);
                         }
 
                         if (!isNaN(val) && val > 0) {
-                            const operator = String(row[listOperatorIndex] || "").trim() || "N/A";
-                            const cleanOp = operator.toUpperCase().replace(/[^A-Z]/g, "").substring(0, 10);
+                            const operator = String(row[listOperatorIndex] || "N/A").trim();
+                            const cleanOp = operator.toUpperCase().replace(/[^A-Z0-9]/g, "").substring(0, 15);
+                            const cleanTurno = currentTurnoLabel.replace(/[^A-Z0-9]/g, "");
+                            
+                            // ID determinístico para evitar duplicatas em re-importações
+                            const recordId = `${currentBlockDate}-${cleanTurno}-${cleanOp}`;
+
                             currentBatch.push({
                                 lab_id: labId,
-                                identificador_unico: `${currentBlockDate}-${currentTurnoLabel.replace(/[^A-Z0-9]/g, "")}-${cleanOp}-ROW${i}`,
+                                identificador_unico: recordId,
                                 data_producao: currentBlockDate,
                                 turno: currentTurnoLabel.replace(":", "").trim(),
                                 produto: operator,
                                 peso: val,
-                                metadata: { source: 'excel_list_mode' }
+                                metadata: { source: 'excel_list_mode_v2' }
                             });
                             result.totalValidos++;
                         }

@@ -65,6 +65,7 @@ export default function Operacao() {
     const [chartData, setChartData] = useState<IOperacaoItem[]>([]);
     const [filterDate, setFilterDate] = useState<string>("");
     const [totalProduzido, setTotalProduzido] = useState(0);
+    const [showDataDebugger, setShowDataDebugger] = useState(false);
 
     const displayData = filterDate ? chartData.filter(d => d.data_producao === filterDate) : chartData;
 
@@ -450,7 +451,7 @@ export default function Operacao() {
                     </div>
                 </div>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 mb-12 animate-in fade-in slide-in-from-bottom-4 duration-700">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
                 {isLoading ? (
                     <>
                         <Skeleton className="h-[180px] rounded-[2rem]" />
@@ -501,15 +502,65 @@ export default function Operacao() {
                                 <BarChart3 className="h-40 w-40 text-white" />
                             </div>
                             <div className="flex items-center justify-between mb-6 relative z-10">
-                                <span className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Produção {filterDate ? 'em ' + new Date(filterDate + 'T00:00:00').toLocaleDateString('pt-BR') : 'Total'}</span>
-                                <div className="h-8 w-8 rounded-full bg-white/10 flex items-center justify-center group-hover:bg-white/20 transition-colors"><BarChart3 className="h-4 w-4 text-white" /></div>
+                                <div className="flex flex-col">
+                                    <span className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Carga Diária Produzida</span>
+                                    <span className="text-[14px] font-bold text-white uppercase tracking-tighter">
+                                        {filterDate ? new Date(filterDate + 'T00:00:00').toLocaleDateString('pt-BR') : 'Geral'}
+                                    </span>
+                                </div>
+                                <div className="h-10 w-10 rounded-full bg-white/10 flex items-center justify-center group-hover:bg-white/20 transition-colors"><BarChart3 className="h-5 w-5 text-white" /></div>
                             </div>
-                            <div className="text-4xl font-serif text-white mb-1 relative z-10 tabular-nums">{totalProduzido.toLocaleString()}</div>
-                            <div className="text-[10px] font-bold text-neutral-500 uppercase tracking-tight relative z-10">Total de Amostras Processadas</div>
+                            <div className="text-6xl font-serif text-white mb-2 relative z-10 tabular-nums">{totalProduzido.toLocaleString()}</div>
+                            <div className="text-[10px] font-bold text-neutral-500 uppercase tracking-tight relative z-10">Quantidade Total de Amostras Processadas</div>
                         </div>
                     </>
                 )}
             </div>
+
+            <div className="flex justify-center mb-8">
+                <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={() => setShowDataDebugger(!showDataDebugger)}
+                    className="text-[10px] font-bold text-neutral-400 hover:text-black uppercase tracking-widest"
+                >
+                    {showDataDebugger ? 'Ocultar Detalhes da Carga' : 'Ver Detalhes da Carga'}
+                </Button>
+            </div>
+
+            {showDataDebugger && (
+                <div className="bg-white border-2 border-neutral-100 rounded-3xl overflow-hidden mb-12 animate-in slide-in-from-top duration-500 shadow-xl">
+                    <div className="max-h-[400px] overflow-y-auto">
+                        <table className="w-full text-left border-collapse">
+                            <thead className="bg-neutral-50 border-b border-neutral-200 sticky top-0 z-10">
+                                <tr>
+                                    <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-neutral-500">Data</th>
+                                    <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-neutral-500">Turno</th>
+                                    <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-neutral-500">Operador / Máquina</th>
+                                    <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-neutral-500 text-right">Amostras</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {displayData.slice(0, 150).map((row, idx) => (
+                                    <tr key={idx} className="border-b border-neutral-50 hover:bg-neutral-50 transition-colors">
+                                        <td className="px-6 py-4 text-[11px] font-bold text-neutral-400">{row.data_producao}</td>
+                                        <td className="px-6 py-4 text-[11px] font-black text-black">{row.turno}</td>
+                                        <td className="px-6 py-4 text-[11px] font-medium text-neutral-600">{row.produto}</td>
+                                        <td className="px-6 py-4 text-[11px] font-bold text-black text-right">{row.peso.toLocaleString()}</td>
+                                    </tr>
+                                ))}
+                                {displayData.length > 150 && (
+                                    <tr>
+                                        <td colSpan={4} className="px-6 py-4 text-center text-[10px] font-bold text-neutral-400 uppercase tracking-widest">
+                                            Exibindo 150 de {displayData.length} registros
+                                        </td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            )}
             <ProductionTrendChart data={chartData} />
             {pastedImage && (
                 <div className="fixed inset-0 bg-white/95 z-50 p-8 overflow-y-auto animate-fade-in">
