@@ -22,8 +22,7 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/contexts/ToastContext";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { AnalistaService, type Analista } from "@/entities/Analista";
-import ChatAssistant from "./ChatAssistant";
+import { AnalistaService } from "@/entities/Analista";
 import ParticleBackground from "./ParticleBackground";
 import { BackupService } from "@/services/BackupService";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
@@ -349,5 +348,6 @@ export default function Layout() {
                     </div>
                 </main>
             </div>
+        </div>
     );
 }
