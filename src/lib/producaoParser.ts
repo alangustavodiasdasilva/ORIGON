@@ -119,7 +119,7 @@ export const parseProducaoFileInChunks = async (
                     const rowString = row.join(" ").toUpperCase();
                     const isSummaryRow = rowString.includes("TOTAL") || rowString.includes("SOMA") || 
                                          rowString.includes("MÉDIA") || rowString.includes("RESUMO") ||
-                                         rowString.includes("VALOR") || rowString.includes("GERAL");
+                                         rowString.includes("GERAL");
 
                     if (isSummaryRow) continue;
 
@@ -127,7 +127,14 @@ export const parseProducaoFileInChunks = async (
                     const potentialDate = row.map(parseDate).find(d => d !== null);
                     if (potentialDate) currentBlockDate = potentialDate;
 
-                    const turnoLabel = row.map(c => String(c || "").toUpperCase().trim()).find(s => s.includes("TURNO") || s === "COMERCIAL");
+                    const turnoLabel = row
+                        .map(c => String(c || "").toUpperCase().trim())
+                        .find(s => {
+                            const isShift = (s.includes("TURNO") || s === "COMERCIAL");
+                            const isNotSummary = !s.includes("TOTAL") && !s.includes("SOMA") && !s.includes("RESUMO") && !s.includes("MÉDIA") && !s.includes("GERAL");
+                            return isShift && isNotSummary;
+                        });
+                    
                     if (turnoLabel) currentTurnoLabel = turnoLabel;
 
                     if (!currentBlockDate || !currentTurnoLabel) continue;
@@ -135,34 +142,24 @@ export const parseProducaoFileInChunks = async (
                     // 3. Processamento de Dados baseado no Modo
                     if (isListMode) {
                         // MODO LISTA: Uma linha = Um registro
-                        const cell = row[listColIndex] !== "" && row[listColIndex] !== undefined ? row[listColIndex] : row[listColIndex - 1];
+                        const cell = row[listColIndex] || row[listColIndex - 1]; // Fallback for shifted Excel rows
                         let val = NaN;
                         if (typeof cell === 'number') val = cell;
                         else if (typeof cell === 'string' && cell.trim() !== "") {
-                            // Limpeza agressiva: remove tudo que não é número ou vírgula/ponto, depois resolve o decimal
-                            const clean = cell.replace(/[^\d.,]/g, "").replace(",", ".");
-                            // Se tiver múltiplos pontos (ex: 1.200.50), remove os anteriores
-                            const parts = clean.split(".");
-                            const finalNum = parts.length > 2 ? parts.slice(0, -1).join("") + "." + parts.slice(-1) : clean;
-                            val = parseFloat(finalNum);
+                            const clean = cell.replace(/\./g, "").replace(",", ".");
+                            if (!isNaN(parseFloat(clean))) val = parseFloat(clean);
                         }
 
                         if (!isNaN(val) && val > 0) {
-                            const operator = String(row[listOperatorIndex] || "N/A").trim();
-                            const cleanOp = operator.toUpperCase().replace(/[^A-Z0-9]/g, "").substring(0, 15);
-                            const cleanTurno = currentTurnoLabel.replace(/[^A-Z0-9]/g, "");
-                            
-                            // ID determinístico para evitar duplicatas em re-importações
-                            const recordId = `${currentBlockDate}-${cleanTurno}-${cleanOp}`;
-
+                            const operator = String(row[listOperatorIndex] || "").trim() || "N/A";
                             currentBatch.push({
                                 lab_id: labId,
-                                identificador_unico: recordId,
+                                identificador_unico: `${currentBlockDate}-${currentTurnoLabel.replace(/[^A-Z0-9]/g, "")}-ROW${i}-${val}`,
                                 data_producao: currentBlockDate,
                                 turno: currentTurnoLabel.replace(":", "").trim(),
                                 produto: operator,
                                 peso: val,
-                                metadata: { source: 'excel_list_mode_v2' }
+                                metadata: { source: 'excel_list_mode' }
                             });
                             result.totalValidos++;
                         }
