@@ -63,20 +63,12 @@ export default function Operacao() {
     const [ocrData, setOcrData] = useState<OCRResult | null>(null);
     const [isClearConfirmOpen, setIsClearConfirmOpen] = useState(false);
     const [chartData, setChartData] = useState<IOperacaoItem[]>([]);
-    const [allData, setAllData] = useState<IOperacaoItem[]>([]);
     const [totalProduzido, setTotalProduzido] = useState(0);
-    const [filterDate, setFilterDate] = useState<string>(new Date().toISOString().split('T')[0]);
-    const [availableDates, setAvailableDates] = useState<string[]>([]);
 
-    const filteredChartData = useMemo(() => {
-        return allData.filter(d => d.data_producao === filterDate);
-    }, [allData, filterDate]);
-
-    const turno1Total = filteredChartData.filter((d: IOperacaoItem) => d.turno.toUpperCase().includes('1')).reduce((acc: number, curr: IOperacaoItem) => acc + curr.peso, 0);
-    const turno2Total = filteredChartData.filter((d: IOperacaoItem) => d.turno.toUpperCase().includes('2')).reduce((acc: number, curr: IOperacaoItem) => acc + curr.peso, 0);
-    const turno3Total = filteredChartData.filter((d: IOperacaoItem) => d.turno.toUpperCase().includes('3')).reduce((acc: number, curr: IOperacaoItem) => acc + curr.peso, 0);
-    const turnoComercialTotal = filteredChartData.filter((d: IOperacaoItem) => d.turno.toUpperCase().includes('COMERCIAL')).reduce((acc: number, curr: IOperacaoItem) => acc + curr.peso, 0);
-    const totalDoDia = filteredChartData.reduce((acc: number, curr: IOperacaoItem) => acc + curr.peso, 0);
+    const turno1Total = chartData.filter((d: IOperacaoItem) => d.turno.toUpperCase().includes('1')).reduce((acc: number, curr: IOperacaoItem) => acc + curr.peso, 0);
+    const turno2Total = chartData.filter((d: IOperacaoItem) => d.turno.toUpperCase().includes('2')).reduce((acc: number, curr: IOperacaoItem) => acc + curr.peso, 0);
+    const turno3Total = chartData.filter((d: IOperacaoItem) => d.turno.toUpperCase().includes('3')).reduce((acc: number, curr: IOperacaoItem) => acc + curr.peso, 0);
+    const turnoComercialTotal = chartData.filter((d: IOperacaoItem) => d.turno.toUpperCase().includes('COMERCIAL')).reduce((acc: number, curr: IOperacaoItem) => acc + curr.peso, 0);
 
     useEffect(() => {
         loadStats();
@@ -123,17 +115,7 @@ export default function Operacao() {
             const data = await producaoService.list(targetLabId);
             if (data) {
                 const validData: IOperacaoItem[] = data.map((d: ProducaoData) => ({ ...d, peso: d.peso || 0 }));
-                setAllData(validData);
-                
-                // Extrair datas únicas disponíveis
-                const dates = Array.from(new Set(validData.map(d => d.data_producao))).sort().reverse();
-                setAvailableDates(dates);
-                
-                // Se a data atual não tiver dados mas houver outras datas, foca na última
-                if (validData.length > 0 && !validData.some(d => d.data_producao === filterDate)) {
-                    setFilterDate(dates[0]);
-                }
-
+                setChartData(validData);
                 setTotalProduzido(validData.reduce((acc: number, curr: IOperacaoItem) => acc + curr.peso, 0));
             }
         } catch (error) {
@@ -423,21 +405,6 @@ export default function Operacao() {
                             {labs.map(l => <option key={l.id} value={l.id}>{l.nome}</option>)}
                         </select>
                     )}
-                    <div className="flex bg-neutral-100 p-1 rounded-xl border border-neutral-200">
-                        <select 
-                            title="Filtrar por Data"
-                            aria-label="Filtrar por Data"
-                            value={filterDate}
-                            onChange={(e) => setFilterDate(e.target.value)}
-                            className="bg-transparent text-[10px] font-bold uppercase tracking-widest px-4 py-1.5 outline-none border-none text-neutral-600 appearance-none cursor-pointer hover:bg-white rounded-lg transition-colors min-w-[140px]"
-                        >
-                            <option value="">TODAS AS DATAS</option>
-                            {availableDates.map(date => (
-                                <option key={date} value={date}>{new Date(date + 'T12:00:00').toLocaleDateString('pt-BR')}</option>
-                            ))}
-                        </select>
-                    </div>
-
                     <Button variant="outline" onClick={() => loadStats(false)} disabled={isLoading} className="text-black border-neutral-200 hover:bg-neutral-50 px-4">
                         <RefreshCw className={cn("h-4 w-4 mr-2", isLoading && "animate-spin")} />
                         Sincronizar
@@ -469,7 +436,7 @@ export default function Operacao() {
                                 <div className="h-8 w-8 rounded-full bg-amber-50 flex items-center justify-center group-hover:scale-110 transition-transform"><Sun className="h-4 w-4 text-amber-500" /></div>
                             </div>
                             <div className="text-3xl font-serif text-black mb-1 tabular-nums">{turno1Total.toLocaleString()}</div>
-                            <div className="text-[9px] font-bold text-neutral-400 uppercase tracking-tight">Amostras do Dia</div>
+                            <div className="text-[9px] font-bold text-neutral-400 uppercase tracking-tight">Amostras</div>
                         </div>
 
                         <div className="group bg-white border border-neutral-200 p-6 rounded-[2rem] shadow-[0_10px_30px_rgba(0,0,0,0.02)] hover:shadow-[0_20px_50px_rgba(0,0,0,0.05)] transition-all duration-500 hover:-translate-y-1">
@@ -478,7 +445,7 @@ export default function Operacao() {
                                 <div className="h-8 w-8 rounded-full bg-orange-50 flex items-center justify-center group-hover:scale-110 transition-transform"><Sunset className="h-4 w-4 text-orange-500" /></div>
                             </div>
                             <div className="text-3xl font-serif text-black mb-1 tabular-nums">{turno2Total.toLocaleString()}</div>
-                            <div className="text-[9px] font-bold text-neutral-400 uppercase tracking-tight">Amostras do Dia</div>
+                            <div className="text-[9px] font-bold text-neutral-400 uppercase tracking-tight">Amostras</div>
                         </div>
 
                         <div className="group bg-white border border-neutral-200 p-6 rounded-[2rem] shadow-[0_10px_30px_rgba(0,0,0,0.02)] hover:shadow-[0_20px_50px_rgba(0,0,0,0.05)] transition-all duration-500 hover:-translate-y-1">
@@ -487,7 +454,7 @@ export default function Operacao() {
                                 <div className="h-8 w-8 rounded-full bg-indigo-50 flex items-center justify-center group-hover:scale-110 transition-transform"><Moon className="h-4 w-4 text-indigo-500" /></div>
                             </div>
                             <div className="text-3xl font-serif text-black mb-1 tabular-nums">{turno3Total.toLocaleString()}</div>
-                            <div className="text-[9px] font-bold text-neutral-400 uppercase tracking-tight">Amostras do Dia</div>
+                            <div className="text-[9px] font-bold text-neutral-400 uppercase tracking-tight">Amostras</div>
                         </div>
 
                         <div className="group bg-white border border-neutral-200 p-6 rounded-[2rem] shadow-[0_10px_30px_rgba(0,0,0,0.02)] hover:shadow-[0_20px_50px_rgba(0,0,0,0.05)] transition-all duration-500 hover:-translate-y-1">
@@ -496,7 +463,7 @@ export default function Operacao() {
                                 <div className="h-8 w-8 rounded-full bg-blue-50 flex items-center justify-center group-hover:scale-110 transition-transform"><Briefcase className="h-4 w-4 text-blue-500" /></div>
                             </div>
                             <div className="text-3xl font-serif text-black mb-1 tabular-nums">{turnoComercialTotal.toLocaleString()}</div>
-                            <div className="text-[9px] font-bold text-neutral-400 uppercase tracking-tight">Amostras do Dia</div>
+                            <div className="text-[9px] font-bold text-neutral-400 uppercase tracking-tight">Amostras</div>
                         </div>
 
                         <div className="group bg-black p-6 rounded-[2rem] shadow-[0_10px_30px_rgba(0,0,0,0.15)] relative overflow-hidden transition-all duration-500 hover:-translate-y-2">
@@ -504,11 +471,11 @@ export default function Operacao() {
                                 <BarChart3 className="h-32 w-32 text-white" />
                             </div>
                             <div className="flex items-center justify-between mb-4 relative z-10">
-                                <span className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Total do Dia</span>
+                                <span className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Total</span>
                                 <div className="h-8 w-8 rounded-full bg-white/10 flex items-center justify-center group-hover:bg-white/20 transition-colors"><BarChart3 className="h-4 w-4 text-white" /></div>
                             </div>
-                            <div className="text-3xl font-serif text-white mb-1 relative z-10 tabular-nums">{totalDoDia.toLocaleString()}</div>
-                            <div className="text-[9px] font-bold text-neutral-500 uppercase tracking-tight relative z-10">Data Filtrada</div>
+                            <div className="text-3xl font-serif text-white mb-1 relative z-10 tabular-nums">{totalProduzido.toLocaleString()}</div>
+                            <div className="text-[9px] font-bold text-neutral-500 uppercase tracking-tight relative z-10">Geral</div>
                         </div>
                     </>
                 )}

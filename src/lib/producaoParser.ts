@@ -146,19 +146,27 @@ export const parseProducaoFileInChunks = async (
 
                     if (!currentBlockDate || !currentTurnoLabel || currentTurnoLabel === "") continue;
 
-                    // 3. Processamento de Dados baseado no Modo
                     if (isListMode) {
                         // MODO LISTA: Uma linha = Um registro
-                        // Tenta achar o peso (número > 0) nas colunas próximas ao header detectado
+                        // O peso (Amostras) pode ter se movido de coluna. Vamos procurar qualquer número válido na linha.
                         let val = NaN;
-                        const cellCandidates = [row[listColIndex], row[listColIndex-1], row[listColIndex+1]];
                         
-                        for(const cell of cellCandidates) {
-                            if (typeof cell === 'number') { val = cell; break; }
-                            if (typeof cell === 'string' && cell.trim() !== "") {
+                        // Busca ampla por qualquer número na linha que não seja na coluna de operador
+                        for (let col = 0; col < row.length; col++) {
+                            if (col === listOperatorIndex) continue; // Pula a coluna com o nome do operador
+                            
+                            const cell = row[col];
+                            if (typeof cell === 'number' && cell > 0 && cell < 30000) { // Ignora números enormes que parecem datas
+                                val = cell;
+                                break;
+                            } else if (typeof cell === 'string' && cell.trim() !== "") {
                                 const clean = cell.replace(/\./g, "").replace(",", ".");
                                 const parsed = parseFloat(clean);
-                                if (!isNaN(parsed) && !String(cell).includes("/")) { val = parsed; break; }
+                                // Aceita se for um número válido, maior que zero, menor que limiar gigante e não for data
+                                if (!isNaN(parsed) && parsed > 0 && parsed < 30000 && !String(cell).includes("/")) {
+                                    val = parsed;
+                                    break;
+                                }
                             }
                         }
 
