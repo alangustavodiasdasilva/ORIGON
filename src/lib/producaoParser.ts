@@ -207,7 +207,7 @@ export const parseProducaoFileInChunks = async (
                                 const mNum = machineMap[headerCol];
                                 currentBatch.push({
                                     lab_id: labId,
-                                    identificador_unico: `${currentBlockDate}-${currentTurnoLabel.replace(/[^A-Z0-9]/g, "")}-MQ${mNum}`,
+                                    identificador_unico: `${currentBlockDate}-${currentTurnoLabel.replace(/[^A-Z0-9]/g, "")}-MQ${mNum}-R${i}`,
                                     data_producao: currentBlockDate,
                                     turno: currentTurnoLabel,
                                     produto: `Máquina ${mNum}`,
