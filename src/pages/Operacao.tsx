@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/contexts/ToastContext";
-import { Upload, BarChart3, Loader2, X, Sun, Moon, Sunset, ArrowRight, Save, Calendar, Copy, FileSpreadsheet, Trash2, RefreshCw } from "lucide-react";
+import { Upload, BarChart3, Loader2, X, Sun, Moon, Sunset, ArrowRight, Save, Calendar, Copy, FileSpreadsheet, Trash2, RefreshCw, Briefcase } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import Tesseract from 'tesseract.js';
@@ -63,11 +63,18 @@ export default function Operacao() {
     const [ocrData, setOcrData] = useState<OCRResult | null>(null);
     const [isClearConfirmOpen, setIsClearConfirmOpen] = useState(false);
     const [chartData, setChartData] = useState<IOperacaoItem[]>([]);
+    const [filterDate, setFilterDate] = useState<string>("");
     const [totalProduzido, setTotalProduzido] = useState(0);
 
-    const turno1Total = chartData.filter((d: IOperacaoItem) => d.turno === 'TURNO 1').reduce((acc: number, curr: IOperacaoItem) => acc + curr.peso, 0);
-    const turno2Total = chartData.filter((d: IOperacaoItem) => d.turno === 'TURNO 2').reduce((acc: number, curr: IOperacaoItem) => acc + curr.peso, 0);
-    const turno3Total = chartData.filter((d: IOperacaoItem) => d.turno === 'TURNO 3').reduce((acc: number, curr: IOperacaoItem) => acc + curr.peso, 0);
+    const displayData = filterDate ? chartData.filter(d => d.data_producao === filterDate) : chartData;
+
+    const turno1Total = displayData.filter((d: IOperacaoItem) => d.turno.toUpperCase().includes('TURNO 1')).reduce((acc: number, curr: IOperacaoItem) => acc + curr.peso, 0);
+    const turno2Total = displayData.filter((d: IOperacaoItem) => d.turno.toUpperCase().includes('TURNO 2')).reduce((acc: number, curr: IOperacaoItem) => acc + curr.peso, 0);
+    const turno3Total = displayData.filter((d: IOperacaoItem) => d.turno.toUpperCase().includes('TURNO 3')).reduce((acc: number, curr: IOperacaoItem) => acc + curr.peso, 0);
+    const turnoComercialTotal = displayData.filter((d: IOperacaoItem) => d.turno.toUpperCase().includes('COMERCIAL')).reduce((acc: number, curr: IOperacaoItem) => acc + curr.peso, 0);
+    
+    // Lista de datas únicas para o filtro
+    const availableDates = Array.from(new Set(chartData.map(d => d.data_producao))).sort().reverse();
 
     useEffect(() => {
         loadStats();
@@ -115,7 +122,16 @@ export default function Operacao() {
             if (data) {
                 const validData: IOperacaoItem[] = data.map((d: ProducaoData) => ({ ...d, peso: d.peso || 0 }));
                 setChartData(validData);
-                setTotalProduzido(validData.reduce((acc: number, curr: IOperacaoItem) => acc + curr.peso, 0));
+                
+                // Se não tiver data filtrada, pega a mais recente automaticamente
+                if (!filterDate && validData.length > 0) {
+                    const latest = [...validData].sort((a,b) => b.data_producao.localeCompare(a.data_producao))[0].data_producao;
+                    setFilterDate(latest);
+                }
+
+                const currentTotal = (filterDate ? validData.filter(d => d.data_producao === filterDate) : validData)
+                    .reduce((acc: number, curr: IOperacaoItem) => acc + curr.peso, 0);
+                setTotalProduzido(currentTotal);
             }
         } catch (error) {
             console.error("Failed load:", error);
@@ -404,6 +420,22 @@ export default function Operacao() {
                             {labs.map(l => <option key={l.id} value={l.id}>{l.nome}</option>)}
                         </select>
                     )}
+                    
+                    <select
+                        title="Filtrar por Data"
+                        aria-label="Filtrar por Data"
+                        className="bg-white border-2 border-neutral-200 text-black text-[10px] font-bold uppercase tracking-widest rounded-xl px-4 py-2 hover:border-black transition-all cursor-pointer outline-none"
+                        value={filterDate}
+                        onChange={(e) => setFilterDate(e.target.value)}
+                    >
+                        <option value="">TODAS AS DATAS</option>
+                        {availableDates.map(date => (
+                            <option key={date} value={date}>
+                                {new Date(date + 'T00:00:00').toLocaleDateString('pt-BR')}
+                            </option>
+                        ))}
+                    </select>
+
                     <Button variant="outline" onClick={() => loadStats(false)} disabled={isLoading} className="text-black border-neutral-200 hover:bg-neutral-50 px-4">
                         <RefreshCw className={cn("h-4 w-4 mr-2", isLoading && "animate-spin")} />
                         Sincronizar
@@ -455,12 +487,21 @@ export default function Operacao() {
                             <div className="text-[10px] font-bold text-neutral-400 uppercase tracking-tight">Carga de Amostras</div>
                         </div>
 
-                        <div className="group bg-black p-8 rounded-[2rem] shadow-[0_10px_30px_rgba(0,0,0,0.15)] relative overflow-hidden transition-all duration-500 hover:-translate-y-2">
+                        <div className="group bg-white border border-neutral-200 p-8 rounded-[2rem] shadow-[0_10px_30px_rgba(0,0,0,0.02)] hover:shadow-[0_20px_50px_rgba(0,0,0,0.05)] transition-all duration-500 hover:-translate-y-1">
+                            <div className="flex items-center justify-between mb-6">
+                                <span className="text-[10px] font-black uppercase tracking-widest text-neutral-400 group-hover:text-teal-500 transition-colors">Comercial</span>
+                                <div className="h-8 w-8 rounded-full bg-teal-50 flex items-center justify-center group-hover:scale-110 transition-transform"><Briefcase className="h-4 w-4 text-teal-500" /></div>
+                            </div>
+                            <div className="text-4xl font-serif text-black mb-1 tabular-nums">{turnoComercialTotal.toLocaleString()}</div>
+                            <div className="text-[10px] font-bold text-neutral-400 uppercase tracking-tight">Carga de Amostras</div>
+                        </div>
+
+                        <div className="group bg-black p-8 rounded-[2rem] shadow-[0_10px_30px_rgba(0,0,0,0.15)] relative overflow-hidden transition-all duration-500 hover:-translate-y-2 lg:col-span-4">
                             <div className="absolute -right-8 -bottom-8 opacity-10 group-hover:opacity-20 transition-opacity rotate-12 group-hover:rotate-0 duration-700">
                                 <BarChart3 className="h-40 w-40 text-white" />
                             </div>
                             <div className="flex items-center justify-between mb-6 relative z-10">
-                                <span className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Produção Total</span>
+                                <span className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Produção {filterDate ? 'em ' + new Date(filterDate + 'T00:00:00').toLocaleDateString('pt-BR') : 'Total'}</span>
                                 <div className="h-8 w-8 rounded-full bg-white/10 flex items-center justify-center group-hover:bg-white/20 transition-colors"><BarChart3 className="h-4 w-4 text-white" /></div>
                             </div>
                             <div className="text-4xl font-serif text-white mb-1 relative z-10 tabular-nums">{totalProduzido.toLocaleString()}</div>

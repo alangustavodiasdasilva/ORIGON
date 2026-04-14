@@ -119,7 +119,7 @@ export const parseProducaoFileInChunks = async (
                     const rowString = row.join(" ").toUpperCase();
                     const isSummaryRow = rowString.includes("TOTAL") || rowString.includes("SOMA") || 
                                          rowString.includes("MÉDIA") || rowString.includes("RESUMO") ||
-                                         rowString.includes("GERAL");
+                                         rowString.includes("VALOR") || rowString.includes("GERAL");
 
                     if (isSummaryRow) continue;
 
@@ -145,9 +145,10 @@ export const parseProducaoFileInChunks = async (
 
                         if (!isNaN(val) && val > 0) {
                             const operator = String(row[listOperatorIndex] || "").trim() || "N/A";
+                            const cleanOp = operator.toUpperCase().replace(/[^A-Z]/g, "").substring(0, 10);
                             currentBatch.push({
                                 lab_id: labId,
-                                identificador_unico: `${currentBlockDate}-${currentTurnoLabel.replace(/[^A-Z0-9]/g, "")}-ROW${i}-${val}`,
+                                identificador_unico: `${currentBlockDate}-${currentTurnoLabel.replace(/[^A-Z0-9]/g, "")}-${cleanOp}-ROW${i}`,
                                 data_producao: currentBlockDate,
                                 turno: currentTurnoLabel.replace(":", "").trim(),
                                 produto: operator,
