@@ -189,15 +189,40 @@ export const parseStatusOSFileInChunks = async (
                     const revisor = String(row[colMap.rev] || '').trim();
                     const horasVal = Number(row[colMap.horas]) || 0;
 
+                    // ── Função auxiliar para parse robusto de Datas em Texto (PT-BR) ──
+                    const parseStringDate = (raw: string): Date | null => {
+                        if (!raw) return null;
+                        const trimmed = String(raw).trim();
+                        // 1. Tentar parse nativo direto
+                        let d = new Date(trimmed);
+                        if (!isNaN(d.getTime())) return d;
+                        
+                        // 2. Tentar quebrar formato brasileiro (DD/MM/YYYY ou DD/MM/YY)
+                        const parts = trimmed.split(/[/ -]/);
+                        if (parts.length >= 3) {
+                            const [p1, p2, p3] = parts;
+                            // Se o primeiro elemento for dia (maior que 12 ou deduzido)
+                            // Assumimos formato padrão PT-BR: DD/MM/YYYY
+                            let day = parseInt(p1);
+                            let month = parseInt(p2);
+                            let year = parseInt(p3.split(' ')[0]); // ignora horas se houver
+                            
+                            if (year < 100) year += 2000;
+                            
+                            // Cria data forçando hora meio-dia para evitar conflitos de fuso
+                            const brDate = new Date(year, month - 1, day, 12, 0, 0);
+                            if (!isNaN(brDate.getTime())) return brDate;
+                        }
+                        return null;
+                    };
+
                     // ── Data de Recepção ──────────────────────────────────────────────
                     let dateRec: Date | null = null;
                     const rawDateRec = row[colMap.data];
                     if (typeof rawDateRec === 'number') dateRec = excelDateToJSDate(rawDateRec);
                     else if (rawDateRec instanceof Date) dateRec = rawDateRec;
-                    else if (typeof rawDateRec === 'string' && rawDateRec.trim()) {
-                        const d = new Date(rawDateRec.trim());
-                        if (!isNaN(d.getTime())) dateRec = d;
-                    }
+                    else if (typeof rawDateRec === 'string') dateRec = parseStringDate(rawDateRec);
+
                     const dateRecISO = dateRec ? dateRec.toISOString() : null;
 
                     // ── Data de Finalização (coluna dedicada OU fallback por status) ──
@@ -210,10 +235,8 @@ export const parseStatusOSFileInChunks = async (
                         const rawDateFin = row[colMap.dataFin];
                         if (typeof rawDateFin === 'number') {
                             if (rawDateFin > 30000) {
-                                // Valor provavelmente é uma data válida do Excel
                                 dateFin = excelDateToJSDate(rawDateFin);
                             } else if (rawDateFin > 0) {
-                                // Número pequeno: probabilidade altíssima de ser quantidade de amostras finalizadas
                                 isFinalizado = true;
                                 isQuantityFormat = true;
                             }
@@ -228,9 +251,8 @@ export const parseStatusOSFileInChunks = async (
                                 isFinalizado = true;
                                 isQuantityFormat = true;
                             } else {
-                                const d = new Date(trimmed);
-                                if (!isNaN(d.getTime())) dateFin = d;
-                                else if (norm(trimmed) === 'sim' || norm(trimmed) === 'ok') isFinalizado = true;
+                                dateFin = parseStringDate(trimmed);
+                                if (!dateFin && (norm(trimmed) === 'sim' || norm(trimmed) === 'ok')) isFinalizado = true;
                             }
                         }
                     }
