@@ -48,14 +48,14 @@ export default function Admin() {
 
             const now = new Date().getTime();
             const onlineList = data.filter(a =>
-                a.last_active && (now - new Date(a.last_active).getTime() < 12000)
+                a.last_active && (Math.abs(now - new Date(a.last_active).getTime()) < 60000)
             );
 
             setOnlineAnalysts(onlineList);
         };
 
         loadCount();
-        const interval = setInterval(loadCount, 2000);
+        const interval = setInterval(loadCount, 10000);
         return () => clearInterval(interval);
     }, [user, currentLab]);
 

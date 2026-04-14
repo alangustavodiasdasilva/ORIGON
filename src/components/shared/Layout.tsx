@@ -349,8 +349,5 @@ export default function Layout() {
                     </div>
                 </main>
             </div>
-
-            <ChatAssistant />
-        </div>
     );
 }
