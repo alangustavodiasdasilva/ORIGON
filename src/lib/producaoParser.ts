@@ -75,7 +75,11 @@ export const parseProducaoFileInChunks = async (
 
                         // Check for Machine Column (1, 2, MQ1, Maq 02...)
                         const numMatch = sVal.match(/\d+/);
-                        if (numMatch && !sVal.includes("/")) {
+                        const isLikelySummary = sVal.includes("TOTAL") || sVal.includes("SOMA") || 
+                                              sVal.includes("MÉDIA") || sVal.includes("RESUMO") || 
+                                              sVal.includes("CONTAGEM");
+
+                        if (numMatch && !sVal.includes("/") && !isLikelySummary) {
                             const val = parseInt(numMatch[0]);
                             if (val > 0 && val < 2000) {
                                 tempMap[colIdx] = val;
