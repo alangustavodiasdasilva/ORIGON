@@ -59,29 +59,46 @@ export const parseProducaoFileInChunks = async (
                 let machineMap: Record<number, number> = {};
                 let listColIndex = -1, listOperatorIndex = -1, headerRowIndex = -1, isListMode = false;
 
-                for (let i = 0; i < Math.min(rows.length, 100); i++) {
+                for (let i = 0; i < Math.min(rows.length, 150); i++) {
                     const row = rows[i];
+                    if (!row || row.length < 5) continue;
+                    
                     let foundMachines = 0;
                     const tempMap: Record<number, number> = {};
+                    
                     row.forEach((cell, colIdx) => {
                         const sVal = String(cell || "").toUpperCase().trim();
-                        const val = parseInt(sVal);
-                        if (!isNaN(val) && val > 0 && val < 5000 && !sVal.includes("/")) {
-                            tempMap[colIdx] = val;
-                            foundMachines++;
+                        if (!sVal) return;
+
+                        // 1. Tentar extrair número da máquina (aceita 1, MQ-1, M05, Máquina 10)
+                        // Apenas se não tiver cara de DATA (sem barras ou hífen no meio de números)
+                        if (!sVal.includes("/") && !sVal.includes("-202")) {
+                            const matchNum = sVal.match(/(\d+)$/); // Pega número no fim
+                            if (matchNum) {
+                                const val = parseInt(matchNum[1]);
+                                if (val > 0 && val < 10000) {
+                                    tempMap[colIdx] = val;
+                                    foundMachines++;
+                                }
+                            }
                         }
-                        if (sVal === "AMOSTRAS" || sVal.includes("TOTAL AMOSTRAS")) listColIndex = colIdx;
-                        if (sVal === "OPERADOR" || sVal === "ANALISTA") listOperatorIndex = colIdx;
+
+                        // 2. Detecção de Modo Lista (Cabeçalhos)
+                        if (sVal === "AMOSTRAS" || sVal.includes("TOTAL AMOSTRAS") || sVal === "PESO TOTAL") listColIndex = colIdx;
+                        if (sVal === "OPERADOR" || sVal === "ANALISTA" || sVal === "OPERADORES") listOperatorIndex = colIdx;
                     });
-                    if (foundMachines > 5) {
-                        machineMap = tempMap; headerRowIndex = i; isListMode = false;
-                        console.log('Parser: Detectado Modo Matriz na linha', i, 'com', foundMachines, 'máquinas.');
+
+                    if (foundMachines >= 5) {
+                        machineMap = tempMap;
+                        headerRowIndex = i;
+                        isListMode = false;
+                        console.log(`Parser: Detectado Modo Matriz na linha ${i}. Máquinas:`, Object.values(tempMap));
                         break;
                     }
-                    if (listColIndex !== -1) {
-                        headerRowIndex = i; isListMode = true;
-                        if (listOperatorIndex === -1) listOperatorIndex = Math.max(0, listColIndex - 1);
-                        console.log('Parser: Detectado Modo Lista na linha', i);
+                    if (listColIndex !== -1 && listOperatorIndex !== -1) {
+                        headerRowIndex = i;
+                        isListMode = true;
+                        console.log(`Parser: Detectado Modo Lista na linha ${i}. Colunas: ${listOperatorIndex} e ${listColIndex}`);
                         break;
                     }
                 }
