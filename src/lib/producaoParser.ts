@@ -48,57 +48,46 @@ export const parseProducaoFileInChunks = async (
         reader.onload = async (e) => {
             try {
                 const data = new Uint8Array(e.target?.result as ArrayBuffer);
-                const workbook = XLSX.read(data, { type: 'array', cellDates: true, dense: true });
+                const workbook = XLSX.read(data, { type: 'array', cellDates: true });
                 const sheetName = workbook.SheetNames[0];
                 const worksheet = workbook.Sheets[sheetName];
 
                 const rows: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: "" });
+                console.log('Parser: Planilha lida. Total de linhas:', rows.length);
 
                 // 1. Detect Mode: Matrix (Machine Cols) or List (Operator Rows)
                 let machineMap: Record<number, number> = {};
-                let listColIndex = -1;
-                let listOperatorIndex = -1;
-                let headerRowIndex = -1;
-                let isListMode = false;
+                let listColIndex = -1, listOperatorIndex = -1, headerRowIndex = -1, isListMode = false;
 
-                for (let i = 0; i < Math.min(rows.length, 60); i++) {
+                for (let i = 0; i < Math.min(rows.length, 100); i++) {
                     const row = rows[i];
                     let foundMachines = 0;
                     const tempMap: Record<number, number> = {};
-
                     row.forEach((cell, colIdx) => {
-                        const sVal = String(cell).toUpperCase().trim();
-                        
-                        // Machine Column Check (1, 2, 3...)
+                        const sVal = String(cell || "").toUpperCase().trim();
                         const val = parseInt(sVal);
-                        if (!isNaN(val) && val > 0 && val < 1000 && !sVal.includes("/")) {
+                        if (!isNaN(val) && val > 0 && val < 5000 && !sVal.includes("/")) {
                             tempMap[colIdx] = val;
                             foundMachines++;
                         }
-
-                        // List Mode Header Detection
-                        if (sVal === "AMOSTRAS" || sVal.includes("TOTAL AMOSTRAS") || sVal === "PRODUÇÃO") {
-                            listColIndex = colIdx;
-                        }
-                        if (sVal === "OPERADOR" || sVal === "ANALISTA" || sVal.includes("NOME")) {
-                            listOperatorIndex = colIdx;
-                        }
+                        if (sVal === "AMOSTRAS" || sVal.includes("TOTAL AMOSTRAS")) listColIndex = colIdx;
+                        if (sVal === "OPERADOR" || sVal === "ANALISTA") listOperatorIndex = colIdx;
                     });
-
                     if (foundMachines > 5) {
-                        machineMap = tempMap;
-                        headerRowIndex = i;
-                        isListMode = false;
+                        machineMap = tempMap; headerRowIndex = i; isListMode = false;
+                        console.log('Parser: Detectado Modo Matriz na linha', i, 'com', foundMachines, 'máquinas.');
                         break;
                     }
-
                     if (listColIndex !== -1) {
-                        headerRowIndex = i;
-                        isListMode = true;
-                        // Se não achou index de operador, assume um padrão
+                        headerRowIndex = i; isListMode = true;
                         if (listOperatorIndex === -1) listOperatorIndex = Math.max(0, listColIndex - 1);
+                        console.log('Parser: Detectado Modo Lista na linha', i);
                         break;
                     }
+                }
+
+                if (headerRowIndex === -1) {
+                    console.warn('Parser: Falha ao detectar cabeçalho de máquinas ou lista.');
                 }
 
                 if (headerRowIndex === -1) {
