@@ -201,9 +201,9 @@ export const parseProducaoFileInChunks = async (
                         // MODO MATRIZ: Colunas de Máquinas
                         const machineIndices = Object.keys(machineMap).map(Number);
                         for (const headerCol of machineIndices) {
-                            // Tenta buscar o valor na coluna do header ou nas vizinhas (merged cells)
+                            // Tenta buscar o valor na coluna do header ou na anterior (merged cells / offset)
                             let val = NaN;
-                            const candidates = [row[headerCol], row[headerCol - 1], row[headerCol + 1]];
+                            const candidates = [row[headerCol], row[headerCol - 1]];
                             
                             for (const cell of candidates) {
                                 if (cell === null || cell === undefined || cell === "") continue;
