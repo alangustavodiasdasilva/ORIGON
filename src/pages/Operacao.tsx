@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/contexts/ToastContext";
 import { Upload, BarChart3, Loader2, X, Sun, Moon, Sunset, ArrowRight, Save, Calendar, Copy, FileSpreadsheet, Trash2, RefreshCw, Briefcase } from "lucide-react";
