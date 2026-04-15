@@ -47,64 +47,64 @@ export const parseProducaoFileInChunks = async (
 
         reader.onload = async (e) => {
             try {
-                const data = new Uint8Array(e.target?.result as ArrayBuffer);
-                const workbook = XLSX.read(data, { type: 'array', cellDates: true });
+                const data = e.target?.result;
+                const workbook = XLSX.read(data, { type: 'binary', dense: true });
                 const sheetName = workbook.SheetNames[0];
                 const worksheet = workbook.Sheets[sheetName];
 
                 const rows: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: "" });
-                console.log('Parser: Planilha lida. Total de linhas:', rows.length);
 
                 // 1. Detect Mode: Matrix (Machine Cols) or List (Operator Rows)
                 let machineMap: Record<number, number> = {};
-                let listColIndex = -1, listOperatorIndex = -1, headerRowIndex = -1, isListMode = false;
+                let listColIndex = -1;
+                let listOperatorIndex = -1;
+                let headerRowIndex = -1;
+                let isListMode = false;
 
-                for (let i = 0; i < Math.min(rows.length, 150); i++) {
+                // Scan first 100 rows for headers
+                for (let i = 0; i < Math.min(rows.length, 100); i++) {
                     const row = rows[i];
-                    if (!row || row.length < 5) continue;
+                    if (!row) continue;
                     
-                    let foundMachines = 0;
+                    let machinesInRow = 0;
                     const tempMap: Record<number, number> = {};
                     
                     row.forEach((cell, colIdx) => {
                         const sVal = String(cell || "").toUpperCase().trim();
                         if (!sVal) return;
 
-                        // 1. Tentar extrair número da máquina (aceita 1, MQ-1, M05, Máquina 10)
-                        // Apenas se não tiver cara de DATA (sem barras ou hífen no meio de números)
-                        if (!sVal.includes("/") && !sVal.includes("-202")) {
-                            const matchNum = sVal.match(/(\d+)$/); // Pega número no fim
-                            if (matchNum) {
-                                const val = parseInt(matchNum[1]);
-                                if (val > 0 && val < 10000) {
-                                    tempMap[colIdx] = val;
-                                    foundMachines++;
-                                }
+                        // Check for Machine Column (1, 2, MQ1, Maq 02...)
+                        const numMatch = sVal.match(/\d+/);
+                        if (numMatch && !sVal.includes("/")) {
+                            const val = parseInt(numMatch[0]);
+                            if (val > 0 && val < 2000) {
+                                tempMap[colIdx] = val;
+                                machinesInRow++;
                             }
                         }
 
-                        // 2. Detecção de Modo Lista (Cabeçalhos)
-                        if (sVal === "AMOSTRAS" || sVal.includes("TOTAL AMOSTRAS") || sVal === "PESO TOTAL") listColIndex = colIdx;
-                        if (sVal === "OPERADOR" || sVal === "ANALISTA" || sVal === "OPERADORES") listOperatorIndex = colIdx;
+                        // List Mode Header Detection
+                        if (sVal === "AMOSTRAS" || sVal.includes("TOTAL AMOSTRAS") || sVal === "PRODUÇÃO") {
+                            listColIndex = colIdx;
+                        }
+                        if (sVal === "OPERADOR" || sVal === "ANALISTA" || sVal.includes("NOME")) {
+                            listOperatorIndex = colIdx;
+                        }
                     });
 
-                    if (foundMachines >= 5) {
+                    if (machinesInRow > 4) {
                         machineMap = tempMap;
                         headerRowIndex = i;
                         isListMode = false;
-                        console.log(`Parser: Detectado Modo Matriz na linha ${i}. Máquinas:`, Object.values(tempMap));
                         break;
                     }
-                    if (listColIndex !== -1 && listOperatorIndex !== -1) {
+
+                    if (listColIndex !== -1) {
                         headerRowIndex = i;
                         isListMode = true;
-                        console.log(`Parser: Detectado Modo Lista na linha ${i}. Colunas: ${listOperatorIndex} e ${listColIndex}`);
+                        if (listOperatorIndex === -1) listOperatorIndex = Math.max(0, listColIndex - 1);
                         break;
                     }
-                }
-
-                if (headerRowIndex === -1) {
-                    console.warn('Parser: Falha ao detectar cabeçalho de máquinas ou lista.');
                 }
 
                 if (headerRowIndex === -1) {
@@ -197,17 +197,25 @@ export const parseProducaoFileInChunks = async (
                         // MODO MATRIZ: Colunas de Máquinas
                         const machineIndices = Object.keys(machineMap).map(Number);
                         for (const headerCol of machineIndices) {
-                            // O Excel pode usar células mescladas onde o cabeçalho fica em N, mas o dado cai em N-1
-                            const dataCol = row[headerCol] !== null && row[headerCol] !== undefined && row[headerCol] !== "" ? headerCol : headerCol - 1;
-                            const cell = row[dataCol];
-
-                            if (cell === null || cell === "" || cell === undefined) continue;
-
+                            // Tenta buscar o valor na coluna do header ou nas vizinhas (merged cells)
                             let val = NaN;
-                            if (typeof cell === 'number') val = cell;
-                            else if (typeof cell === 'string') {
-                                const clean = cell.replace(/\./g, "").replace(",", ".");
-                                if (!isNaN(parseFloat(clean))) val = parseFloat(clean);
+                            const candidates = [row[headerCol], row[headerCol - 1], row[headerCol + 1]];
+                            
+                            for (const cell of candidates) {
+                                if (cell === null || cell === undefined || cell === "") continue;
+                                
+                                let currentVal = NaN;
+                                if (typeof cell === 'number') currentVal = cell;
+                                else if (typeof cell === 'string') {
+                                    const clean = String(cell).replace(/\./g, "").replace(",", ".");
+                                    const parsed = parseFloat(clean);
+                                    if (!isNaN(parsed)) currentVal = parsed;
+                                }
+
+                                if (!isNaN(currentVal) && currentVal > 0) {
+                                    val = currentVal;
+                                    break; // Achou um valor válido
+                                }
                             }
 
                             if (!isNaN(val) && val > 0) {
@@ -245,6 +253,6 @@ export const parseProducaoFileInChunks = async (
         };
 
         reader.onerror = reject;
-        reader.readAsArrayBuffer(file);
+        reader.readAsBinaryString(file);
     });
 };

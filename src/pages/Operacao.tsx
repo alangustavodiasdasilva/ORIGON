@@ -56,7 +56,6 @@ export default function Operacao() {
     const labId = currentLab?.id || user?.lab_id || (user?.acesso === 'admin_global' ? 'all' : undefined);
     const { addToast } = useToast();
     const [isUploading, setIsUploading] = useState(false);
-    const [importStats, setImportStats] = useState<{validos: number, rejeitados: number} | null>(null);
     const [isProcessingOCR, setIsProcessingOCR] = useState(false);
     const [ocrDebugText, setOcrDebugText] = useState<string>("");
     const [isLoading, setIsLoading] = useState(false);
@@ -71,10 +70,17 @@ export default function Operacao() {
     const turno3Total = chartData.filter((d: IOperacaoItem) => d.turno.toUpperCase().includes('3')).reduce((acc: number, curr: IOperacaoItem) => acc + curr.peso, 0);
     const turnoComercialTotal = chartData.filter((d: IOperacaoItem) => d.turno.toUpperCase().includes('COMERCIAL')).reduce((acc: number, curr: IOperacaoItem) => acc + curr.peso, 0);
 
+    const isUploadingRef = useRef(isUploading);
+    useEffect(() => {
+        isUploadingRef.current = isUploading;
+    }, [isUploading]);
+
     useEffect(() => {
         loadStats();
         const unsubscribe = producaoService.subscribe(() => {
-            loadStats(true);
+            if (!isUploadingRef.current) {
+                loadStats(true);
+            }
         });
         return () => {
             unsubscribe();
@@ -343,44 +349,23 @@ export default function Operacao() {
             event.target.value = "";
             return;
         }
-
         setIsUploading(true);
-        setImportStats(null);
-        
         try {
-            // Limpa o histórico ANTES da nova carga
-            await producaoService.deleteAll(targetLabId);
-            
-            // Usando Promise para garantir que o upload terminou antes de dar feedback
-            const result = await parseProducaoFileInChunks(file, targetLabId, async (batch: any[]) => {
-                await producaoService.uploadData(batch);
-            }, 2500);
-            
-            setImportStats({ validos: result.totalValidos, rejeitados: result.totalRejeitados });
+            await producaoService.deleteAll(targetLabId); // Limpa a tabela de produção para substituir
 
-            if (result.totalValidos === 0) {
-                addToast({ 
-                    title: "Aviso", 
-                    description: "Nenhum dado produtivo foi encontrado no arquivo. Verifique o formato.", 
-                    type: "warning" 
-                });
+            const result = await parseProducaoFileInChunks(file, targetLabId, async (batch: any[]) => { await producaoService.uploadData(batch); }, 2000);
+            
+            if (result.totalRejeitados > 0) {
+                addToast({ title: "Importação com Alertas", description: `${result.totalValidos} importados. ${result.totalRejeitados} ignorados. Ex: ${result.erros[0]}`, type: "warning" });
             } else {
-                addToast({ 
-                    title: "Importação Concluída", 
-                    description: `${result.totalValidos} registros processados para ${targetLabId === 'all' ? 'todos' : 'este laboratório'}.`, 
-                    type: "success" 
-                });
+                addToast({ title: "Upload concluído", description: `${result.totalValidos} registros importados com sucesso.`, type: "success" }); 
             }
-            
-            // Recarrega estatísticas apenas UMA vez após todo o processo
-            await loadStats(false);
-
+            loadStats();
         } catch (error) {
             console.error("Upload producao error:", error);
-            addToast({ title: "Erro fatal no arquivo", description: "Ocorreu um erro ao processar a planilha. Verifique se o arquivo não está corrompido.", type: "error" });
+            addToast({ title: "Erro no processamento", type: "error" });
         } finally {
-            setIsUploading(false);
-            event.target.value = "";
+            setIsUploading(false); event.target.value = "";
         }
     };
 
