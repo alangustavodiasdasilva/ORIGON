@@ -47,8 +47,8 @@ export const parseProducaoFileInChunks = async (
 
         reader.onload = async (e) => {
             try {
-                const data = e.target?.result;
-                const workbook = XLSX.read(data, { type: 'binary', dense: true });
+                const data = new Uint8Array(e.target?.result as ArrayBuffer);
+                const workbook = XLSX.read(data, { type: 'array', cellDates: true, dense: true });
                 const sheetName = workbook.SheetNames[0];
                 const worksheet = workbook.Sheets[sheetName];
 
@@ -239,6 +239,6 @@ export const parseProducaoFileInChunks = async (
         };
 
         reader.onerror = reject;
-        reader.readAsBinaryString(file);
+        reader.readAsArrayBuffer(file);
     });
 };
