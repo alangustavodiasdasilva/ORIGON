@@ -63,54 +63,64 @@ export const statusOSService = {
 
         if (isSupabaseEnabled()) {
             try {
-                // Reduzido para 250 para evitar erros de payload e timeout com grandes volumes
+                // Lotes de 250 registros, enviados em paralelo (até 4 simultâneos)
                 const BATCH_SIZE = 250;
+                const PARALLEL_LIMIT = 4;
                 let totalSuccess = 0;
 
-                console.log(`[StatusOSService] Upload robusto iniciado: ${data.length} registros (Batches de ${BATCH_SIZE})...`);
+                console.log(`[StatusOSService] Upload paralelo iniciado: ${data.length} registros (Batches de ${BATCH_SIZE}, paralelos: ${PARALLEL_LIMIT})...`);
 
+                const formatChunk = (items: Partial<StatusOS>[]) => items.map(item => ({
+                    id: item.id || crypto.randomUUID(),
+                    lab_id: labId,
+                    os_numero: item.os_numero || "",
+                    romaneio: item.romaneio || "",
+                    cliente: item.cliente || "",
+                    fazenda: item.fazenda || "",
+                    usina: item.usina || "",
+                    variedade: item.variedade || "",
+                    data_registro: item.data_registro || null,
+                    data_recepcao: item.data_recepcao || null,
+                    data_acondicionamento: item.data_acondicionamento || null,
+                    data_finalizacao: item.data_finalizacao || null,
+                    revisor: item.revisor || "",
+                    status: item.status || "",
+                    total_amostras: Number(item.total_amostras || 0),
+                    peso_mala: Number(item.peso_mala || 0),
+                    peso_medio: Number(item.peso_medio || 0),
+                    horas: Number(item.horas || 0),
+                    nota_fiscal: item.nota_fiscal || "",
+                    fatura: item.fatura || "",
+                }));
+
+                // Divide em grupos de PARALLEL_LIMIT lotes para enviar em paralelo
+                const allChunks: Partial<StatusOS>[][] = [];
                 for (let i = 0; i < data.length; i += BATCH_SIZE) {
-                    const chunk = data.slice(i, i + BATCH_SIZE).map(item => ({ 
-                        id: item.id || crypto.randomUUID(),
-                        lab_id: labId,
-                        os_numero: item.os_numero || "",
-                        romaneio: item.romaneio || "",
-                        cliente: item.cliente || "",
-                        fazenda: item.fazenda || "",
-                        usina: item.usina || "",
-                        variedade: item.variedade || "",
-                        data_registro: item.data_registro || null,
-                        data_recepcao: item.data_recepcao || null,
-                        data_acondicionamento: item.data_acondicionamento || null,
-                        data_finalizacao: item.data_finalizacao || null,
-                        revisor: item.revisor || "",
-                        status: item.status || "",
-                        total_amostras: Number(item.total_amostras || 0),
-                        peso_mala: Number(item.peso_mala || 0),
-                        peso_medio: Number(item.peso_medio || 0),
-                        horas: Number(item.horas || 0),
-                        nota_fiscal: item.nota_fiscal || "",
-                        fatura: item.fatura || "",
-                    }));
-                    
-                    const { error } = await supabase
-                        .from('status_os_hvi')
-                        .upsert(chunk, { 
-                            onConflict: 'os_numero,lab_id',
-                            ignoreDuplicates: false 
-                        });
-
-                    if (error) {
-                        console.error(`[StatusOSService] Falha grave no lote ${i / BATCH_SIZE + 1}:`, error);
-                        // Se falhou por causa do onConflict, o erro estaria aqui
-                        throw new Error(`Erro no banco: ${error.message} (Cód: ${error.code})`);
-                    }
-                    
-                    totalSuccess += chunk.length;
-                    if (totalSuccess % 5000 === 0) {
-                       console.log(`[StatusOSService] ✅ ${totalSuccess} registros enviados...`);
-                    }
+                    allChunks.push(data.slice(i, i + BATCH_SIZE));
                 }
+
+                for (let g = 0; g < allChunks.length; g += PARALLEL_LIMIT) {
+                    const group = allChunks.slice(g, g + PARALLEL_LIMIT);
+                    const results = await Promise.all(
+                        group.map(chunk =>
+                            supabase.from('status_os_hvi').upsert(formatChunk(chunk), {
+                                onConflict: 'os_numero,lab_id',
+                                ignoreDuplicates: false
+                            })
+                        )
+                    );
+
+                    for (const { error } of results) {
+                        if (error) {
+                            console.error(`[StatusOSService] Falha em lote paralelo:`, error);
+                            throw new Error(`Erro no banco: ${error.message} (Cód: ${error.code})`);
+                        }
+                    }
+
+                    totalSuccess += group.reduce((acc, c) => acc + c.length, 0);
+                    console.log(`[StatusOSService] ✅ ${totalSuccess}/${data.length} registros enviados...`);
+                }
+
                 console.log(`[StatusOSService] Upload concluído com sucesso: ${totalSuccess} registros.`);
                 return true;
             } catch (err: any) {
@@ -135,18 +145,28 @@ export const statusOSService = {
             try {
                 let allData: StatusOS[] = [];
                 let from = 0;
-                const limit = 1000; // Voltando para 1000 para sincronizar com o limite padrão do Supabase
+                const limit = 1000;
                 let hasMore = true;
 
+                // Filtro de data: busca apenas últimos 365 dias para reduzir volume de dados
+                const cutoffDate = new Date();
+                cutoffDate.setFullYear(cutoffDate.getFullYear() - 1);
+                const cutoffISO = cutoffDate.toISOString().split('T')[0];
+
                 while (hasMore) {
-                    let query = supabase.from('status_os_hvi').select('*');
+                    let query = supabase
+                        .from('status_os_hvi')
+                        // Seleciona apenas colunas usadas nos componentes (evita trafegar dados desnecessários)
+                        .select('id,os_numero,romaneio,cliente,fazenda,usina,variedade,data_registro,data_recepcao,data_acondicionamento,data_finalizacao,revisor,status,total_amostras,peso_mala,peso_medio,horas,nota_fiscal,fatura,lab_id,created_at')
+                        .gte('data_recepcao', cutoffISO); // Filtro de data — só 1 ano
+
                     if (labId && labId !== 'all') {
                         query = query.eq('lab_id', labId);
                     }
 
                     const { data, error } = await query
                         .order('data_recepcao', { ascending: false })
-                        .order('os_numero', { ascending: false }) 
+                        .order('os_numero', { ascending: false })
                         .range(from, from + limit - 1);
 
                     if (error) {
@@ -156,17 +176,13 @@ export const statusOSService = {
 
                     if (data && data.length > 0) {
                         allData = [...allData, ...data];
-                        
-                        // SE veio exatamente o que pedimos (ou o limite do server), pode ter mais.
-                        // SE veio menos que o limite, com certeza acabou.
                         if (data.length < limit) {
                             hasMore = false;
                         } else {
                             from += limit;
-                            // Prevenção de loop infinito em caso de erro lógico ou dados corrompidos
-                            if (from > 5000000) { 
-                                console.warn("Limite de segurança de 5 milhões atingido.");
-                                hasMore = false; 
+                            if (from > 500000) {
+                                console.warn("Limite de segurança de 500k atingido.");
+                                hasMore = false;
                             }
                         }
                     } else {
@@ -174,8 +190,8 @@ export const statusOSService = {
                     }
                 }
 
-                // Limpa o cache local pois o Supabase é a verdadeira fonte oficial
-                localStorage.removeItem(STORAGE_KEY);
+                // Atualiza cache local APÓS receber dados novos (não antes)
+                saveStoredStatusOS(allData);
 
                 return allData;
             } catch (err) {

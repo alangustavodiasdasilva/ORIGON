@@ -42,10 +42,10 @@ interface ColorAverage {
     area?: number;
     count?: number;
     mat?: number;
-    leaf?: number;
     sfi?: number;
     csp?: number;
     sci?: number;
+    rawRows?: any[];
 }
 
 export class HVIFileGeneratorService {
@@ -106,6 +106,7 @@ export class HVIFileGeneratorService {
                 sfi:   Number(tpl.sfi)   || 0,
                 csp:   Number(tpl.csp)   || 0,
                 sci:   Number(tpl.sci)   || 0,
+                rawRows: Array.isArray(tpl.rawRows) ? tpl.rawRows : undefined,
             };
         } catch {
             return null;
@@ -168,6 +169,7 @@ export class HVIFileGeneratorService {
             sfi:   base.sfi,
             csp:   base.csp,
             sci:   base.sci,
+            rawRows: base.rawRows,
         };
     }
 
@@ -262,12 +264,19 @@ export class HVIFileGeneratorService {
                 readings[i] = Math.max(min, Math.min(max, readings[i]));
             }
 
-            // Verificar repetição (máx 2 vezes o mesmo valor)
+            // Verificar repetição (máx 2 vezes o mesmo valor, e max 1 par repetido)
             const occ: Record<number, number> = {};
             let maxRep = 0;
-            readings.forEach(v => { occ[v] = (occ[v] || 0) + 1; if (occ[v] > maxRep) maxRep = occ[v]; });
+            let pairsCount = 0;
+            readings.forEach(v => { 
+                occ[v] = (occ[v] || 0) + 1; 
+                if (occ[v] > maxRep) maxRep = occ[v]; 
+                if (occ[v] === 2) pairsCount++;
+            });
 
-            if (maxRep <= 2) return readings;
+            if (maxRep <= 1 || (maxRep === 2 && pairsCount <= 1)) {
+                return readings;
+            }
 
             if (maxRep < bestRepeat) {
                 bestRepeat = maxRep;
@@ -685,15 +694,25 @@ export class HVIFileGeneratorService {
             const csp   = averages.csp   ?? 0;
             const leaf  = averages.leaf  ?? 2;
 
-            // Gerar arrays com variação mínima em torno do valor exato do template
-            const elgReadings  = this.generateBalancedReadings(elg,  count, 0.05, 1);
-            const areaReadings = this.generateBalancedReadings(area, count, 0.01, 2);
-            const cntReadings  = this.generateBalancedReadings(cnt,  count, 1,    0);
-            const matReadings  = this.generateBalancedReadings(mat,  count, 0.005, 2);
-            const sfiReadings  = this.generateBalancedReadings(sfi,  count, 0.1,  1);
-            const sciReadings  = this.generateBalancedReadings(sci,  count, 0.5,  1);
+            // Parâmetros secundários: se a imagem/OCR extraiu 6 linhas exatas, usar EXATAMENTE elas, para não congelar o TXT.
+            const getRaw = (idx: number, prop: string, fallback: any) => {
+                if (averages.rawRows && averages.rawRows[idx] && averages.rawRows[idx][prop] !== undefined) {
+                    const val = averages.rawRows[idx][prop];
+                    if (typeof val === 'number' || typeof val === 'string') return val;
+                }
+                return fallback;
+            };
+
+            const elgReadings  = Array(count).fill(0).map((_, i) => getRaw(i, 'elg', elg));
+            const areaReadings = Array(count).fill(0).map((_, i) => getRaw(i, 'area', area));
+            const cntReadings  = Array(count).fill(0).map((_, i) => getRaw(i, 'count', cnt));
+            const matReadings  = Array(count).fill(0).map((_, i) => getRaw(i, 'mat', mat));
+            const sfiReadings  = Array(count).fill(0).map((_, i) => getRaw(i, 'sfi', sfi));
+            const sciReadings  = Array(count).fill(0).map((_, i) => getRaw(i, 'sci', sci));
+            const leafArr      = Array(count).fill(0).map((_, i) => getRaw(i, 'leaf', leaf));
+            const cgArr        = Array(count).fill(0).map((_, i) => getRaw(i, 'cg', averages.cg));
+
             const cspReadings  = Array(count).fill(csp); // CSP: valor fixo do template
-            const leafArr      = Array(count).fill(leaf);
             const mlReadings   = lenReadings.map(v => parseFloat((v * 0.75).toFixed(2)));
 
             console.log(`[HVI] Amostra ${sample.amostra_id} cor=${sample.cor}`);
@@ -722,6 +741,7 @@ export class HVIFileGeneratorService {
                         sci:   sciReadings[i],
                         csp:   cspReadings[i],
                         leaf:  leafArr[i],
+                        cg:    cgArr[i],
                     };
                     usterLines.push(this.generateUsterOneLine(sample, rowAverages));
                 }

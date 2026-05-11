@@ -45,7 +45,6 @@ export default function MovingAverageChart({ samples, windowSize = 3, onSampleHo
     const [hoveredSample, setHoveredSample] = useState<ChartSample | null>(null);
     const [chartType, setChartType] = useState<typeof CHART_TYPES[number]['key']>('line');
 
-
     // Ordenar amostras por ID para ordem cronológica
     const sortedSamples = useMemo(() =>
         [...samples].sort((a, b) => {

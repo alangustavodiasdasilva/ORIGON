@@ -172,25 +172,23 @@ export const AnalistaService = {
 
     async updateLastActive(id: string, loteId?: string | null): Promise<void> {
         try {
-            const updateData: any = { last_active: new Date().toISOString() };
+            const now = new Date().toISOString();
 
-            // Treat empty string as null for UUID columns
-            if (loteId !== undefined) {
-                updateData.current_lote_id = loteId === "" ? null : loteId;
+            // Atualiza no Supabase SOMENTE current_lote_id (last_active não existe na tabela)
+            if (isSupabaseEnabled() && loteId !== undefined) {
+                const supabaseUpdate: any = {
+                    current_lote_id: loteId === "" ? null : loteId
+                };
+                const { error } = await supabase.from('analistas').update(supabaseUpdate).eq('id', id);
+                if (error) console.warn("[AnalistaService] Ping RLS:", error.message);
             }
 
-            if (isSupabaseEnabled()) {
-                const { error } = await supabase.from('analistas').update(updateData).eq('id', id);
-                if (error) console.warn("[AnalistaService] Nuvem recusou Ping RLS:", error.message);
-                // Nao damos return. O Ping deve SEMPRE ressoar no Storage Local pro Admin pegar e sincronizar em rede hibrida
-            }
-
-            // Fallback obrigatório / Local Network Cache Sync
+            // Mantém last_active apenas no localStorage (presença local)
             const analistas = getStoredAnalistas();
             const index = analistas.findIndex(a => a.id === id);
             if (index !== -1) {
-                analistas[index].last_active = updateData.last_active;
-                if (loteId !== undefined) analistas[index].current_lote_id = updateData.current_lote_id;
+                analistas[index].last_active = now;
+                if (loteId !== undefined) analistas[index].current_lote_id = loteId === "" ? null : loteId;
                 saveStoredAnalistas(analistas);
             }
         } catch (error) {

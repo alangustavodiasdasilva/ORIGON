@@ -28,6 +28,88 @@ interface Group {
     patternFeatures?: string[];
 }
 
+function ClusterScatterPlot({ samples, groups, xAxis, yAxis }: { samples: Sample[], groups: Group[], xAxis: keyof Sample, yAxis: keyof Sample }) {
+    // Valid and map points
+    const points = samples.map(s => {
+        const xRaw = s[xAxis];
+        const yRaw = s[yAxis];
+        const x = typeof xRaw === 'number' ? xRaw : parseFloat(String(xRaw || 0).replace(',', '.'));
+        const y = typeof yRaw === 'number' ? yRaw : parseFloat(String(yRaw || 0).replace(',', '.'));
+        
+        // Find group color
+        const group = groups.find(g => g.sampleIds.includes(s.id));
+        const color = group?.color || '#9ca3af';
+
+        return { id: s.id, x, y, color, groupLabel: group?.label || 'S/ Grupo' };
+    }).filter(p => !isNaN(p.x) && !isNaN(p.y) && p.x > 0 && p.y > 0);
+
+    if (points.length === 0) return null;
+
+    const minX = Math.min(...points.map(p => p.x));
+    const maxX = Math.max(...points.map(p => p.x));
+    const minY = Math.min(...points.map(p => p.y));
+    const maxY = Math.max(...points.map(p => p.y));
+
+    const marginX = (maxX - minX) * 0.1 || 1;
+    const marginY = (maxY - minY) * 0.1 || 1;
+
+    const drawMinX = Math.max(0, minX - marginX);
+    const drawMaxX = maxX + marginX;
+    const drawMinY = Math.max(0, minY - marginY);
+    const drawMaxY = maxY + marginY;
+
+    const rangeX = drawMaxX - drawMinX;
+    const rangeY = drawMaxY - drawMinY;
+
+    const padding = { left: 50, right: 20, top: 20, bottom: 40 };
+
+    return (
+        <svg viewBox={`0 0 800 400`} className="w-full h-full overflow-visible">
+            {/* Eixos */}
+            <line x1={padding.left} y1={400 - padding.bottom} x2={800 - padding.right} y2={400 - padding.bottom} stroke="#e5e5e5" strokeWidth="2" />
+            <line x1={padding.left} y1={padding.top} x2={padding.left} y2={400 - padding.bottom} stroke="#e5e5e5" strokeWidth="2" />
+
+            {/* Grid Y */}
+            {[0.25, 0.5, 0.75, 1].map(pct => {
+                const yVal = drawMinY + rangeY * pct;
+                const yPos = 400 - padding.bottom - (pct * (400 - padding.top - padding.bottom));
+                return (
+                    <g key={`y-${pct}`}>
+                        <line x1={padding.left} y1={yPos} x2={800 - padding.right} y2={yPos} stroke="#f0f0f0" strokeWidth="1" strokeDasharray="4 4" />
+                        <text x={padding.left - 8} y={yPos + 4} textAnchor="end" className="text-[10px] font-mono fill-neutral-400">{yVal.toFixed(2)}</text>
+                    </g>
+                );
+            })}
+
+            {/* Grid X */}
+            {[0.25, 0.5, 0.75, 1].map(pct => {
+                const xVal = drawMinX + rangeX * pct;
+                const xPos = padding.left + (pct * (800 - padding.left - padding.right));
+                return (
+                    <g key={`x-${pct}`}>
+                        <line x1={xPos} y1={padding.top} x2={xPos} y2={400 - padding.bottom} stroke="#f0f0f0" strokeWidth="1" strokeDasharray="4 4" />
+                        <text x={xPos} y={400 - padding.bottom + 16} textAnchor="middle" className="text-[10px] font-mono fill-neutral-400">{xVal.toFixed(2)}</text>
+                    </g>
+                );
+            })}
+
+            <text x={padding.left - 30} y={padding.top + (400 - padding.top - padding.bottom) / 2} transform={`rotate(-90 ${padding.left - 30} ${padding.top + (400 - padding.top - padding.bottom) / 2})`} textAnchor="middle" className="text-[10px] font-bold uppercase fill-black">{String(yAxis)}</text>
+            <text x={padding.left + (800 - padding.left - padding.right) / 2} y={400 - 10} textAnchor="middle" className="text-[10px] font-bold uppercase fill-black">{String(xAxis)}</text>
+
+            {/* Pontos */}
+            {points.map((p, i) => {
+                const px = padding.left + ((p.x - drawMinX) / rangeX) * (800 - padding.left - padding.right);
+                const py = 400 - padding.bottom - ((p.y - drawMinY) / rangeY) * (400 - padding.top - padding.bottom);
+                return (
+                    <circle key={p.id} cx={px} cy={py} r="5" fill={p.color} opacity="0.8" stroke="white" strokeWidth="1" className="hover:r-[8px] transition-all cursor-pointer">
+                        <title>{`Amostra ID: ${p.id}\nGrupo: ${p.groupLabel}\n${String(xAxis).toUpperCase()}: ${p.x}\n${String(yAxis).toUpperCase()}: ${p.y}`}</title>
+                    </circle>
+                );
+            })}
+        </svg>
+    );
+}
+
 export default function PatternAnalysisModal({ isOpen, onClose, samples, onApplyColors }: PatternAnalysisModalProps) {
     const [groups, setGroups] = useState<Group[]>([]);
     const [scanned, setScanned] = useState(false);

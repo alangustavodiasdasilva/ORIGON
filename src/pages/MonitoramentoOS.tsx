@@ -7,7 +7,7 @@ import { producaoService } from "@/services/producao.service";
 import type { ProducaoData } from "@/services/producao.service";
 import { LabService, type Lab } from "@/entities/Lab";
 import { Button } from "@/components/ui/button";
-import { Upload, RefreshCw, Trash2, Loader2, Users, LayoutGrid, ClipboardList, Database, Activity } from "lucide-react";
+import { Upload, RefreshCw, Trash2, Loader2, Users, LayoutGrid, ClipboardList, Database, Activity, BarChart2 as BarChart2Icon, CalendarRange, TrendingUp, TrendingDown, Minus, Award } from "lucide-react";
 import { format, differenceInHours } from "date-fns";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
@@ -21,6 +21,8 @@ import { ReviewersTable } from "@/components/monitoramento/ReviewersTable";
 import { IntelligenceAnalytics } from "@/components/monitoramento/IntelligenceAnalytics";
 import { ClientsTabSection } from "@/components/monitoramento/ClientsTabSection";
 import { DailyBalanceTabSection } from "@/components/monitoramento/DailyBalanceTabSection";
+import { SlaTabSection } from "@/components/monitoramento/SlaTabSection";
+import { ProductivityTabSection } from "@/components/monitoramento/ProductivityTabSection";
 import { type IProducaoVinculo, type OSItem } from "@/components/monitoramento/types";
 
 export default function MonitoramentoOS() {
@@ -30,11 +32,12 @@ export default function MonitoramentoOS() {
 
     const [isLoading, setIsLoading] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
+    const isUploadingRef = useRef(false);
     const [labs, setLabs] = useState<Lab[]>([]);
     const [osList, setOsList] = useState<OSItem[]>([]);
     const [productionData, setProductionData] = useState<IProducaoVinculo[]>([]);
     const [stats, setStats] = useState({ total: 0, faturados: 0, emAberto: 0, totalAmostras: 0, saldoAmostras: 0 });
-    const [activeTab, setActiveTab] = useState<'geral' | 'revisores' | 'clientes' | 'saldo_diario'>('geral');
+    const [activeTab, setActiveTab] = useState<'geral' | 'revisores' | 'clientes' | 'saldo_diario' | 'sla' | 'produtividade'>('geral');
     const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
     const matrixTableRef = useRef<HTMLDivElement>(null);
     const analiticoSectionRef = useRef<HTMLDivElement>(null);
@@ -88,6 +91,11 @@ export default function MonitoramentoOS() {
         return osList;
     }, [osList]);
 
+    // Sincroniza a ref de upload para o realtime poder verificar sem closure stale
+    useEffect(() => {
+        isUploadingRef.current = isUploading;
+    }, [isUploading]);
+
     useEffect(() => {
         if (user?.acesso === 'admin_global') {
             LabService.list().then(setLabs).catch(console.error);
@@ -101,21 +109,26 @@ export default function MonitoramentoOS() {
         let debounceTimer: ReturnType<typeof setTimeout>;
 
         const handleRealtimeChange = (payload: any) => {
+            // Ignora eventos disparados durante um upload ativo (evita loadData() duplo)
+            if (isUploadingRef.current) {
+                console.log("REALTIME: Ignorado durante upload ativo.");
+                return;
+            }
             console.log("REALTIME ACTIVITY DETECTED:", payload);
             clearTimeout(debounceTimer);
             debounceTimer = setTimeout(() => {
                 loadData();
-            }, 5000);
+            }, 3000);
         };
+
+        const filterStr = labId !== 'all' ? `lab_id=eq.${labId}` : undefined;
+
+        const channelConfig: any = { event: '*', schema: 'public', table: 'status_os_hvi' };
+        if (filterStr) channelConfig.filter = filterStr;
 
         const subscription = supabase
             .channel('status_os_realtime_' + labId)
-            .on(
-                'postgres_changes',
-                // Removendo o filtro de lab_id temporariamente para garantir que o websocket capte tudo na tabela
-                { event: '*', schema: 'public', table: 'status_os_hvi' },
-                handleRealtimeChange
-            )
+            .on('postgres_changes', channelConfig, handleRealtimeChange)
             .subscribe((status) => {
                 console.log("Supabase Realtime Status:", status);
             });
@@ -129,7 +142,13 @@ export default function MonitoramentoOS() {
     const revisorStats = React.useMemo(() => {
         const s: Record<string, number> = {};
         filteredOS.forEach((os: OSItem) => {
-            const rev = os.revisor || 'Não Informado';
+            // ✅ Só conta se a OS estiver FINALIZADA (coluna "Finalizado" preenchida na planilha)
+            // E tiver um REVISOR informado (coluna "Revisor" da planilha)
+            const finStr = String(os.data_finalizacao || '').trim();
+            const isFinalizada = finStr !== '' && finStr !== 'null' && finStr !== 'undefined' && finStr !== '0';
+            if (!isFinalizada) return; // ignora OS pendentes
+            const rev = os.revisor?.trim();
+            if (!rev) return; // ignora OS sem revisor
             s[rev] = (s[rev] || 0) + (os.total_amostras || 0);
         });
         return Object.entries(s)
@@ -140,6 +159,7 @@ export default function MonitoramentoOS() {
                 return !norm.includes('media') && !norm.includes('nao informado');
             });
     }, [filteredOS]);
+
 
     const clienteStats = React.useMemo(() => {
         const s: Record<string, { totalAmostras: number; totalHoras: number; count: number }> = {};
@@ -239,7 +259,7 @@ export default function MonitoramentoOS() {
 
     const clienteDailyStats = React.useMemo(() => {
         const grouped: Record<string, any> = {};
-        const stableClients = clienteStats.slice(0, 30).map((c: any) => c.name);
+        const stableClients = clienteStats.map((c: any) => c.name);
 
         osList.forEach((os: OSItem) => {
             if (!os.cliente) return;
@@ -846,6 +866,7 @@ export default function MonitoramentoOS() {
             return;
         }
         setIsUploading(true);
+        isUploadingRef.current = true;
         try {
             await statusOSService.clearData(labId); // Limpa a tabela para substituir pela nova
 
@@ -883,6 +904,7 @@ export default function MonitoramentoOS() {
             console.error("Erro no upload:", error);
             addToast({ title: "Erro de Processamento", description: error.message || "Erro desconhecido", type: "error" });
         } finally {
+            isUploadingRef.current = false;
             setIsUploading(false);
             event.target.value = "";
         }
@@ -1031,14 +1053,15 @@ export default function MonitoramentoOS() {
                     { id: 'geral', label: 'Dashboard', icon: Activity },
                     { id: 'revisores', label: 'Revisão', icon: Users },
                     { id: 'clientes', label: 'Recepção', icon: LayoutGrid },
-                    { id: 'saldo_diario', label: 'Saldo de Análise', icon: ClipboardList }
+                    { id: 'saldo_diario', label: 'Saldo de Análise', icon: ClipboardList },
+                    { id: 'sla', label: 'SLA / Status', icon: BarChart2Icon },
+                    { id: 'produtividade', label: 'Produtividade', icon: CalendarRange },
                 ].map((tab) => (
                     <button
                         key={tab.id}
                         onClick={() => setActiveTab(tab.id as any)}
                         className={cn(
                             "flex items-center gap-3 px-6 py-3 text-xs font-black uppercase tracking-widest transition-all rounded-2xl border-2 whitespace-nowrap",
-                            labId === 'all' && tab.id !== 'geral' ? "hidden" : "",
                             activeTab === tab.id
                                 ? "bg-black text-white border-black shadow-[0_10px_20px_rgba(0,0,0,0.1)]"
                                 : "bg-white text-neutral-400 border-neutral-100 hover:border-neutral-200 hover:text-neutral-600"
@@ -1052,7 +1075,7 @@ export default function MonitoramentoOS() {
                 ))}
             </div>
 
-            {labId === 'all' && (
+            {labId === 'all' && activeTab === 'geral' && (
                 <div className="space-y-6 animate-fade-in mb-6">
 
                     {/* Filtro de laboratórios compartilhado */}
@@ -1106,8 +1129,7 @@ export default function MonitoramentoOS() {
 
             {activeTab === 'geral' && labId !== 'all' && (
                 <div key="tab-geral-stats" className="animate-in fade-in duration-300">
-                    <GeneralStatsGrid stats={stats} />
-
+                    <GeneralStatsGrid stats={stats} osList={osList} />
                 </div>
             )}
 
@@ -1132,29 +1154,13 @@ export default function MonitoramentoOS() {
                 </div>
             )
             }
-            {activeTab === 'geral' && analysisMetrics && (
-                <div className="w-full max-w-full min-w-0 flex-1">
-                    <IntelligenceAnalytics
-                        innerRef={analiticoSectionRef}
-                        analysisMetrics={analysisMetrics}
-                        analysisPeriod={analysisPeriod}
-                        setAnalysisPeriod={(p: any) => setAnalysisPeriod(p)}
-                        handleExportAnaliticoPDF={handleExportAnaliticoPDF}
-                        isGeneratingPDF={isGeneratingPDF}
-                        labs={labs}
-                        globalLabId={labId}
-                        analyticsLabId={analyticsLabId}
-                        setAnalyticsLabId={setAnalyticsLabId}
-                    />
-                </div>
-            )}
-
             {activeTab === 'clientes' && (
                 <div className="w-full max-w-full min-w-0 flex-1">
                     <ClientsTabSection
                         clienteDailyStats={clienteDailyStats}
                         clienteStats={clienteStats}
                         selectedChartClients={selectedChartClients}
+                        setSelectedChartClients={setSelectedChartClients}
                         toggleClientSelection={toggleClientSelection}
                         carteiraClientesPivotStats={carteiraClientesPivotStats}
                         expandedClients={expandedClients}
@@ -1162,6 +1168,7 @@ export default function MonitoramentoOS() {
                         labId={labId}
                         rankingType={rankingType}
                         setRankingType={setRankingType}
+                        osList={osList}
                     />
                 </div>
             )}
@@ -1178,6 +1185,15 @@ export default function MonitoramentoOS() {
                     setPinLevel={setPinLevel}
                 />
             )}
+
+            {activeTab === 'sla' && (
+                <SlaTabSection osList={osList} />
+            )}
+
+            {activeTab === 'produtividade' && (
+                <ProductivityTabSection osList={osList} />
+            )}
+
 
             {isClearConfirmOpen && (
                 <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">

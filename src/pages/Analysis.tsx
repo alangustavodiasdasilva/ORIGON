@@ -2,12 +2,10 @@ import { useState, useEffect, useMemo } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import {
     ArrowLeft,
-    Plus,
     Download,
     Filter,
     Wand2,
     Activity,
-    Palette,
     ImagePlus
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -16,18 +14,14 @@ import type { Lote } from "@/entities/Lote";
 import { SampleService } from "@/entities/Sample";
 import { LoteService } from "@/entities/Lote";
 import AnalysisTable from "@/components/analysis/AnalysisTable";
-
 import MovingAverageChart from "@/components/analysis/MovingAverageChart";
+import ScenarioExplorer from "@/components/analysis/ScenarioExplorer";
 import PatternAnalysisModal from "@/components/analysis/PatternAnalysisModal";
 import ColorTemplatesModal from "@/components/analysis/ColorTemplatesModal";
 import { useToast } from "@/contexts/ToastContext";
 import { useAuth } from "@/contexts/AuthContext";
 import HVIStatisticalReportModal from "@/components/analysis/HVIStatisticalReportModal";
 import { cn } from "@/lib/utils";
-
-interface ColorSummary {
-    samples: number;
-}
 
 export default function Analysis() {
     const [searchParams] = useSearchParams();
@@ -203,6 +197,8 @@ export default function Analysis() {
 
     const [isPatternModalOpen, setIsPatternModalOpen] = useState(false);
     const [isStatsModalOpen, setIsStatsModalOpen] = useState(false);
+    
+    const [activeTab, setActiveTab] = useState<'geral' | 'fitagem'>('geral');
 
     const handleBulkColorUpdate = async (updates: Record<string, string>) => {
         setIsProcessing(true);
@@ -230,66 +226,88 @@ export default function Analysis() {
         : samples;
 
     return (
-        <div className="space-y-12 animate-fade-in relative pb-24 text-black">
+        <div className="space-y-8 animate-fade-in relative pb-24 text-black">
             {/* Header */}
-            <div className="flex flex-col md:flex-row md:items-end justify-between gap-8 border-b border-black pb-8">
-                <div className="space-y-4">
-                    <div className="flex items-center gap-6">
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => navigate(-1)}
-                            className="rounded-none hover:bg-neutral-100 text-black h-10 w-10 border border-neutral-200"
-                        >
-                            <ArrowLeft className="h-4 w-4" />
-                        </Button>
-                        <div className="space-y-1">
-                            <div className="flex items-center gap-3">
-                                <h1 className="text-3xl font-serif text-black leading-none uppercase text-neutral-400">
-                                    MEDIA GERAL <span className="text-[10px] text-slate-400 align-top normal-case font-mono">v1.1</span>
-                                </h1>
-                                <span className={`text-[9px] font-bold uppercase tracking-widest border border-black px-2 py-0.5 ${lote.status === 'aberto' ? 'bg-black text-white' : 'bg-transparent text-black'}`}>
-                                    {lote.status === 'aberto' ? 'Active' : 'Archived'}
-                                </span>
+            <div className="flex flex-col border-b border-black pb-0">
+                <div className="flex flex-col md:flex-row md:items-end justify-between gap-8 pb-8">
+                    <div className="space-y-4">
+                        <div className="flex items-center gap-6">
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => navigate(-1)}
+                                className="rounded-none hover:bg-neutral-100 text-black h-10 w-10 border border-neutral-200"
+                            >
+                                <ArrowLeft className="h-4 w-4" />
+                            </Button>
+                            <div className="space-y-1">
+                                <div className="flex items-center gap-3">
+                                    <h1 className="text-3xl font-serif text-black leading-none uppercase text-neutral-400">
+                                        MEDIA GERAL <span className="text-[10px] text-slate-400 align-top normal-case font-mono">v1.1</span>
+                                    </h1>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                    <span className="text-[11px] font-bold uppercase tracking-widest text-black bg-neutral-100 px-3 py-1">LOTE #{lote.nome}</span>
+                                    <span className="text-[10px] uppercase font-bold text-neutral-400 tracking-widest">{samples.length} Fardos processados</span>
+                                </div>
                             </div>
-                            <p className="font-mono text-neutral-500 text-xs uppercase tracking-widest">
-                                BATCH: {lote.nome}
-                            </p>
                         </div>
+                    </div>
+
+                    {/* Ações Rápidas */}
+                    <div className="flex flex-wrap gap-3">
+                        <Button
+                            variant="outline"
+                            onClick={() => setIsPatternModalOpen(true)}
+                            className="h-10 rounded-none border-neutral-200 hover:border-black hover:bg-neutral-50 flex items-center gap-2"
+                        >
+                            <Wand2 className="h-4 w-4 text-purple-600" />
+                            <span className="text-[10px] font-bold uppercase tracking-widest text-neutral-600">Auto-Classify</span>
+                        </Button>
+                        <Button
+                            variant="outline"
+                            onClick={() => setIsStatsModalOpen(true)}
+                            className="h-10 rounded-none border-neutral-200 hover:border-black hover:bg-neutral-50 flex items-center gap-2"
+                        >
+                            <Activity className="h-4 w-4 text-emerald-600" />
+                            <span className="text-[10px] font-bold uppercase tracking-widest text-neutral-600">Relatório Estatístico</span>
+                        </Button>
+                        <Button
+                            variant="outline"
+                            onClick={handleExportCSV}
+                            className="h-10 rounded-none border-neutral-200 hover:border-black hover:bg-neutral-50 flex items-center gap-2"
+                        >
+                            <Download className="h-4 w-4 text-blue-600" />
+                            <span className="text-[10px] font-bold uppercase tracking-widest text-neutral-600">Exportar (Excel)</span>
+                        </Button>
                     </div>
                 </div>
 
-                <div className="flex items-center gap-4">
-                    <Button
-                        onClick={() => setIsPatternModalOpen(true)}
-                        className="rounded-none h-12 px-6 bg-white border border-black text-black hover:bg-black hover:text-white font-bold text-[10px] uppercase tracking-widest transition-colors flex items-center gap-2"
+                {/* Abas */}
+                <div className="flex mt-2">
+                    <button 
+                        onClick={() => setActiveTab('geral')} 
+                        className={cn(
+                            "px-8 py-4 font-bold uppercase tracking-widest text-[11px] border-b-[3px] transition-all", 
+                            activeTab === 'geral' ? "border-black text-black" : "border-transparent text-neutral-400 hover:text-black hover:bg-neutral-50"
+                        )}
                     >
-                        <Wand2 className="h-4 w-4" />
-                        Auto-Classify
-                    </Button>
-                    <Button
-                        onClick={() => setIsStatsModalOpen(true)}
-                        className="rounded-none h-12 px-6 bg-white border border-black text-black hover:bg-black hover:text-white font-bold text-[10px] uppercase tracking-widest transition-colors flex items-center gap-2"
+                        Visão Geral
+                    </button>
+                    <button 
+                        onClick={() => setActiveTab('fitagem')} 
+                        className={cn(
+                            "px-8 py-4 font-bold uppercase tracking-widest text-[11px] border-b-[3px] transition-all", 
+                            activeTab === 'fitagem' ? "border-black text-black" : "border-transparent text-neutral-400 hover:text-black hover:bg-neutral-50"
+                        )}
                     >
-                        <Activity className="h-4 w-4" />
-                        AI Patterns
-                    </Button>
-                    <Button
-                        onClick={handleExportCSV}
-                        className="rounded-none h-12 px-6 bg-white border border-black text-black hover:bg-black hover:text-white font-bold text-[10px] uppercase tracking-widest transition-colors"
-                    >
-                        <Download className="mr-2 h-3 w-3" /> Export CSV
-                    </Button>
-                    <Button
-                        onClick={() => navigate(`/registro?loteId=${loteId}`)}
-                        className="rounded-none h-12 px-6 bg-black text-white hover:bg-neutral-800 font-bold text-[10px] uppercase tracking-widest transition-colors"
-                    >
-                        <Plus className="mr-2 h-3 w-3" /> Add Sample
-                    </Button>
+                        Fitagem & Cenários
+                    </button>
                 </div>
             </div>
 
-            <div className="space-y-12">
+            {activeTab === 'geral' && (
+                <div className="space-y-12 pt-4">
                 {/* Metrics Header */}
                 <div className="flex flex-col gap-6">
                     <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 border border-neutral-200 p-6 bg-neutral-50">
@@ -384,11 +402,10 @@ export default function Analysis() {
                         />
                     </div>
                 </div>
-            </div>
 
-            {/* Individual Performance & Generation Metrics - Moved Bottom */}
-            <div className="space-y-12 pt-12 border-t border-neutral-200">
-                <div className="space-y-6">
+                {/* Individual Performance & Generation Metrics - Moved Bottom */}
+                <div className="space-y-12 pt-12 border-t border-neutral-200">
+                    <div className="space-y-6">
                     <h2 className="text-2xl font-serif font-bold tracking-tight text-neutral-900 px-1 uppercase">MEDIA PRIMARIA</h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                         {(Object.entries(metricsByColor) as [string, any][])
@@ -441,12 +458,23 @@ export default function Analysis() {
                     </div>
                 </div>
 
-                <div className="pt-12">
+                <div className="pt-12 space-y-12">
                     <MovingAverageChart
                         samples={samples}
                     />
                 </div>
             </div>
+            </div>
+            )}
+
+            {activeTab === 'fitagem' && (
+                <div className="space-y-12 pt-4 animate-fade-in">
+                    <ScenarioExplorer 
+                        samples={samples}
+                        onColorChange={handleColorChange}
+                    />
+                </div>
+            )}
 
             <PatternAnalysisModal
                 isOpen={isPatternModalOpen}

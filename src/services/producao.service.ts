@@ -44,34 +44,41 @@ export const producaoService = {
         if (isSupabaseEnabled()) {
             let fullSuccess = true;
             try {
-                // Diminuido para 250 para evitar estourar o limite de payload do PostgREST/Vercel
                 const BATCH_SIZE = 250;
+                const PARALLEL_LIMIT = 4;
                 let inserted = 0;
 
+                const allChunks: ProducaoData[][] = [];
                 for (let i = 0; i < data.length; i += BATCH_SIZE) {
-                    const chunk = data.slice(i, i + BATCH_SIZE).map(d => ({
+                    allChunks.push(data.slice(i, i + BATCH_SIZE).map(d => ({
                         ...d,
                         created_at: new Date().toISOString()
-                    }));
-
-                    const { error } = await supabase
-                        .from('operacao_producao')
-                        .upsert(chunk, {
-                            onConflict: 'lab_id,identificador_unico',
-                            ignoreDuplicates: false
-                        });
-
-                    if (error) {
-                        console.error(`[ProducaoService] Falha num lote de produção (A partir de: ${i}):`, error.message);
-                        fullSuccess = false;
-                        // Não dá throw, para permitir que o resto dos lotes tentem subir mesmo assim
-                    } else {
-                        inserted += chunk.length;
-                    }
+                    })));
                 }
-                
-                if (inserted > 0) return true; // Se ao menos algo subiu, retornamos sucesso parcial.
-                
+
+                for (let g = 0; g < allChunks.length; g += PARALLEL_LIMIT) {
+                    const group = allChunks.slice(g, g + PARALLEL_LIMIT);
+                    const results = await Promise.all(
+                        group.map(chunk =>
+                            supabase.from('operacao_producao').upsert(chunk, {
+                                onConflict: 'lab_id,identificador_unico',
+                                ignoreDuplicates: false
+                            })
+                        )
+                    );
+
+                    for (const { error } of results) {
+                        if (error) {
+                            console.error(`[ProducaoService] Falha em lote paralelo:`, error.message);
+                            fullSuccess = false;
+                        }
+                    }
+
+                    inserted += group.reduce((acc, c) => acc + c.length, 0);
+                }
+
+                if (inserted > 0) return true;
+
             } catch (err: any) {
                 console.error("Supabase upload error fatal:", err);
             }
@@ -128,8 +135,8 @@ export const producaoService = {
                     }
                 }
                 
-                // Limpa o cache local pois o Supabase é a fonte oficial
-                localStorage.removeItem(STORAGE_KEY);
+                // Atualiza cache local APÓS receber dados novos
+                saveStoredProducao(allData);
                 
                 return allData;
             } catch (err) {

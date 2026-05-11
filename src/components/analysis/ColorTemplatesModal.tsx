@@ -120,6 +120,27 @@ interface ColorTemplatesModalProps {
 export default function ColorTemplatesModal({ isOpen, onClose, specificColor, contextKey }: ColorTemplatesModalProps) {
     const STORAGE_PREFIX = contextKey ? `lote_${contextKey}_` : '';
 
+    const safeSetPreviews = (nextPreviews: Record<string, string>) => {
+        const key = `${STORAGE_PREFIX}custom_print_previews`;
+        const val = JSON.stringify(nextPreviews);
+        try {
+            localStorage.setItem(key, val);
+        } catch (e) {
+            console.warn('LocalStorage quota excedida! Limpando imagens antigas...');
+            for (let i = 0; i < localStorage.length; i++) {
+                const k = localStorage.key(i);
+                if (k && k.includes('custom_print_previews') && k !== key) {
+                    localStorage.removeItem(k);
+                }
+            }
+            try {
+                localStorage.setItem(key, val);
+            } catch (e2) {
+                console.error('Falha ao salvar print, usando apenas a memória local da página.');
+            }
+        }
+    };
+
     const [templates, setTemplates] = useState<Record<string, ColorTemplate>>(DEFAULT_TEMPLATES);
     const [previews, setPreviews] = useState<Record<string, string>>({});
     const [selectedLines, setSelectedLines] = useState<Record<string, number>>({});
@@ -467,15 +488,21 @@ export default function ColorTemplatesModal({ isOpen, onClose, specificColor, co
         COLORS.forEach(({ hex }) => {
             const base: StoredTemplate = { ...templates[hex] };
 
-            if (selectedLines[hex] !== undefined) {
-                const idx = selectedLines[hex];
-                if (scannedRows[idx]) {
-                    Object.assign(base, scannedRows[idx]);
-                    base.selectedLine = idx;
+            if (!specificColor || specificColor === hex) {
+                if (selectedLines[hex] !== undefined) {
+                    const idx = selectedLines[hex];
+                    if (scannedRows[idx]) {
+                        Object.assign(base, scannedRows[idx]);
+                        base.selectedLine = idx;
+                    }
+                } else if (previews[hex] && scannedRows.length > 0) {
+                    Object.assign(base, scannedRows[0]);
+                    base.selectedLine = 0;
                 }
-            } else if (previews[hex] && scannedRows.length > 0) {
-                Object.assign(base, scannedRows[0]);
-                base.selectedLine = 0;
+
+                if (scannedRows.length === 6) {
+                    (base as any).rawRows = [...scannedRows];
+                }
             }
 
             finalTemplates[hex] = base;
@@ -483,7 +510,7 @@ export default function ColorTemplatesModal({ isOpen, onClose, specificColor, co
 
         localStorage.setItem(`${STORAGE_PREFIX}custom_color_averages`, JSON.stringify(finalTemplates));
         localStorage.setItem(`${STORAGE_PREFIX}custom_print_scanned_rows`, JSON.stringify(scannedRows));
-        localStorage.setItem(`${STORAGE_PREFIX}custom_print_previews`, JSON.stringify(previews));
+        safeSetPreviews(previews);
         onClose();
     };
 
@@ -512,7 +539,7 @@ export default function ColorTemplatesModal({ isOpen, onClose, specificColor, co
         setPreviews(prev => {
             const next = { ...prev };
             delete next[hex];
-            localStorage.setItem(`${STORAGE_PREFIX}custom_print_previews`, JSON.stringify(next));
+            safeSetPreviews(next);
             return next;
         });
     };
@@ -795,7 +822,7 @@ export default function ColorTemplatesModal({ isOpen, onClose, specificColor, co
                                                     });
                                                     setPreviews(prev => {
                                                         const next = { ...prev, [colorObj.hex]: compressedBase64 };
-                                                        localStorage.setItem(`${STORAGE_PREFIX}custom_print_previews`, JSON.stringify(next));
+                                                        safeSetPreviews(next);
                                                         return next;
                                                     });
                                                     setTimeout(() => processOCR(compressedBase64), 100);

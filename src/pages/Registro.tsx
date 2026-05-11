@@ -148,18 +148,39 @@ export default function Registro() {
             setEditingMala(reviewItem.data.mala || '');
             setEditingEtiqueta(reviewItem.data.etiqueta || '');
 
-            setEditingRows(reviewItem.data.rows.length > 0 ? [...reviewItem.data.rows] : [{
+            let rows = reviewItem.data.rows;
+            
+            // Regra de Negócio: Se extraiu mais de uma linha, reprova a tabela, 
+            // mantém a Etiqueta e Mala extraídas, e zera as métricas para preenchimento manual.
+            if (rows.length > 1) {
+                addToast({
+                    title: "Imagem Reprovada (Múltiplas Linhas)",
+                    description: "Foram detectadas várias amostras. Apenas a etiqueta foi salva. Insira as métricas manualmente ou use outra imagem.",
+                    type: "warning"
+                });
+                rows = [];
+            }
+
+            setEditingRows(rows.length > 0 ? [...rows] : [{
                 numero: '1', hvi: '1', data_analise: new Date().toLocaleDateString('pt-BR'), hora_analise: new Date().toLocaleTimeString('pt-BR'),
                 mic: 0, len: 0, unf: 0, str: 0, rd: 0, b: 0
             }]);
             setCurrentRowIndex(0);
-            setSelectedRows(new Set(reviewItem.data.rows.length > 0 ? reviewItem.data.rows.map((_, i) => i) : [0]));
+            setSelectedRows(new Set(rows.length > 0 ? rows.map((_, i) => i) : [0]));
 
-            addToast({
-                title: "Imagem Carregada",
-                description: reviewItem.data.rows.length > 0 ? `${reviewItem.data.rows.length} registros.` : "Sem dados automáticos.",
-                type: "success"
-            });
+            if (rows.length === 1) {
+                addToast({
+                    title: "Imagem Carregada",
+                    description: "Registro extraído com sucesso.",
+                    type: "success"
+                });
+            } else if (rows.length === 0 && reviewItem.data.rows.length <= 1) {
+                addToast({
+                    title: "Imagem Carregada",
+                    description: "Sem métricas automáticas. Preencha manualmente.",
+                    type: "info"
+                });
+            }
         }
     };
 
