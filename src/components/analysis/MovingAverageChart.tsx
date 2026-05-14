@@ -8,6 +8,7 @@ interface MovingAverageChartProps {
     samples: Sample[];
     windowSize?: number;
     onSampleHover?: (sampleId: string | null) => void;
+    onColorChange?: (sampleId: string, newColor: string) => void;
 }
 
 // Todos os parâmetros HVI incluindo UNF
@@ -33,6 +34,7 @@ const COLORS_MAP: Record<string, string> = {
     "#10b981": "GRUPO 2",
     "#f59e0b": "GRUPO 3",
     "#ef4444": "GRUPO 4",
+    "ANULADA": "ANULADA"
 };
 
 interface ChartSample extends Sample {
@@ -40,9 +42,10 @@ interface ChartSample extends Sample {
     globalIndex?: number;
 }
 
-export default function MovingAverageChart({ samples, windowSize = 3, onSampleHover }: MovingAverageChartProps) {
+export default function MovingAverageChart({ samples, windowSize = 3, onSampleHover, onColorChange }: MovingAverageChartProps) {
     const [selectedField, setSelectedField] = useState<typeof FIELDS[number]['key']>('mic');
     const [hoveredSample, setHoveredSample] = useState<ChartSample | null>(null);
+    const [selectingColorSample, setSelectingColorSample] = useState<ChartSample | null>(null);
     const [chartType, setChartType] = useState<typeof CHART_TYPES[number]['key']>('line');
 
     // Ordenar amostras por ID para ordem cronológica
@@ -75,14 +78,19 @@ export default function MovingAverageChart({ samples, windowSize = 3, onSampleHo
 
         if (validSamples.length === 0) return null;
 
-        const values = validSamples.map(s => s.parsedVal);
-        const minVal = Math.min(...values);
-        const maxVal = Math.max(...values);
-        const globalAvg = values.reduce((a, b) => a + b, 0) / values.length;
+        // Amostras válidas para cálculos estatísticos (ignorando anuladas)
+        const validSamplesForStats = validSamples.filter(s => s.cor !== 'ANULADA');
+        const valuesForStats = validSamplesForStats.map(s => s.parsedVal);
+        
+        const globalAvg = valuesForStats.length > 0 ? valuesForStats.reduce((a, b) => a + b, 0) / valuesForStats.length : 0;
 
-        // Calcular desvio padrão
-        const variance = values.reduce((acc, val) => acc + Math.pow(val - globalAvg, 2), 0) / values.length;
+        // Calcular desvio padrão (ignorando anuladas)
+        const variance = valuesForStats.length > 0 ? valuesForStats.reduce((acc, val) => acc + Math.pow(val - globalAvg, 2), 0) / valuesForStats.length : 0;
         const stdDev = Math.sqrt(variance);
+
+        const allValues = validSamples.map(s => s.parsedVal);
+        const minVal = Math.min(...allValues);
+        const maxVal = Math.max(...allValues);
 
         const margin = (maxVal - minVal) * 0.2 || (maxVal * 0.1) || 1;
         const yMin = Math.max(0, minVal - margin);
@@ -130,6 +138,23 @@ export default function MovingAverageChart({ samples, windowSize = 3, onSampleHo
 
             return { color, points, path };
         }).filter(s => s !== null);
+
+        // Série especial para amostras ANULADAS (pontos cinzas isolados)
+        const anuladaSamples = validSamples
+            .map((s, i) => ({ ...s, globalIndex: i }))
+            .filter(s => s.cor === 'ANULADA');
+            
+        if (anuladaSamples.length > 0) {
+            series.push({
+                color: '#d1d5db', // cinza
+                path: null,
+                points: anuladaSamples.map((s) => {
+                    const x = padding.left + (s.globalIndex * stepX);
+                    const y = padding.top + chartHeight - ((s.parsedVal - yMin) / yRange) * chartHeight;
+                    return { x, y, val: s.parsedVal, original: s, color: '#d1d5db', isOutlier: false };
+                })
+            });
+        }
 
         // Linhas de grade baseadas nos valores reais
         const gridValues = [
@@ -399,14 +424,9 @@ export default function MovingAverageChart({ samples, windowSize = 3, onSampleHo
                                                 setHoveredSample(p.original);
                                                 if (onSampleHover) onSampleHover(p.original.id);
                                             }}
-                                            onClick={() => {
-                                                if (hoveredSample?.id === p.original.id) {
-                                                    setHoveredSample(null);
-                                                    if (onSampleHover) onSampleHover(null);
-                                                } else {
-                                                    setHoveredSample(p.original);
-                                                    if (onSampleHover) onSampleHover(p.original.id);
-                                                }
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setSelectingColorSample(p.original);
                                             }}
                                         />
                                         {/* Destaque de Outlier */}
@@ -465,6 +485,40 @@ export default function MovingAverageChart({ samples, windowSize = 3, onSampleHo
                         ))}
                     </svg>
 
+                    {/* Menu Flutuante de Forçar Cor */}
+                    {selectingColorSample && (
+                        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white border border-black p-4 shadow-2xl z-[60] animate-fade-in flex flex-col gap-3">
+                            <div className="flex items-center justify-between border-b border-neutral-100 pb-2 mb-1 gap-8">
+                                <span className="text-[10px] font-bold uppercase tracking-widest text-black">Mover Padrão</span>
+                                <button onClick={() => setSelectingColorSample(null)} className="text-neutral-400 hover:text-black font-bold">✕</button>
+                            </div>
+                            <div className="text-[9px] font-mono font-bold uppercase text-neutral-500 mb-2">Amostra #{selectingColorSample.amostra_id}</div>
+                            <div className="flex gap-2">
+                                {['#3b82f6', '#10b981', '#f59e0b', '#ef4444'].map((c) => (
+                                    <button
+                                        key={c}
+                                        aria-label={`Forçar cor ${c}`}
+                                        title={`Mover para ${COLORS_MAP[c]}`}
+                                        onClick={() => {
+                                            if (onColorChange) {
+                                                onColorChange(selectingColorSample.id, c);
+                                                setSelectingColorSample(null);
+                                                if (hoveredSample?.id === selectingColorSample.id) {
+                                                    setHoveredSample({ ...hoveredSample, cor: c });
+                                                }
+                                            }
+                                        }}
+                                        className="w-8 h-8 transition-transform hover:scale-110 active:scale-95 border-2 shadow-sm"
+                                        style={{
+                                            backgroundColor: c,
+                                            borderColor: selectingColorSample.cor === c ? 'black' : 'transparent'
+                                        }}
+                                    />
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
                     {/* Legenda */}
                     <div className="absolute bottom-2 left-16 flex items-center gap-4 text-[9px]">
                         <div className="flex items-center gap-1">
@@ -507,17 +561,42 @@ export default function MovingAverageChart({ samples, windowSize = 3, onSampleHo
 
                             <div className="space-y-2">
                                 <span className="text-[9px] text-neutral-400 uppercase tracking-widest block">Métrica Principal ({selectedField.toUpperCase()})</span>
-                                <div className="flex items-center gap-3">
-                                    <span className="text-3xl font-mono font-bold border-b-2 border-black">
-                                        {formatDecimalBR(hoveredSample.parsedVal || 0, 2)}
-                                    </span>
-                                    <div className="relative inline-flex items-center justify-center px-3 py-1">
-                                        <svg className="absolute inset-0 w-full h-full" preserveAspectRatio="none">
-                                            <rect width="100%" height="100%" rx="4" fill={hoveredSample.cor || '#000'} />
-                                        </svg>
-                                        <span className="relative text-[10px] font-bold uppercase text-white z-10">
-                                            {COLORS_MAP[hoveredSample.cor || ''] || 'S/COR'}
+                                <div className="flex flex-col gap-3">
+                                    <div className="flex items-center gap-3">
+                                        <span className="text-3xl font-mono font-bold border-b-2 border-black">
+                                            {formatDecimalBR(hoveredSample.parsedVal || 0, 2)}
                                         </span>
+                                        <div className="relative inline-flex items-center justify-center px-3 py-1">
+                                            <svg className="absolute inset-0 w-full h-full" preserveAspectRatio="none">
+                                                <rect width="100%" height="100%" rx="4" fill={hoveredSample.cor || '#000'} />
+                                            </svg>
+                                            <span className="relative text-[10px] font-bold uppercase text-white z-10">
+                                                {COLORS_MAP[hoveredSample.cor || ''] || 'S/COR'}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    
+                                    {/* Botões de Alteração de Cor */}
+                                    <div className="flex items-center gap-1.5 pt-1">
+                                        <span className="text-[8px] uppercase tracking-widest text-neutral-400 font-bold mr-1">Mover para:</span>
+                                        {['#3b82f6', '#10b981', '#f59e0b', '#ef4444'].map((c, idx) => (
+                                            <button
+                                                key={c}
+                                                aria-label={`Forçar cor ${c}`}
+                                                title={`Mover para ${COLORS_MAP[c]}`}
+                                                onClick={() => {
+                                                    if (onColorChange) {
+                                                        onColorChange(hoveredSample.id, c);
+                                                        setHoveredSample({ ...hoveredSample, cor: c });
+                                                    }
+                                                }}
+                                                className="w-5 h-5 transition-transform hover:scale-125 active:scale-95 border border-white shadow-sm"
+                                                style={{
+                                                    backgroundColor: c,
+                                                    boxShadow: hoveredSample.cor === c ? '0 0 0 2px black' : undefined
+                                                }}
+                                            />
+                                        ))}
                                     </div>
                                 </div>
                             </div>

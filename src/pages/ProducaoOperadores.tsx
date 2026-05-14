@@ -242,14 +242,15 @@ export default function ProducaoOperadores() {
     // ── Ranking por Turno (acumulado no período) ───────────────────────────
     const rankingPorTurno = report
         ? (() => {
-            const map: Record<string, Record<string, { nome: string; matricula: string; total: number }>> = {};
+            const map: Record<string, Record<string, { nome: string; matricula: string; total: number; dias: number }>> = {};
             for (const dia of report.dias) {
                 for (const [turnoNome, turnoData] of Object.entries(dia.turnos)) {
                     if (!map[turnoNome]) map[turnoNome] = {};
                     for (const op of turnoData.operadores) {
                         const key = op.nome;
-                        if (!map[turnoNome][key]) map[turnoNome][key] = { nome: op.nome, matricula: op.matricula, total: 0 };
+                        if (!map[turnoNome][key]) map[turnoNome][key] = { nome: op.nome, matricula: op.matricula, total: 0, dias: 0 };
                         map[turnoNome][key].total += op.amostras;
+                        map[turnoNome][key].dias += 1;
                     }
                 }
             }
@@ -608,6 +609,7 @@ export default function ProducaoOperadores() {
                                     <div className="divide-y divide-neutral-50">
                                         {ops.map((op, i) => {
                                             const pct = (op.total / maxT) * 100;
+                                            const avg = op.dias > 0 ? Math.round(op.total / op.dias) : 0;
                                             return (
                                                 <div key={op.nome} className="flex items-center gap-3 px-5 py-3 hover:bg-neutral-50/60 transition-colors">
                                                     <span className={cn(
@@ -618,9 +620,14 @@ export default function ProducaoOperadores() {
                                                     </span>
                                                     <div className="flex-1 min-w-0">
                                                         <div className="flex items-center justify-between mb-0.5">
-                                                            <span className="text-[10px] font-bold text-neutral-700 truncate" title={op.nome}>
-                                                                {op.nome.split(" ").slice(0, 2).join(" ")}
-                                                            </span>
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="text-[10px] font-bold text-neutral-700 truncate" title={op.nome}>
+                                                                    {op.nome.split(" ").slice(0, 2).join(" ")}
+                                                                </span>
+                                                                <span className="text-[8px] font-mono font-bold text-neutral-400 bg-neutral-100 border border-neutral-200 px-1.5 py-0.5 rounded">
+                                                                    MÉDIA: {avg.toLocaleString("pt-BR")}/d
+                                                                </span>
+                                                            </div>
                                                             <span className="text-[10px] font-mono font-bold ml-2 flex-shrink-0">
                                                                 {op.total.toLocaleString("pt-BR")}
                                                             </span>

@@ -41,6 +41,7 @@ export default function AnalysisTable({ samples, onUpdateSample, onColorChange, 
 
     const statsByField = fields.reduce((acc, field) => {
         const values = samples
+            .filter(s => s.cor !== 'ANULADA')
             .map(s => ({ id: s.id, val: (s as any)[field] }))
             .filter(v => typeof v.val === 'number');
         acc[field] = calculateStatistics(values);
@@ -112,7 +113,7 @@ export default function AnalysisTable({ samples, onUpdateSample, onColorChange, 
                             </div>
                         </th>
                         <th
-                            className="px-1 text-center w-[70px] cursor-pointer hover:text-blue-600 transition-colors"
+                            className="px-1 text-center w-[130px] cursor-pointer hover:text-blue-600 transition-colors"
                             onClick={() => handleSort('cor')}
                         >
                             <div className="flex items-center justify-center gap-1">
@@ -155,14 +156,16 @@ export default function AnalysisTable({ samples, onUpdateSample, onColorChange, 
 
                         const isHighlighted = highlightedSampleId === sample.id;
 
+                        const isAnulada = sample.cor === 'ANULADA';
+
                         return (
                             <tr
                                 key={sample.id}
                                 id={`sample-row-${sample.id}`}
                                 className={cn(
                                     "transition-all text-xs border-b",
-                                    rowBgClass,
-                                    isHighlighted ? "bg-black text-white !border-black scale-[1.01] shadow-xl z-20 relative" : "border-slate-100"
+                                    isAnulada ? "bg-slate-100 opacity-50 grayscale" : rowBgClass,
+                                    isHighlighted ? "bg-black text-white !border-black scale-[1.01] shadow-xl z-20 relative grayscale-0 opacity-100" : "border-slate-100"
                                 )}
                             >
                                 <td className="px-2 py-4 font-mono font-black text-black text-center border-r border-slate-100/50">
@@ -197,6 +200,7 @@ export default function AnalysisTable({ samples, onUpdateSample, onColorChange, 
                                     <div className="flex gap-1 justify-center items-center min-w-fit px-1">
                                         {COLORS.map((c) => (
                                             <button
+                                                type="button"
                                                 key={c.value}
                                                 disabled={sample.locked}
                                                 onClick={() => {
@@ -221,6 +225,28 @@ export default function AnalysisTable({ samples, onUpdateSample, onColorChange, 
                                                 title={sample.locked ? "Amostra bloqueada" : (sample.cor === c.value ? `Remover cor ${c.label}` : `Aplicar ${c.label}`)}
                                             />
                                         ))}
+                                        {/* Botão de Anular */}
+                                        <button
+                                            type="button"
+                                            disabled={sample.locked}
+                                            onClick={() => {
+                                                if (sample.cor === 'ANULADA') {
+                                                    onColorChange(sample.id, ""); // Restaura
+                                                } else {
+                                                    onColorChange(sample.id, 'ANULADA'); // Anula
+                                                }
+                                            }}
+                                            className={cn(
+                                                "ml-1 w-5 h-5 rounded-full border-2 border-white shadow-md transition-all flex items-center justify-center font-black text-[10px]",
+                                                sample.locked ? "cursor-not-allowed opacity-50" : "hover:scale-110",
+                                                sample.cor === 'ANULADA'
+                                                    ? "bg-slate-800 text-white scale-110 ring-2 ring-slate-900 ring-offset-1 opacity-100"
+                                                    : "bg-slate-200 text-slate-400 opacity-30 hover:opacity-100 hover:ring-2 hover:ring-slate-300 hover:ring-offset-1"
+                                            )}
+                                            title={sample.locked ? "Amostra bloqueada" : (sample.cor === 'ANULADA' ? "Restaurar Amostra" : "Anular Amostra (Ignorar médias)")}
+                                        >
+                                            ∅
+                                        </button>
                                     </div>
                                 </td>
                                 {fields.map((field) => {

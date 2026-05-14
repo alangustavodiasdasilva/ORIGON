@@ -2,9 +2,9 @@ import { useState, useMemo, useEffect } from "react";
 import type { Sample } from "@/entities/Sample";
 import { formatDecimalBR } from "@/services/ocrExtraction";
 import { cn } from "@/lib/utils";
-import { Compass, Lightbulb, Activity, Target, Fingerprint, Focus, LayoutGrid, BarChart3, Table as TableIcon, AlignLeft, Share2 } from "lucide-react";
+import { Compass, Lightbulb, Activity, Target, Fingerprint, LayoutGrid, BarChart3, Table as TableIcon, AlignLeft } from "lucide-react";
 
-function ClusterTrendChart({ points, yAxis, labelY }: { points: any[], yAxis: string, labelY: string }) {
+function ClusterTrendChart({ points, yAxis }: { points: any[], yAxis: string }) {
     const [hoveredPoint, setHoveredPoint] = useState<any>(null);
     const [viewField, setViewField] = useState(yAxis);
 
@@ -300,7 +300,7 @@ export default function ScenarioExplorer({ samples, onColorChange }: ScenarioExp
     
     const [hoveredPoint, setHoveredPoint] = useState<any>(null);
     const [selectingColorPoint, setSelectingColorPoint] = useState<any>(null);
-    const [showClusters, setShowClusters] = useState(true);
+    const [showClusters] = useState(true);
     const [overrides, setOverrides] = useState<Record<string, number>>({});
     const [viewMode, setViewMode] = useState<'scatter' | 'averages' | 'kpi_table' | 'histogram'>('scatter');
 
@@ -464,9 +464,7 @@ export default function ScenarioExplorer({ samples, onColorChange }: ScenarioExp
                     <div className="flex items-center gap-1 mb-6 bg-white border border-black p-1 self-start shadow-[4px_4px_0px_rgba(0,0,0,1)]">
                         {[
                             { id: 'scatter', label: 'Mapa 2D', icon: LayoutGrid },
-                            { id: 'averages', label: 'Médias', icon: BarChart3 },
-                            { id: 'kpi_table', label: 'Tabela KPI', icon: TableIcon },
-                            { id: 'histogram', label: 'Distribuição', icon: AlignLeft }
+                            { id: 'kpi_table', label: 'Tabela KPI', icon: TableIcon }
                         ].map(mode => {
                             const Icon = mode.icon;
                             return (
@@ -491,16 +489,37 @@ export default function ScenarioExplorer({ samples, onColorChange }: ScenarioExp
                     ) : (
                         <div className="relative flex-1 group w-full h-full">
                             
-                            {/* MODO MAPA 2D (ORIGINAL) */}
+                            {/* MODO MAPA 2D (MELHORADO) */}
                             {viewMode === 'scatter' && (
-                                <svg viewBox="0 0 800 400" className="w-full h-full overflow-visible" onMouseLeave={() => setHoveredPoint(null)}>
-                                    <defs>
-                                        <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-                                            <circle cx="2" cy="2" r="1" fill="#e5e5e5" />
-                                        </pattern>
-                                    </defs>
-                                    
-                                    <rect x="50" y="20" width="730" height="340" fill="url(#grid)" />
+                                <svg viewBox="0 0 800 420" className="w-full h-full min-h-[400px] overflow-visible" onMouseLeave={() => setHoveredPoint(null)}>
+                                    {/* Grid Profissional e Eixos */}
+                                    <g className="grid-lines">
+                                        {/* Linhas Horizontais (Eixo Y) */}
+                                        {[0, 0.25, 0.5, 0.75, 1].map(pct => {
+                                            const y = 360 - (pct * 340);
+                                            const val = chartData.drawMinY + (pct * chartData.rangeY);
+                                            return (
+                                                <g key={`grid-y-${pct}`}>
+                                                    <line x1="50" y1={y} x2="780" y2={y} stroke="#e5e5e5" strokeWidth="1" strokeDasharray="4 4" />
+                                                    <text x="40" y={y + 3} textAnchor="end" className="text-[9px] font-mono fill-neutral-400">{val.toFixed(2)}</text>
+                                                </g>
+                                            );
+                                        })}
+                                        {/* Linhas Verticais (Eixo X) */}
+                                        {[0, 0.25, 0.5, 0.75, 1].map(pct => {
+                                            const x = 50 + (pct * 730);
+                                            const val = chartData.drawMinX + (pct * chartData.rangeX);
+                                            return (
+                                                <g key={`grid-x-${pct}`}>
+                                                    <line x1={x} y1="20" x2={x} y2="360" stroke="#e5e5e5" strokeWidth="1" strokeDasharray="4 4" />
+                                                    <text x={x} y="375" textAnchor="middle" className="text-[9px] font-mono fill-neutral-400">{val.toFixed(2)}</text>
+                                                </g>
+                                            );
+                                        })}
+                                        {/* Linhas Base dos Eixos */}
+                                        <line x1="50" y1="360" x2="780" y2="360" stroke="#000" strokeWidth="2" />
+                                        <line x1="50" y1="20" x2="50" y2="360" stroke="#000" strokeWidth="2" />
+                                    </g>
 
                                     {/* Nuvens de Dispersão */}
                                     {showClusters && chartData.clusters.map(cluster => {
@@ -514,145 +533,201 @@ export default function ScenarioExplorer({ samples, onColorChange }: ScenarioExp
                                         return (
                                             <g key={`hull-${cluster.id}`} className="group/cluster">
                                                 <polygon points={path} fill={cluster.color} opacity="0.1" strokeLinejoin="round" className="transition-all duration-300 group-hover/cluster:opacity-30" />
-                                                <polygon points={path} fill="none" stroke={cluster.color} strokeWidth="1.5" strokeDasharray="4 4" strokeLinejoin="round" opacity="0.5" className="transition-all duration-300 group-hover/cluster:opacity-100 group-hover/cluster:stroke-2" />
-                                                <text x={50 + ((cluster.hull[0].x - chartData.drawMinX) / chartData.rangeX) * 730} y={(360 - ((cluster.hull[0].y - chartData.drawMinY) / chartData.rangeY) * 340) - 10} fill={cluster.color} className="text-[10px] font-black uppercase font-mono">{cluster.id}</text>
+                                                <polygon points={path} fill="none" stroke={cluster.color} strokeWidth="1.5" strokeDasharray="4 4" strokeLinejoin="round" opacity="0.6" className="transition-all duration-300 group-hover/cluster:opacity-100 group-hover/cluster:stroke-2" />
+                                                <text x={50 + ((cluster.hull[0].x - chartData.drawMinX) / chartData.rangeX) * 730} y={(360 - ((cluster.hull[0].y - chartData.drawMinY) / chartData.rangeY) * 340) - 10} fill={cluster.color} className="text-[10px] font-black uppercase font-mono bg-white">{cluster.id}</text>
                                             </g>
                                         );
                                     })}
 
-                                    {/* Médias */}
+                                    {/* Médias dos Clusters */}
                                     {showClusters && chartData.clusters.map(cluster => {
                                         if (cluster.hull.length < 3) return null;
                                         const cxPx = 50 + ((cluster.cx - chartData.drawMinX) / chartData.rangeX) * 730;
                                         const cyPx = 360 - ((cluster.cy - chartData.drawMinY) / chartData.rangeY) * 340;
                                         return (
                                             <g key={`centroid-${cluster.id}`}>
-                                                <circle cx={cxPx} cy={cyPx} r="4" fill={cluster.color} stroke="white" strokeWidth="1" />
-                                                <rect x={cxPx - 16} y={cyPx + 6} width="32" height="12" fill={cluster.color} rx="2" opacity="0.8"/>
-                                                <text x={cxPx} y={cyPx + 14} fill="white" textAnchor="middle" className="text-[7px] font-bold font-mono tracking-widest">MÉDIA</text>
+                                                <circle cx={cxPx} cy={cyPx} r="5" fill={cluster.color} stroke="white" strokeWidth="1.5" className="shadow-lg" />
+                                                <rect x={cxPx - 18} y={cyPx + 8} width="36" height="14" fill={cluster.color} rx="3" opacity="0.9"/>
+                                                <text x={cxPx} y={cyPx + 17} fill="white" textAnchor="middle" className="text-[8px] font-bold font-mono tracking-widest">MÉDIA</text>
                                             </g>
                                         );
                                     })}
 
-                                    {/* Bolinhas */}
+                                    {/* Amostras (Bolinhas) */}
                                     {chartData.points.map(p => {
                                         const px = 50 + ((p.x - chartData.drawMinX) / chartData.rangeX) * 730;
                                         const py = 360 - ((p.y - chartData.drawMinY) / chartData.rangeY) * 340;
                                         const isHovered = hoveredPoint?.original.id === p.original.id;
                                         return (
-                                            <g key={p.original.id} onMouseEnter={() => setHoveredPoint(p)} onClick={() => setSelectingColorPoint(p)} className="cursor-crosshair">
-                                                {isHovered && <circle cx={px} cy={py} r="12" fill={p.color} opacity="0.2" className="animate-pulse" />}
-                                                <circle cx={px} cy={py} r={isHovered ? "8" : "6"} fill={p.color} opacity={hoveredPoint && !isHovered ? 0.2 : 0.9} stroke="white" strokeWidth={isHovered ? "2" : "1"} className="transition-all duration-200" />
+                                            <g 
+                                                key={p.original.id} 
+                                                onMouseEnter={() => setHoveredPoint(p)} 
+                                                onMouseLeave={() => setHoveredPoint(null)}
+                                                onClick={(e) => { e.stopPropagation(); setSelectingColorPoint(p); }} 
+                                                className="cursor-crosshair"
+                                            >
+                                                {isHovered && <circle cx={px} cy={py} r="12" fill={p.color} opacity="0.3" />}
+                                                <circle cx={px} cy={py} r={isHovered ? "8" : "5"} fill={p.color} opacity={hoveredPoint && !isHovered ? 0.15 : 0.9} stroke="white" strokeWidth={isHovered ? "2" : "1"} className="transition-all duration-200 shadow-sm" />
                                             </g>
                                         );
                                     })}
-                                    <text x="415" y="395" textAnchor="middle" className="text-[9px] font-black uppercase tracking-widest fill-black opacity-40">{String(xAxis)} ( {chartData.drawMinX.toFixed(1)} → {chartData.drawMaxX.toFixed(1)} )</text>
-                                    <text x="-190" y="15" transform="rotate(-90)" textAnchor="middle" className="text-[9px] font-black uppercase tracking-widest fill-black opacity-40">{String(yAxis)} ( {chartData.drawMinY.toFixed(1)} → {chartData.drawMaxY.toFixed(1)} )</text>
+                                    
+                                    {/* Títulos dos Eixos */}
+                                    <text x="415" y="405" textAnchor="middle" className="text-[11px] font-black uppercase tracking-widest fill-black">Eixo X: {String(xAxis)}</text>
+                                    <text x="-190" y="15" transform="rotate(-90)" textAnchor="middle" className="text-[11px] font-black uppercase tracking-widest fill-black">Eixo Y: {String(yAxis)}</text>
                                 </svg>
                             )}
 
-                            {/* MODO TABELA KPI (LAUDO) */}
+                            {/* MODO TABELA KPI (LAUDO) — COMPLETA */}
                             {viewMode === 'kpi_table' && (
-                                <div className="w-full h-full overflow-auto bg-white border border-black p-4">
-                                    <table className="w-full text-left border-collapse">
-                                        <thead>
-                                            <tr className="border-b-2 border-black">
-                                                <th className="py-3 px-2 text-[10px] font-black uppercase tracking-widest text-neutral-400">Padrão</th>
-                                                <th className="py-3 px-2 text-[10px] font-black uppercase tracking-widest">Qtd</th>
-                                                <th className="py-3 px-2 text-[10px] font-black uppercase tracking-widest">Média</th>
-                                                <th className="py-3 px-2 text-[10px] font-black uppercase tracking-widest">Desvio (SD)</th>
-                                                <th className="py-3 px-2 text-[10px] font-black uppercase tracking-widest">CV (%)</th>
-                                                <th className="py-3 px-2 text-[10px] font-black uppercase tracking-widest">Mínimo</th>
-                                                <th className="py-3 px-2 text-[10px] font-black uppercase tracking-widest">Máximo</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {chartData.clusters.map(cluster => {
-                                                const cPoints = chartData.points.filter(p => p.clusterIndex === (cluster.id.split(' ')[1].charCodeAt(0) - 65)).map(p => p.y);
-                                                if (cPoints.length === 0) return null;
-                                                
-                                                const avg = cPoints.reduce((a,b)=>a+b,0) / cPoints.length;
-                                                const variance = cPoints.reduce((acc,v) => acc + Math.pow(v - avg, 2), 0) / cPoints.length;
-                                                const sd = Math.sqrt(variance);
-                                                const cv = (sd / (avg || 1)) * 100;
-                                                const min = Math.min(...cPoints);
-                                                const max = Math.max(...cPoints);
+                                <div className="w-full h-full overflow-auto">
+                                    {/* Cabeçalho de Clusters (resumo de fardos) */}
+                                    <div className="flex items-stretch gap-px mb-1">
+                                        <div className="w-36 shrink-0" />
+                                        {chartData.clusters.map(cluster => {
+                                            const clusterIdx = cluster.id.split(' ')[1].charCodeAt(0) - 65;
+                                            const count = chartData.points.filter(p => p.clusterIndex === clusterIdx).length;
+                                            return (
+                                                <div key={cluster.id} className="flex-1 min-w-[180px] flex items-center gap-2 px-3 py-2 border-b-4" style={{ borderColor: cluster.color }}>
+                                                    <div className="w-3 h-3 shrink-0" style={{ backgroundColor: cluster.color }} />
+                                                    <div>
+                                                        <div className="text-[11px] font-black uppercase tracking-widest">{cluster.id}</div>
+                                                        <div className="text-[9px] text-neutral-400 font-bold">{count} fardos</div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
 
-                                                return (
-                                                    <tr key={cluster.id} className="border-b border-neutral-100 hover:bg-neutral-50 transition-colors">
-                                                        <td className="py-4 px-2">
-                                                            <div className="flex items-center gap-2">
-                                                                <div className="w-3 h-3 border border-black" style={{backgroundColor: cluster.color}} />
-                                                                <span className="text-[11px] font-black uppercase">{cluster.id}</span>
-                                                            </div>
-                                                        </td>
-                                                        <td className="py-4 px-2 text-[11px] font-mono">{cPoints.length}</td>
-                                                        <td className="py-4 px-2 text-[11px] font-mono font-bold">{avg.toFixed(2)}</td>
-                                                        <td className="py-4 px-2 text-[11px] font-mono text-neutral-500">{sd.toFixed(3)}</td>
-                                                        <td className="py-4 px-2 text-[11px] font-mono text-neutral-500">{cv.toFixed(1)}%</td>
-                                                        <td className="py-4 px-2 text-[11px] font-mono">{min.toFixed(2)}</td>
-                                                        <td className="py-4 px-2 text-[11px] font-mono">{max.toFixed(2)}</td>
-                                                    </tr>
-                                                );
-                                            })}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            )}
+                                    {/* Sub-cabeçalho de colunas */}
+                                    <div className="flex items-stretch gap-px mb-2">
+                                        <div className="w-36 shrink-0 bg-neutral-100 border border-neutral-200 flex items-center px-3">
+                                            <span className="text-[8px] font-black uppercase tracking-widest text-neutral-400">Parâmetro</span>
+                                        </div>
+                                        {chartData.clusters.map(cluster => (
+                                            <div key={`sub-${cluster.id}`} className="flex-1 min-w-[180px] bg-neutral-50 border border-neutral-200">
+                                                <div className="grid grid-cols-4 gap-0 text-[8px] font-black text-neutral-400 uppercase tracking-wide">
+                                                    <span className="px-2 py-1 border-r border-neutral-200">Média</span>
+                                                    <span className="px-2 py-1 border-r border-neutral-200">±SD</span>
+                                                    <span className="px-2 py-1 border-r border-neutral-200">CV%</span>
+                                                    <span className="px-2 py-1">Min→Máx</span>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
 
-                            {/* MODO DISTRIBUIÇÃO (HISTOGRAMA) */}
-                            {viewMode === 'histogram' && (
-                                <svg viewBox="0 0 800 400" className="w-full h-full overflow-visible">
-                                    {(() => {
-                                        const field = yAxis as string;
-                                        const allVals = chartData.points.map(p => p.y);
-                                        const minAll = Math.min(...allVals), maxAll = Math.max(...allVals), range = maxAll - minAll || 1;
-                                        
-                                        const binCount = 12;
-                                        const bins = Array.from({length: binCount}).map((_, i) => {
-                                            const binMin = minAll + (i / binCount) * range;
-                                            const binMax = minAll + ((i + 1) / binCount) * range;
-                                            const clusterCounts = chartData.clusters.map(cluster => {
-                                                const count = chartData.points.filter(p => 
-                                                    p.clusterIndex === (cluster.id.split(' ')[1].charCodeAt(0) - 65) &&
-                                                    p.y >= binMin && (i === binCount - 1 ? p.y <= binMax : p.y < binMax)
-                                                ).length;
-                                                return { color: cluster.color, count };
-                                            });
-                                            return { binMin, binMax, clusterCounts };
+                                    {/* Linhas de parâmetros */}
+                                    {[
+                                        { id: 'mic', label: 'MIC', decimals: 2, desc: 'Micronaire' },
+                                        { id: 'len', label: 'LEN', decimals: 2, desc: 'Comprimento' },
+                                        { id: 'unf', label: 'UNF', decimals: 1, desc: 'Uniformidade' },
+                                        { id: 'str', label: 'STR', decimals: 1, desc: 'Resistência' },
+                                        { id: 'rd',  label: 'RD',  decimals: 1, desc: 'Refletância' },
+                                        { id: 'b',   label: '+B',  decimals: 1, desc: 'Amarelamento' },
+                                    ].map((param, rowIdx) => {
+                                        const isActiveParam = String(yAxis) === param.id;
+
+                                        // CV máx entre clusters para normalizar barras
+                                        const allCVs: number[] = chartData.clusters.map(cluster => {
+                                            const ci = cluster.id.split(' ')[1].charCodeAt(0) - 65;
+                                            const vals = chartData.points
+                                                .filter(p => p.clusterIndex === ci)
+                                                .map(p => {
+                                                    const raw = (p.original as any)[param.id];
+                                                    const v = typeof raw === 'number' ? raw : parseFloat(String(raw || '0').replace(',', '.'));
+                                                    return isNaN(v) ? 0 : v;
+                                                }).filter(v => v > 0);
+                                            if (vals.length === 0) return 0;
+                                            const avg = vals.reduce((a, b) => a + b, 0) / vals.length;
+                                            const sd = Math.sqrt(vals.reduce((acc, v) => acc + Math.pow(v - avg, 2), 0) / vals.length);
+                                            return (sd / (avg || 1)) * 100;
                                         });
-
-                                        const maxTotalInBin = Math.max(...bins.map(b => b.clusterCounts.reduce((sum, c) => sum + c.count, 0))) || 1;
+                                        const maxCV = Math.max(...allCVs, 1);
 
                                         return (
-                                            <g transform="translate(60, 40)">
-                                                {bins.map((bin, i) => {
-                                                    const x = i * (680 / binCount);
-                                                    const barWidth = (680 / binCount) - 4;
-                                                    let currentY = 300;
+                                            <div
+                                                key={param.id}
+                                                className={`flex items-stretch gap-px mb-px ${ isActiveParam ? 'ring-1 ring-amber-400 ring-offset-0' : '' }`}
+                                            >
+                                                {/* Label do parâmetro */}
+                                                <div className={`w-36 shrink-0 flex flex-col justify-center px-3 py-3 border ${ isActiveParam ? 'bg-amber-50 border-amber-200' : rowIdx % 2 === 0 ? 'bg-white border-neutral-100' : 'bg-neutral-50 border-neutral-100' }`}>
+                                                    <div className="flex items-center gap-1.5">
+                                                        <span className={`text-[13px] font-black font-mono ${ isActiveParam ? 'text-amber-700' : 'text-black' }`}>{param.label}</span>
+                                                        {isActiveParam && <span className="text-[7px] bg-amber-200 text-amber-800 font-black px-1 py-px uppercase tracking-wider">Y</span>}
+                                                    </div>
+                                                    <span className="text-[9px] text-neutral-400 uppercase tracking-wide">{param.desc}</span>
+                                                </div>
+
+                                                {/* Células por cluster */}
+                                                {chartData.clusters.map(cluster => {
+                                                    const ci = cluster.id.split(' ')[1].charCodeAt(0) - 65;
+                                                    const vals = chartData.points
+                                                        .filter(p => p.clusterIndex === ci)
+                                                        .map(p => {
+                                                            const raw = (p.original as any)[param.id];
+                                                            const v = typeof raw === 'number' ? raw : parseFloat(String(raw || '0').replace(',', '.'));
+                                                            return isNaN(v) ? 0 : v;
+                                                        }).filter(v => v > 0);
+
+                                                    if (vals.length === 0) {
+                                                        return (
+                                                            <div key={`${cluster.id}-${param.id}`} className="flex-1 min-w-[180px] flex items-center px-3 border border-neutral-100 text-neutral-200 text-[10px] font-mono">—</div>
+                                                        );
+                                                    }
+
+                                                    const avg = vals.reduce((a, b) => a + b, 0) / vals.length;
+                                                    const variance = vals.reduce((acc, v) => acc + Math.pow(v - avg, 2), 0) / vals.length;
+                                                    const sd = Math.sqrt(variance);
+                                                    const cv = (sd / (avg || 1)) * 100;
+                                                    const min = Math.min(...vals);
+                                                    const max = Math.max(...vals);
+                                                    const cvBarPct = Math.min((cv / maxCV) * 100, 100);
+                                                    const cvColor = cv < 3 ? '#10b981' : cv < 6 ? '#f59e0b' : '#ef4444';
 
                                                     return (
-                                                        <g key={i}>
-                                                            {bin.clusterCounts.map((c, ci) => {
-                                                                const h = (c.count / maxTotalInBin) * 250;
-                                                                if (h === 0) return null;
-                                                                const bar = <rect key={ci} x={x} y={currentY - h} width={barWidth} height={h} fill={c.color} opacity="0.8" stroke="white" strokeWidth="1" />;
-                                                                currentY -= h;
-                                                                return bar;
-                                                            })}
-                                                            <text x={x + barWidth/2} y="320" textAnchor="middle" className="text-[8px] font-mono fill-neutral-400 rotate-45">{bin.binMin.toFixed(2)}</text>
-                                                        </g>
+                                                        <div
+                                                            key={`${cluster.id}-${param.id}`}
+                                                            className={`flex-1 min-w-[180px] border ${ isActiveParam ? 'border-amber-100 bg-amber-50/30' : rowIdx % 2 === 0 ? 'border-neutral-100 bg-white' : 'border-neutral-100 bg-neutral-50/40' } hover:bg-neutral-100/50 transition-colors`}
+                                                        >
+                                                            <div className="grid grid-cols-4 gap-0 h-full">
+                                                                {/* Média */}
+                                                                <div className="flex items-center px-2 py-3 border-r border-neutral-100">
+                                                                    <span className="text-[12px] font-black font-mono text-neutral-800">{avg.toFixed(param.decimals)}</span>
+                                                                </div>
+                                                                {/* SD */}
+                                                                <div className="flex items-center px-2 py-3 border-r border-neutral-100">
+                                                                    <span className="text-[10px] font-mono text-neutral-500">{sd.toFixed(param.decimals + 1)}</span>
+                                                                </div>
+                                                                {/* CV% com barra */}
+                                                                <div className="flex flex-col justify-center gap-1 px-2 py-2 border-r border-neutral-100">
+                                                                    <span className="text-[10px] font-black font-mono" style={{ color: cvColor }}>{cv.toFixed(1)}%</span>
+                                                                    <div className="h-1 bg-neutral-100 rounded-full w-full overflow-hidden">
+                                                                        <div className="h-full rounded-full transition-all" style={{ width: `${cvBarPct}%`, backgroundColor: cvColor }} />
+                                                                    </div>
+                                                                </div>
+                                                                {/* Min → Máx */}
+                                                                <div className="flex items-center px-2 py-3">
+                                                                    <span className="text-[8.5px] font-mono text-neutral-400 whitespace-nowrap leading-tight">
+                                                                        {min.toFixed(param.decimals)}<br />→ {max.toFixed(param.decimals)}
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
                                                     );
                                                 })}
-                                                <line x1="0" y1="300" x2="680" y2="300" stroke="black" strokeWidth="2" />
-                                                <text x="340" y="360" textAnchor="middle" className="text-[10px] font-black uppercase tracking-widest fill-neutral-400">Frequência de Fardos por Faixa de {field.toUpperCase()}</text>
-                                            </g>
+                                            </div>
                                         );
-                                    })()}
-                                </svg>
+                                    })}
+
+                                    {/* Legenda CV */}
+                                    <div className="mt-4 pt-3 border-t border-neutral-100 flex flex-wrap items-center gap-5 text-[9px] font-bold uppercase tracking-widest text-neutral-400">
+                                        <span className="flex items-center gap-1.5"><span className="inline-block w-2.5 h-2.5 rounded-full bg-[#10b981]" />CV &lt; 3% — Homogêneo</span>
+                                        <span className="flex items-center gap-1.5"><span className="inline-block w-2.5 h-2.5 rounded-full bg-[#f59e0b]" />CV 3–6% — Moderado</span>
+                                        <span className="flex items-center gap-1.5"><span className="inline-block w-2.5 h-2.5 rounded-full bg-[#ef4444]" />CV &gt; 6% — Alta Variação</span>
+                                        <span className="ml-auto flex items-center gap-1.5"><span className="inline-block w-6 h-2.5 bg-amber-50 border border-amber-300" />Parâmetro ativo do cenário</span>
+                                    </div>
+                                </div>
                             )}
-
-
 
                             {/* Menu Flutuante de Forçar Cor */}
                             {selectingColorPoint && (
@@ -666,6 +741,8 @@ export default function ScenarioExplorer({ samples, onColorChange }: ScenarioExp
                                         {['#3b82f6', '#10b981', '#f59e0b', '#ef4444'].map((c, idx) => (
                                             <button
                                                 key={c}
+                                                aria-label={`Forçar cor ${c}`}
+                                                title={`Forçar cor ${c}`}
                                                 className="w-8 h-8 rounded-full border-2 transition-transform hover:scale-110 shadow-sm"
                                                 style={{backgroundColor: c, borderColor: selectingColorPoint.original.cor === c ? 'black' : 'transparent'}}
                                                 onClick={() => {
@@ -725,7 +802,6 @@ export default function ScenarioExplorer({ samples, onColorChange }: ScenarioExp
                         <ClusterTrendChart 
                             points={chartData.points} 
                             yAxis={String(yAxis)} 
-                            labelY={activePreset.descY}
                         />
                     </div>
                 </div>

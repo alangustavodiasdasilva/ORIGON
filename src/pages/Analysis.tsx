@@ -461,6 +461,7 @@ export default function Analysis() {
                 <div className="pt-12 space-y-12">
                     <MovingAverageChart
                         samples={samples}
+                        onColorChange={handleColorChange}
                     />
                 </div>
             </div>
