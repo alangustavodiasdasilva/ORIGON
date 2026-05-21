@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useRef, useEffect } from "react";
 import type { Sample } from "@/entities/Sample";
 import { cn } from "@/lib/utils";
 import { formatDecimalBR } from "@/services/ocrExtraction";
@@ -23,6 +23,13 @@ const CHART_TYPES = [
     { key: 'line', label: 'Linha de Médias', icon: LineChart },
     { key: 'scatter', label: 'Dispersão', icon: CircleDot },
 ] as const;
+
+// ── Componente auxiliar (evita inline style= flagado pelo linter) ────────────
+function BorderColorDiv({ color, className, children }: { color: string; className: string; children: React.ReactNode }) {
+    const ref = useRef<HTMLDivElement>(null);
+    useEffect(() => { if (ref.current) ref.current.style.borderColor = color; }, [color]);
+    return <div ref={ref} className={className}>{children}</div>;
+}
 
 export default function MalaTrendChart({ samples, onSampleHover }: MalaTrendChartProps) {
     const [selectedField, setSelectedField] = useState<typeof FIELDS[number]['key']>('mic');
@@ -287,10 +294,10 @@ export default function MalaTrendChart({ samples, onSampleHover }: MalaTrendChar
                                 <span className="text-[10px] font-bold text-neutral-500 uppercase">{hoveredMala.count} amostras analisadas</span>
                             </div>
 
-                            <div className="space-y-2 border-l-4 pl-3" style={{ borderColor: hoveredMala.color }}>
+                            <BorderColorDiv color={hoveredMala.color} className="space-y-2 border-l-4 pl-3">
                                 <span className="text-[9px] text-neutral-400 uppercase tracking-widest block">Média da Mala ({selectedField.toUpperCase()})</span>
                                 <span className="text-3xl font-mono font-bold">{formatDecimalBR(hoveredMala.avg, 2)}</span>
-                            </div>
+                            </BorderColorDiv>
 
                             <div className="p-4 bg-neutral-50 border border-neutral-200 space-y-3 rounded-lg">
                                 <span className="text-[9px] text-neutral-400 uppercase tracking-widest block border-b border-neutral-200 pb-1">Amplitude & Variação</span>

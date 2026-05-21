@@ -1,5 +1,6 @@
 
 import { supabase } from "@/lib/supabase";
+import { AuditLogService } from "./AuditLog";
 
 export interface Lote {
     id: string;
@@ -19,6 +20,18 @@ const isSupabaseEnabled = () => {
     const url = import.meta.env.VITE_SUPABASE_URL;
     const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
     return !!url && url !== 'YOUR_SUPABASE_URL' && !!key && key !== 'YOUR_SUPABASE_ANON_KEY';
+};
+
+const listeners = new Set<() => void>();
+
+const notify = () => {
+    listeners.forEach(cb => {
+        try {
+            cb();
+        } catch (e) {
+            console.error("Error in LoteService listener:", e);
+        }
+    });
 };
 
 const getStoredLotes = (): Lote[] => {
@@ -74,6 +87,8 @@ export const LoteService = {
         if (isSupabaseEnabled()) {
             const { data: newLote, error } = await supabase.from('lotes').insert([data]).select().single();
             if (error) throw error;
+            AuditLogService.logAction('lotes', newLote.id, 'CREATE', null, newLote);
+            notify();
             return newLote;
         }
 
@@ -86,13 +101,18 @@ export const LoteService = {
         };
         lotes.push(newLote);
         saveStoredLotes(lotes);
+        AuditLogService.logAction('lotes', newLote.id, 'CREATE', null, newLote);
+        notify();
         return newLote;
     },
 
     async update(id: string, data: Partial<Lote>): Promise<Lote> {
+        const oldLote = await this.get(id);
         if (isSupabaseEnabled()) {
             const { data: updated, error } = await supabase.from('lotes').update(data).eq('id', id).select().single();
             if (error) throw error;
+            AuditLogService.logAction('lotes', id, 'UPDATE', oldLote, updated);
+            notify();
             return updated;
         }
 
@@ -100,40 +120,56 @@ export const LoteService = {
         const index = lotes.findIndex(l => l.id === id);
         if (index === -1) throw new Error("Lote not found");
 
-        lotes[index] = { ...lotes[index], ...data, updated_at: new Date().toISOString() };
+        const updated = { ...lotes[index], ...data, updated_at: new Date().toISOString() };
+        lotes[index] = updated;
         saveStoredLotes(lotes);
-        return lotes[index];
+        AuditLogService.logAction('lotes', id, 'UPDATE', oldLote, updated);
+        notify();
+        return updated;
     },
 
     async delete(id: string): Promise<void> {
+        const oldLote = await this.get(id);
         if (isSupabaseEnabled()) {
             const { data, error } = await supabase.from('lotes').delete().eq('id', id).select();
             if (error) throw error;
             if (!data || data.length === 0) {
                 throw new Error("Permissão negada ou item já excluído.");
             }
+            AuditLogService.logAction('lotes', id, 'DELETE', oldLote, null);
+            notify();
             return;
         }
 
         const lotes = getStoredLotes();
         const filtered = lotes.filter(l => l.id !== id);
         saveStoredLotes(filtered);
+        AuditLogService.logAction('lotes', id, 'DELETE', oldLote, null);
+        notify();
     },
 
     subscribe(callback: () => void): () => void {
-        if (!isSupabaseEnabled()) return () => { };
+        listeners.add(callback);
 
-        const channel = supabase
-            .channel(`lotes-changes-${Math.random().toString(36).substr(2, 9)}`)
-            .on(
-                'postgres_changes',
-                { event: '*', schema: 'public', table: 'lotes' },
-                () => callback()
-            )
-            .subscribe();
+        let unsubscribeSupabase = () => {};
+        if (isSupabaseEnabled()) {
+            const channel = supabase
+                .channel(`lotes-changes-${Math.random().toString(36).substr(2, 9)}`)
+                .on(
+                    'postgres_changes',
+                    { event: '*', schema: 'public', table: 'lotes' },
+                    () => callback()
+                )
+                .subscribe();
+
+            unsubscribeSupabase = () => {
+                supabase.removeChannel(channel);
+            };
+        }
 
         return () => {
-            supabase.removeChannel(channel);
+            listeners.delete(callback);
+            unsubscribeSupabase();
         };
     }
 };

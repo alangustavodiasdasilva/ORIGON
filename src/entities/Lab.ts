@@ -1,5 +1,6 @@
 
 import { supabase } from "@/lib/supabase";
+import { AuditLogService } from "./AuditLog";
 
 export interface Lab {
     id: string;
@@ -76,6 +77,7 @@ export const LabService = {
             const stored = getStoredLabs();
             stored.push(newLab);
             saveStoredLabs(stored);
+            AuditLogService.logAction('laboratorios', newLab.id, 'CREATE', null, newLab);
             return newLab;
         }
 
@@ -88,10 +90,12 @@ export const LabService = {
         };
         labs.push(newLab);
         saveStoredLabs(labs);
+        AuditLogService.logAction('laboratorios', newLab.id, 'CREATE', null, newLab);
         return newLab;
     },
 
     async update(id: string, data: Partial<Lab>): Promise<Lab> {
+        const oldLab = await this.get(id);
         if (isSupabaseEnabled()) {
             const { data: updated, error } = await supabase.from('laboratorios').update(data).eq('id', id).select().single();
             if (error) throw error;
@@ -100,6 +104,7 @@ export const LabService = {
             const idx = stored.findIndex(l => l.id === id);
             if (idx >= 0) stored[idx] = updated;
             saveStoredLabs(stored);
+            AuditLogService.logAction('laboratorios', id, 'UPDATE', oldLab, updated);
             return updated;
         }
 
@@ -108,21 +113,27 @@ export const LabService = {
         if (index === -1) throw new Error("Lab not found");
         labs[index] = { ...labs[index], ...data, updated_at: new Date().toISOString() };
         saveStoredLabs(labs);
+        AuditLogService.logAction('laboratorios', id, 'UPDATE', oldLab, labs[index]);
         return labs[index];
     },
 
     async delete(id: string): Promise<void> {
+        const oldLab = await this.get(id);
         if (isSupabaseEnabled()) {
             const { data, error } = await supabase.from('laboratorios').delete().eq('id', id).select();
             if (error) throw error;
             if (!data || data.length === 0) {
                 throw new Error("Permissão negada pelo servidor ou laboratório já excluído.");
             }
+            AuditLogService.logAction('laboratorios', id, 'DELETE', oldLab, null);
         }
         // SEMPRE limpa do localStorage — independente do Supabase estar ativo ou não
         // Isso evita o "ghost lab" que voltava após atualização de página
         const stored = getStoredLabs();
         saveStoredLabs(stored.filter(l => l.id !== id));
+        if (!isSupabaseEnabled()) {
+            AuditLogService.logAction('laboratorios', id, 'DELETE', oldLab, null);
+        }
     },
 
     /**

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useRef, useEffect } from "react";
 import type { Sample } from "@/entities/Sample";
 import { cn } from "@/lib/utils";
 import { formatDecimalBR } from "@/services/ocrExtraction";
@@ -40,6 +40,37 @@ const COLORS_MAP: Record<string, string> = {
 interface ChartSample extends Sample {
     parsedVal: number;
     globalIndex?: number;
+}
+
+// ── Componente auxiliar (evita inline style= flagado pelo linter) ────────────
+function ColorButton({ color, active, activeStyle, className, onClick, ariaLabel, title }: {
+    color: string;
+    active: boolean;
+    activeStyle: 'border' | 'shadow';
+    className: string;
+    onClick: () => void;
+    ariaLabel: string;
+    title: string;
+}) {
+    const ref = useRef<HTMLButtonElement>(null);
+    useEffect(() => {
+        if (!ref.current) return;
+        ref.current.style.backgroundColor = color;
+        if (activeStyle === 'border') {
+            ref.current.style.borderColor = active ? 'black' : 'transparent';
+        } else {
+            ref.current.style.boxShadow = active ? '0 0 0 2px black' : '';
+        }
+    }, [color, active, activeStyle]);
+    return (
+        <button
+            ref={ref}
+            aria-label={ariaLabel}
+            title={title}
+            onClick={onClick}
+            className={className}
+        />
+    );
 }
 
 export default function MovingAverageChart({ samples, windowSize = 3, onSampleHover, onColorChange }: MovingAverageChartProps) {
@@ -495,9 +526,12 @@ export default function MovingAverageChart({ samples, windowSize = 3, onSampleHo
                             <div className="text-[9px] font-mono font-bold uppercase text-neutral-500 mb-2">Amostra #{selectingColorSample.amostra_id}</div>
                             <div className="flex gap-2">
                                 {['#3b82f6', '#10b981', '#f59e0b', '#ef4444'].map((c) => (
-                                    <button
+                                    <ColorButton
                                         key={c}
-                                        aria-label={`Forçar cor ${c}`}
+                                        color={c}
+                                        active={selectingColorSample.cor === c}
+                                        activeStyle="border"
+                                        ariaLabel={`Forçar cor ${c}`}
                                         title={`Mover para ${COLORS_MAP[c]}`}
                                         onClick={() => {
                                             if (onColorChange) {
@@ -509,10 +543,6 @@ export default function MovingAverageChart({ samples, windowSize = 3, onSampleHo
                                             }
                                         }}
                                         className="w-8 h-8 transition-transform hover:scale-110 active:scale-95 border-2 shadow-sm"
-                                        style={{
-                                            backgroundColor: c,
-                                            borderColor: selectingColorSample.cor === c ? 'black' : 'transparent'
-                                        }}
                                     />
                                 ))}
                             </div>
@@ -579,10 +609,13 @@ export default function MovingAverageChart({ samples, windowSize = 3, onSampleHo
                                     {/* Botões de Alteração de Cor */}
                                     <div className="flex items-center gap-1.5 pt-1">
                                         <span className="text-[8px] uppercase tracking-widest text-neutral-400 font-bold mr-1">Mover para:</span>
-                                        {['#3b82f6', '#10b981', '#f59e0b', '#ef4444'].map((c, idx) => (
-                                            <button
+                                        {['#3b82f6', '#10b981', '#f59e0b', '#ef4444'].map((c) => (
+                                            <ColorButton
                                                 key={c}
-                                                aria-label={`Forçar cor ${c}`}
+                                                color={c}
+                                                active={hoveredSample.cor === c}
+                                                activeStyle="shadow"
+                                                ariaLabel={`Forçar cor ${c}`}
                                                 title={`Mover para ${COLORS_MAP[c]}`}
                                                 onClick={() => {
                                                     if (onColorChange) {
@@ -591,10 +624,6 @@ export default function MovingAverageChart({ samples, windowSize = 3, onSampleHo
                                                     }
                                                 }}
                                                 className="w-5 h-5 transition-transform hover:scale-125 active:scale-95 border border-white shadow-sm"
-                                                style={{
-                                                    backgroundColor: c,
-                                                    boxShadow: hoveredSample.cor === c ? '0 0 0 2px black' : undefined
-                                                }}
                                             />
                                         ))}
                                     </div>

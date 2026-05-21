@@ -1,5 +1,6 @@
 
 import { supabase } from "@/lib/supabase";
+import { AuditLogService } from "./AuditLog";
 
 export interface Machine {
     id: string;
@@ -89,6 +90,23 @@ export const MachineService = {
             });
     },
 
+    async get(id: string): Promise<Machine | undefined> {
+        if (isSupabaseEnabled()) {
+            const { data, error } = await supabase.from('maquinas').select('*').eq('id', id).single();
+            if (!error && data) {
+                return {
+                    id: data.id,
+                    machineId: data.identificacao,
+                    serialNumber: data.numero_serie,
+                    model: data.modelo,
+                    labId: data.lab_id,
+                    created_at: data.created_at
+                };
+            }
+        }
+        return getStoredMachines().find(m => m.id === id);
+    },
+
     async create(data: Omit<Machine, 'id' | 'created_at'>): Promise<Machine> {
         // SEGURANÇA: Rastreamento de chamada para descobrir quem está criando máquinas 'fantasma'
         console.trace(`MachineService.create chamado para: ${data.machineId}`);
@@ -116,7 +134,7 @@ export const MachineService = {
 
             if (error) throw error;
 
-            return {
+            const result: Machine = {
                 id: newMachine.id,
                 machineId: newMachine.identificacao,
                 serialNumber: newMachine.numero_serie,
@@ -124,6 +142,8 @@ export const MachineService = {
                 labId: newMachine.lab_id,
                 created_at: newMachine.created_at
             };
+            AuditLogService.logAction('maquinas', result.id, 'CREATE', null, result);
+            return result;
         }
 
         const machines = getStoredMachines();
@@ -134,10 +154,12 @@ export const MachineService = {
         };
         machines.push(newMachine);
         saveStoredMachines(machines);
+        AuditLogService.logAction('maquinas', newMachine.id, 'CREATE', null, newMachine);
         return newMachine;
     },
 
     async update(id: string, data: Partial<Machine>): Promise<Machine> {
+        const oldMachine = await this.get(id);
         if (isSupabaseEnabled()) {
             const dbUpdates: any = {};
             if (data.machineId) dbUpdates.identificacao = data.machineId;
@@ -154,7 +176,7 @@ export const MachineService = {
 
             if (error) throw error;
 
-            return {
+            const result: Machine = {
                 id: updated.id,
                 machineId: updated.identificacao,
                 serialNumber: updated.numero_serie,
@@ -162,6 +184,8 @@ export const MachineService = {
                 labId: updated.lab_id,
                 created_at: updated.created_at
             };
+            AuditLogService.logAction('maquinas', id, 'UPDATE', oldMachine, result);
+            return result;
         }
 
         const machines = getStoredMachines();
@@ -170,21 +194,27 @@ export const MachineService = {
 
         machines[index] = { ...machines[index], ...data };
         saveStoredMachines(machines);
+        AuditLogService.logAction('maquinas', id, 'UPDATE', oldMachine, machines[index]);
         return machines[index];
     },
 
     async delete(id: string): Promise<void> {
+        const oldMachine = await this.get(id);
         if (isSupabaseEnabled()) {
             const { data, error } = await supabase.from('maquinas').delete().eq('id', id).select();
             if (error) throw error;
             if (!data || data.length === 0) {
                 throw new Error("Permissão negada pelo servidor ou máquina já excluída.");
             }
+            AuditLogService.logAction('maquinas', id, 'DELETE', oldMachine, null);
         }
         // SEMPRE limpa do localStorage — independente do Supabase estar ativo ou não
         // Isso evita que dados deletados reapareçam via fallback
         const machines = getStoredMachines();
         saveStoredMachines(machines.filter(m => m.id !== id));
+        if (!isSupabaseEnabled()) {
+            AuditLogService.logAction('maquinas', id, 'DELETE', oldMachine, null);
+        }
     },
 
     subscribe(callback: () => void): () => void {

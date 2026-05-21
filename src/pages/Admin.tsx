@@ -13,6 +13,7 @@ import type { Lab } from "@/entities/Lab";
 import { MigrationService } from "@/services/MigrationService";
 import { Loader2 } from "lucide-react";
 import { usePresence } from "@/hooks/usePresence";
+import AuditLogsTab from "@/components/admin/AuditLogsTab";
 
 const isSupabaseEnabled = () => {
     const url = import.meta.env.VITE_SUPABASE_URL;
@@ -51,9 +52,6 @@ export default function Admin() {
             }
 
             const now = new Date().getTime();
-            const onlineList = data.filter(a =>
-                a.last_active && (Math.abs(now - new Date(a.last_active).getTime()) < 60000)
-            );
             
             // Carregar labs se ainda n tiver
             const labsList = await LabService.list();
@@ -105,6 +103,7 @@ export default function Admin() {
         { id: "labs", label: "Laboratórios", icon: Database },
         { id: "analysts", label: "Access Control", icon: Users },
         { id: "machines", label: "Máquinas", icon: Server },
+        { id: "audit", label: "Auditoria", icon: ShieldCheck },
     ];
 
     // Se não for admin_global, removemos a aba de labs (ou podemos mantê-la e restringir dentro do componente)
@@ -197,6 +196,7 @@ export default function Admin() {
                 {activeTab === "labs" && <LabsTab />}
                 {activeTab === "analysts" && <AnalystsTab />}
                 {activeTab === "machines" && <SystemConfigTab />}
+                {activeTab === "audit" && <AuditLogsTab />}
             </div>
         </div>
     );

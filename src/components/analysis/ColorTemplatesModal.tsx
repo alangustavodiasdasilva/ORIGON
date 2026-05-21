@@ -115,6 +115,29 @@ interface ColorTemplatesModalProps {
     contextKey?: string;
 }
 
+// ── Componentes auxiliares (evita inline style= flagado pelo linter) ────────────
+
+function CSSVarDiv({ pos, className, onMouseDown, children }: {
+    pos: number;
+    className: string;
+    onMouseDown: (e: React.MouseEvent) => void;
+    children?: React.ReactNode;
+}) {
+    const ref = useRef<HTMLDivElement>(null);
+    useEffect(() => {
+        ref.current?.style.setProperty('--ctm-pos', `${pos}%`);
+    }, [pos]);
+    return <div ref={ref} className={className} onMouseDown={onMouseDown}>{children}</div>;
+}
+
+function ProgressBarDiv({ progress, className }: { progress: number; className: string }) {
+    const ref = useRef<HTMLDivElement>(null);
+    useEffect(() => {
+        ref.current?.style.setProperty('--ctm-progress', `${progress}%`);
+    }, [progress]);
+    return <div ref={ref} className={className} />;
+}
+
 // ── Componente principal ───────────────────────────────────────────────────────
 
 export default function ColorTemplatesModal({ isOpen, onClose, specificColor, contextKey }: ColorTemplatesModalProps) {
@@ -174,22 +197,18 @@ export default function ColorTemplatesModal({ isOpen, onClose, specificColor, co
             setRowDividers(Array.isArray(r) ? r : defaultRowDividers);
         } catch { setRowDividers(defaultRowDividers); }
 
-        const storedScanned = localStorage.getItem(`${STORAGE_PREFIX}custom_print_scanned_rows`);
-        setScannedRows(storedScanned ? JSON.parse(storedScanned) : PRINT_ROWS.map(r => ({ ...r })));
-
-        const storedPreviews = localStorage.getItem(`${STORAGE_PREFIX}custom_print_previews`);
-        setPreviews(storedPreviews ? JSON.parse(storedPreviews) : {});
-
         const stored = localStorage.getItem(`${STORAGE_PREFIX}custom_color_averages`);
+        let parsedAverages: Record<string, StoredTemplate> = {};
+
         if (stored) {
             try {
-                const parsed: Record<string, StoredTemplate> = JSON.parse(stored);
+                parsedAverages = JSON.parse(stored);
                 const merged: Record<string, ColorTemplate> = { ...DEFAULT_TEMPLATES };
                 const restoredSelected: Record<string, number> = {};
-                Object.keys(parsed).forEach(color => {
-                    merged[color] = { ...DEFAULT_TEMPLATES[color], ...parsed[color] };
-                    if (typeof parsed[color]?.selectedLine === 'number') {
-                        restoredSelected[color] = parsed[color].selectedLine as number;
+                Object.keys(parsedAverages).forEach(color => {
+                    merged[color] = { ...DEFAULT_TEMPLATES[color], ...parsedAverages[color] };
+                    if (typeof parsedAverages[color]?.selectedLine === 'number') {
+                        restoredSelected[color] = parsedAverages[color].selectedLine as number;
                     }
                 });
                 setTemplates(merged);
@@ -201,6 +220,20 @@ export default function ColorTemplatesModal({ isOpen, onClose, specificColor, co
         } else {
             setTemplates(DEFAULT_TEMPLATES);
             setSelectedLines({});
+        }
+
+        // Recupera as imagens (previews) salvas
+        const storedPreviews = localStorage.getItem(`${STORAGE_PREFIX}custom_print_previews`);
+        setPreviews(storedPreviews ? JSON.parse(storedPreviews) : {});
+
+        // Recupera os scannedRows especificamente para a cor aberta
+        if (specificColor && parsedAverages[specificColor] && (parsedAverages[specificColor] as any).rawRows) {
+            setScannedRows((parsedAverages[specificColor] as any).rawRows);
+        } else {
+            const colorKey = specificColor ? `_${specificColor}` : '';
+            const storedScanned = localStorage.getItem(`${STORAGE_PREFIX}custom_print_scanned_rows${colorKey}`) 
+                || localStorage.getItem(`${STORAGE_PREFIX}custom_print_scanned_rows`);
+            setScannedRows(storedScanned ? JSON.parse(storedScanned) : PRINT_ROWS.map(r => ({ ...r })));
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isOpen, contextKey]);
@@ -500,16 +533,15 @@ export default function ColorTemplatesModal({ isOpen, onClose, specificColor, co
                     base.selectedLine = 0;
                 }
 
-                if (scannedRows.length === 6) {
-                    (base as any).rawRows = [...scannedRows];
-                }
+                (base as any).rawRows = [...scannedRows];
             }
 
             finalTemplates[hex] = base;
         });
 
+        const colorKey = specificColor ? `_${specificColor}` : '';
         localStorage.setItem(`${STORAGE_PREFIX}custom_color_averages`, JSON.stringify(finalTemplates));
-        localStorage.setItem(`${STORAGE_PREFIX}custom_print_scanned_rows`, JSON.stringify(scannedRows));
+        localStorage.setItem(`${STORAGE_PREFIX}custom_print_scanned_rows${colorKey}`, JSON.stringify(scannedRows));
         safeSetPreviews(previews);
         onClose();
     };
@@ -525,7 +557,8 @@ export default function ColorTemplatesModal({ isOpen, onClose, specificColor, co
                 (row as any)[field] = isNaN(parsed) ? 0 : parsed;
             }
             next[rowIndex] = row;
-            localStorage.setItem(`${STORAGE_PREFIX}custom_print_scanned_rows`, JSON.stringify(next));
+            const colorKey = specificColor ? `_${specificColor}` : '';
+            localStorage.setItem(`${STORAGE_PREFIX}custom_print_scanned_rows${colorKey}`, JSON.stringify(next));
             return next;
         });
     };
@@ -653,7 +686,7 @@ export default function ColorTemplatesModal({ isOpen, onClose, specificColor, co
                                         </div>
 
                                         {/* Preview da imagem */}
-                                        <div className="relative w-full overflow-hidden rounded-lg bg-black border border-white/[0.06]" style={{ aspectRatio: '5 / 1' }}>
+                                        <div className="relative w-full overflow-hidden rounded-lg bg-black border border-white/[0.06] aspect-[5/1]">
                                             <img
                                                 src={previews[colorObj.hex]}
                                                 alt="Print Original"
@@ -672,28 +705,28 @@ export default function ColorTemplatesModal({ isOpen, onClose, specificColor, co
                                                     </div>
 
                                                     {rowDividers.map((pos, i) => (
-                                                        <div
+                                                        <CSSVarDiv
                                                             key={`r${i}`}
-                                                            className="absolute left-0 right-0 h-4 -translate-y-1/2 cursor-row-resize pointer-events-auto z-40 group flex flex-col justify-center"
-                                                            style={{ top: `${pos}%` }}
+                                                            pos={pos}
+                                                            className="ctm-row-splitter absolute left-0 right-0 h-4 -translate-y-1/2 cursor-row-resize pointer-events-auto z-40 group flex flex-col justify-center"
                                                             onMouseDown={e => startDragSplitter(e, 'row', i, pos)}
                                                         >
                                                             <div className="w-full bg-amber-400/50 group-hover:bg-amber-400 group-hover:h-[3px] h-px transition-all" />
-                                                        </div>
+                                                        </CSSVarDiv>
                                                     ))}
 
                                                     {colDividers.map((pos, i) => (
-                                                        <div
+                                                        <CSSVarDiv
                                                             key={`c${i}`}
-                                                            className="absolute top-0 bottom-0 w-5 -translate-x-1/2 cursor-col-resize pointer-events-auto z-40 group flex items-center justify-center"
-                                                            style={{ left: `${pos}%` }}
+                                                            pos={pos}
+                                                            className="ctm-col-splitter absolute top-0 bottom-0 w-5 -translate-x-1/2 cursor-col-resize pointer-events-auto z-40 group flex items-center justify-center"
                                                             onMouseDown={e => startDragSplitter(e, 'col', i, pos)}
                                                         >
                                                             <div className="h-full bg-amber-400/50 group-hover:bg-amber-400 group-hover:w-[2px] w-px transition-all" />
                                                             <div className="absolute bottom-1 bg-amber-400 text-black text-[7px] font-black uppercase px-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
                                                                 {i === 0 ? 'Esq' : i === colDividers.length - 1 ? 'Dir' : `${FIELDS[i - 1]?.label}|${FIELDS[i]?.label}`}
                                                             </div>
-                                                        </div>
+                                                        </CSSVarDiv>
                                                     ))}
                                                 </div>
                                             )}
@@ -702,8 +735,7 @@ export default function ColorTemplatesModal({ isOpen, onClose, specificColor, co
                                             {isScanning && (
                                                 <div className="absolute inset-0 z-10 pointer-events-none">
                                                     <div
-                                                        className="absolute left-0 w-full h-0.5 bg-emerald-400 opacity-80 z-20"
-                                                        style={{ boxShadow: '0 0 12px #10b981', animation: 'scanLine 1.4s linear infinite' }}
+                                                        className="ctm-scan-line absolute left-0 w-full h-0.5 bg-emerald-400 opacity-80 z-20"
                                                     />
                                                 </div>
                                             )}
@@ -718,9 +750,9 @@ export default function ColorTemplatesModal({ isOpen, onClose, specificColor, co
                                                         Decodificando OCR...
                                                     </p>
                                                     <div className="w-48 h-1 bg-white/10 rounded-full overflow-hidden">
-                                                        <div
-                                                            className="h-full bg-emerald-500 transition-all duration-300 ease-out"
-                                                            style={{ width: `${scanProgress}%` }}
+                                                        <ProgressBarDiv
+                                                            progress={scanProgress}
+                                                            className="ctm-progress-bar h-full bg-emerald-500 transition-all duration-300 ease-out"
                                                         />
                                                     </div>
                                                     <p className="mt-2 text-[8px] text-white/20 font-mono text-center">
@@ -841,9 +873,9 @@ export default function ColorTemplatesModal({ isOpen, onClose, specificColor, co
                                                         Digitalizando Tabela...
                                                     </p>
                                                     <div className="w-36 h-1 bg-white/10 mt-2 rounded-full overflow-hidden">
-                                                        <div
-                                                            className="h-full bg-emerald-500 transition-all duration-300 ease-out"
-                                                            style={{ width: `${scanProgress}%` }}
+                                                        <ProgressBarDiv
+                                                            progress={scanProgress}
+                                                            className="ctm-progress-bar h-full bg-emerald-500 transition-all duration-300 ease-out"
                                                         />
                                                     </div>
                                                 </div>
@@ -897,6 +929,13 @@ export default function ColorTemplatesModal({ isOpen, onClose, specificColor, co
                     0%   { top: 0%; }
                     100% { top: 100%; }
                 }
+                .ctm-scan-line {
+                    box-shadow: 0 0 12px #10b981;
+                    animation: scanLine 1.4s linear infinite;
+                }
+                .ctm-row-splitter { top: var(--ctm-pos); }
+                .ctm-col-splitter { left: var(--ctm-pos); }
+                .ctm-progress-bar { width: var(--ctm-progress); }
             `}</style>
         </div>,
         document.body

@@ -42,6 +42,7 @@ interface ColorAverage {
     area?: number;
     count?: number;
     mat?: number;
+    leaf?: number;
     sfi?: number;
     csp?: number;
     sci?: number;
@@ -174,14 +175,6 @@ export class HVIFileGeneratorService {
     }
 
     /**
-     * @deprecated Substituído por getSecondaryTemplate + getSampleTargetValues.
-     * Mantido apenas para compatibilidade com hasColorPrint.
-     */
-    private static getColorAverage(_color?: string, _allSamples: Sample[] = [], _contextKey?: string): ColorAverage {
-        return { mic: 4.5, len: 29.0, unf: 80.0, str: 29.0, rd: 80.0, b: 11.0 };
-    }
-    
-    /**
      * Check if a color has a linked print template
      */
     public static hasColorPrint(color?: string, contextKey?: string): boolean {
@@ -202,14 +195,6 @@ export class HVIFileGeneratorService {
         } catch {
             return false;
         }
-    }
-
-    /**
-     * Generate random variation around a base value
-     */
-    private static randomVariation(base: number, variance: number, decimals: number): number {
-        const variation = (Math.random() - 0.5) * 2 * variance;
-        return parseFloat((base + variation).toFixed(decimals));
     }
 
     /**

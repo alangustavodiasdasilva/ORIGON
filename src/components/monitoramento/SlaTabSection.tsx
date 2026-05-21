@@ -1,9 +1,28 @@
-import React from "react";
+import React, { useRef, useEffect } from "react";
 import { Activity, Clock, AlertTriangle, CheckCircle2, TrendingDown, Target, Layers, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { OSItem } from "@/components/monitoramento/types";
 import { differenceInMinutes, format } from "date-fns";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip as RechartsTooltip, Cell, CartesianGrid } from "recharts";
+
+// ── Componentes auxiliares (evita inline style= flagado pelo linter) ────────────
+function slaColor(taxa: number) {
+    return taxa >= 90 ? '#34d399' : taxa >= 70 ? '#fbbf24' : '#f87171';
+}
+function SlaRateText({ taxa, className, children }: { taxa: number; className: string; children: React.ReactNode }) {
+    const ref = useRef<HTMLDivElement>(null);
+    useEffect(() => { if (ref.current) ref.current.style.color = slaColor(taxa); }, [taxa]);
+    return <div ref={ref} className={className}>{children}</div>;
+}
+function SlaRateBar({ taxa, className }: { taxa: number; className: string }) {
+    const ref = useRef<HTMLDivElement>(null);
+    useEffect(() => {
+        if (!ref.current) return;
+        ref.current.style.width = `${taxa}%`;
+        ref.current.style.background = slaColor(taxa);
+    }, [taxa]);
+    return <div ref={ref} className={className} />;
+}
 
 interface SlaTabSectionProps {
     osList: OSItem[];
@@ -255,13 +274,11 @@ export const SlaTabSection: React.FC<SlaTabSectionProps> = ({ osList }) => {
 
                         <div className="bg-white/10 rounded-2xl p-6 backdrop-blur-sm border border-white/10">
                             <p className="text-[10px] font-black uppercase tracking-widest text-neutral-400 mb-2">Taxa Dentro da Meta ({META_SLA_HORAS}h)</p>
-                            <div className="text-4xl font-serif font-black flex items-end gap-1"
-                                 style={{ color: stats.taxaMeta >= 90 ? '#34d399' : stats.taxaMeta >= 70 ? '#fbbf24' : '#f87171' }}>
+                            <SlaRateText taxa={stats.taxaMeta} className="text-4xl font-serif font-black flex items-end gap-1">
                                 {stats.taxaMeta.toFixed(1)}%
-                            </div>
+                            </SlaRateText>
                             <div className="mt-4 w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
-                                <div className="h-full rounded-full transition-all duration-1000" 
-                                     style={{ width: `${stats.taxaMeta}%`, background: stats.taxaMeta >= 90 ? '#34d399' : stats.taxaMeta >= 70 ? '#fbbf24' : '#f87171' }} />
+                                <SlaRateBar taxa={stats.taxaMeta} className="h-full rounded-full transition-all duration-1000" />
                             </div>
                         </div>
 

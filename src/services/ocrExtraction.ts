@@ -152,10 +152,15 @@ const parseHVIData = (text: string): ExtractionResult => {
 
     // PRIORIDADE 1: Procura pela linha "Média" ou "Media" na tabela de descrição
     // Esta é a linha que o usuário quer extrair (destacada em vermelho)
+    // O OCR pode ler como: "Media", "Média", "Méd", "Medias", "2- Média", "2 Media", etc.
     for (const line of lines) {
-        // Procura por linha que contém "Média" ou "2- Média" seguida de valores numéricos
+        // Regex muito flexível: aceita qualquer variante de "Media" com 1+ espaços entre colunas
         const mediaMatch = line.match(
-            /[2-]?\s*M[eé]dia[:\s]*([\d,.]+)\s+([\d,.]+)\s+([\d,.]+)\s+([\d,.]+)\s+([\d,.]+)\s+([\d,.]+)/i
+            /(?:2[-.]?\s*)?M[eé][d]?[i]?[a-z.]*[:\s]+([\d,.]+)\s+([\d,.]+)\s+([\d,.]+)\s+([\d,.]+)\s+([\d,.]+)\s+([\d,.]+)/i
+        ) ||
+        // Fallback: linha que começa com "Media" ou "Média" sem prefixo numérico
+        line.match(
+            /^\s*M[eé][a-z.]*\s+([\d,.]+)\s+([\d,.]+)\s+([\d,.]+)\s+([\d,.]+)\s+([\d,.]+)\s+([\d,.]+)/i
         );
 
         if (mediaMatch) {
@@ -265,7 +270,7 @@ export const OCRExtractionService = {
 
             const result = await Tesseract.recognize(
                 imageUrl,
-                'por', // Português
+                'eng', // 'eng' é muito mais preciso para tabelas numéricas com vírgula
                 {
                     logger: (m) => {
                         if (m.status === 'recognizing text' && onProgress) {
@@ -277,7 +282,19 @@ export const OCRExtractionService = {
 
             URL.revokeObjectURL(imageUrl);
 
-            const extractedData = parseHVIData(result.data.text);
+            // Normaliza o texto antes do parsing:
+            // colapsa múltiplos espaços em um único, remove chars que não são texto/números
+            const rawText = result.data.text;
+            const normalizedText = rawText
+                .replace(/\r\n/g, '\n')          // normaliza quebras de linha Windows
+                .replace(/[ \t]+/g, ' ')          // colapsa múltiplos espaços/tabs em um só
+                .replace(/[|\\]/g, ' ')            // remove barras e pipes (lidos como separadores)
+                .replace(/—|–/g, '-');             // normaliza traços especiais
+
+            console.log('[OCR] Raw text:', rawText);
+            console.log('[OCR] Normalized text:', normalizedText);
+
+            const extractedData = parseHVIData(normalizedText);
 
             // Se não conseguiu extrair dados, retorna erro
             if (extractedData.rows.length === 0 && !extractedData.mala && !extractedData.etiqueta) {

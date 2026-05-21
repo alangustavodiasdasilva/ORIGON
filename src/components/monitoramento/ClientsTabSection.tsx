@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useRef, useEffect } from "react";
 import { LayoutGrid, Database, PlusSquare, MinusSquare, Download, CheckSquare, Square } from "lucide-react";
 import * as XLSX from 'xlsx';
 import { ResponsiveContainer, LineChart, CartesianGrid, XAxis, YAxis, Tooltip as RechartsTooltip, Line, Brush } from "recharts";
@@ -6,6 +6,45 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { CustomTooltip } from "@/components/monitoramento/CustomTooltip";
 import { cn } from "@/lib/utils";
+
+// ── Componentes auxiliares (evita inline style= flagado pelo linter) ────────────
+function ClientFilterButton({ label, selected, borderColor, onClick }: {
+    label: string;
+    selected: boolean;
+    borderColor: string;
+    onClick: () => void;
+}) {
+    const ref = useRef<HTMLButtonElement>(null);
+    useEffect(() => {
+        if (!ref.current) return;
+        ref.current.style.borderColor = selected ? borderColor : 'transparent';
+    }, [selected, borderColor]);
+    return (
+        <button
+            ref={ref}
+            onClick={onClick}
+            className={cn(
+                "flex items-center gap-3 px-4 py-2.5 rounded-xl border-2 transition-all shrink-0 min-w-fit",
+                selected
+                    ? "bg-white text-black shadow-sm"
+                    : "bg-neutral-50/50 text-neutral-400 border-transparent hover:bg-white hover:border-neutral-200"
+            )}
+        >
+            <div className="flex items-center gap-2.5">
+                <ClientColorDot color={borderColor} />
+                <span className="text-[9px] font-black uppercase tracking-wider">{label}</span>
+            </div>
+        </button>
+    );
+}
+
+function ClientColorDot({ color }: { color: string }) {
+    const ref = useRef<HTMLDivElement>(null);
+    useEffect(() => {
+        if (ref.current) ref.current.style.background = color || '#e5e5e5';
+    }, [color]);
+    return <div ref={ref} className="h-2.5 w-2.5 rounded-full" />;
+}
 import type { OSItem } from "@/components/monitoramento/types";
 
 interface ClientsTabSectionProps {
@@ -143,24 +182,13 @@ export const ClientsTabSection: React.FC<ClientsTabSectionProps> = ({
                         )}
                         <div className="w-px h-8 bg-neutral-200 mx-1 shrink-0"></div>
                         {clienteDailyStats.keys.filter((k: string) => k !== 'Total Recebido').map((key: string) => (
-                            <button
+                            <ClientFilterButton
                                 key={key}
+                                label={key}
+                                selected={selectedChartClients.includes(key)}
+                                borderColor={clienteDailyStats.keyColors[key] || '#e5e5e5'}
                                 onClick={() => toggleClientSelection(key)}
-                                className={cn(
-                                    "flex items-center gap-3 px-4 py-2.5 rounded-xl border-2 transition-all shrink-0 min-w-fit",
-                                    selectedChartClients.includes(key)
-                                        ? "bg-white text-black shadow-sm"
-                                        : "bg-neutral-50/50 text-neutral-400 border-transparent hover:bg-white hover:border-neutral-200"
-                                )}
-                                style={{
-                                    borderColor: selectedChartClients.includes(key) ? clienteDailyStats.keyColors[key] : 'transparent'
-                                }}
-                            >
-                                <div className="flex items-center gap-2.5">
-                                    <div className="h-2.5 w-2.5 rounded-full" style={{ background: clienteDailyStats.keyColors[key] || '#e5e5e5' }} />
-                                    <span className="text-[9px] font-black uppercase tracking-wider">{key}</span>
-                                </div>
-                            </button>
+                            />
                         ))}
                     </div>
                 </div>

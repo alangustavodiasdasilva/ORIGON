@@ -1,5 +1,5 @@
-import React from "react";
-import { Activity, Inbox, Users, LayoutGrid } from "lucide-react";
+import React, { useRef, useEffect } from "react";
+import { Activity, Inbox, Users } from "lucide-react";
 import { ResponsiveContainer, LineChart, CartesianGrid, XAxis, YAxis, Tooltip as RechartsTooltip, Line, Brush } from "recharts";
 import { CustomTooltip } from "@/components/monitoramento/CustomTooltip";
 import { cn } from "@/lib/utils";
@@ -16,12 +16,35 @@ interface ReviewerPerformanceSectionProps {
     labId: string | null | undefined;
 }
 
-const PERIOD_OPTIONS = [
-    { label: '30 dias', value: 30 },
-    { label: '60 dias', value: 60 },
-    { label: '90 dias', value: 90 },
-    { label: 'Todos', value: 99999 },
-];
+
+// ── Componentes auxiliares (evita inline style= flagado pelo linter) ────────────
+function DestAvatar({ color, initials }: { color: string; initials: string }) {
+    const ref = useRef<HTMLDivElement>(null);
+    useEffect(() => { if (ref.current) ref.current.style.background = color; }, [color]);
+    return (
+        <div ref={ref} className="h-9 w-9 rounded-xl flex items-center justify-center text-white text-[10px] font-black shrink-0">
+            {initials}
+        </div>
+    );
+}
+function DestClientBar({ pct, color }: { pct: number; color: string }) {
+    const ref = useRef<HTMLDivElement>(null);
+    useEffect(() => {
+        if (!ref.current) return;
+        ref.current.style.width = `${pct}%`;
+        ref.current.style.background = color;
+    }, [pct, color]);
+    return <div ref={ref} className="h-full rounded-full" />;
+}
+function DestTableCell({ color, children }: { color: string; children: React.ReactNode }) {
+    const ref = useRef<HTMLTableCellElement>(null);
+    useEffect(() => { if (ref.current) ref.current.style.borderLeft = `3px solid ${color}`; }, [color]);
+    return (
+        <td ref={ref} className="p-3 sticky left-0 bg-white z-10 border-r border-neutral-100 font-black text-[11px]">
+            {children}
+        </td>
+    );
+}
 
 export const ReviewerPerformanceSection: React.FC<ReviewerPerformanceSectionProps> = ({
     activeTab,
@@ -32,7 +55,7 @@ export const ReviewerPerformanceSection: React.FC<ReviewerPerformanceSectionProp
     labId
 }) => {
     const [viewMode, setViewMode] = React.useState<'grafico' | 'dest'>('grafico');
-    const [periodoExibicao, setPeriodoExibicao] = React.useState(99999);
+    const [periodoExibicao] = React.useState(30);
 
     React.useEffect(() => {
         if (activeTab === 'geral' && viewMode === 'dest') {
@@ -264,10 +287,7 @@ export const ReviewerPerformanceSection: React.FC<ReviewerPerformanceSectionProp
                             return (
                                 <div key={dest.destName} className="bg-white border border-neutral-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all">
                                     <div className="flex items-center gap-3 mb-4">
-                                        <div className="h-9 w-9 rounded-xl flex items-center justify-center text-white text-[10px] font-black shrink-0"
-                                            style={{ background: color }}>
-                                            {dest.destName.slice(0, 2).toUpperCase()}
-                                        </div>
+                                        <DestAvatar color={color} initials={dest.destName.slice(0, 2).toUpperCase()} />
                                         <div className="min-w-0">
                                             <p className="text-[11px] font-black uppercase tracking-wider text-neutral-800 truncate">{dest.destName}</p>
                                             <p className="text-[10px] font-bold text-neutral-400">Dest / Revisor</p>
@@ -279,7 +299,7 @@ export const ReviewerPerformanceSection: React.FC<ReviewerPerformanceSectionProp
                                         {topClientes.map(([cli, am]) => (
                                             <div key={cli} className="flex items-center gap-2">
                                                 <div className="flex-1 h-1.5 bg-neutral-100 rounded-full overflow-hidden">
-                                                    <div className="h-full rounded-full" style={{ width: `${(am / dest.total) * 100}%`, background: color }} />
+                                                    <DestClientBar pct={(am / dest.total) * 100} color={color} />
                                                 </div>
                                                 <span className="text-[9px] font-bold text-neutral-500 shrink-0 max-w-[120px] truncate">{cli}</span>
                                                 <span className="text-[9px] font-black text-neutral-700 shrink-0">{am.toLocaleString('pt-BR')}</span>
@@ -326,10 +346,9 @@ export const ReviewerPerformanceSection: React.FC<ReviewerPerformanceSectionProp
                                         const color = colors[idx % colors.length];
                                         return (
                                             <tr key={dest.destName} className="hover:bg-neutral-50 transition-colors">
-                                                <td className="p-3 sticky left-0 bg-white z-10 border-r border-neutral-100 font-black text-[11px]"
-                                                    style={{ borderLeft: `3px solid ${color}` }}>
-                                                    {dest.destName}
-                                                </td>
+                                            <DestTableCell color={color}>
+                                                {dest.destName}
+                                            </DestTableCell>
                                                 {destPivot.sortedDates.map(date => (
                                                     <td key={date} className="p-3 text-center border-r border-neutral-100 font-bold text-neutral-700">
                                                         {dest.dates[date] ? dest.dates[date].toLocaleString('pt-BR') : '—'}

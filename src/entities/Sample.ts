@@ -1,5 +1,6 @@
 
 import { supabase } from "@/lib/supabase";
+import { AuditLogService } from "./AuditLog";
 
 export interface Sample {
     id: string;
@@ -31,6 +32,18 @@ export interface Sample {
 const STORAGE_KEY = 'fibertech_samples';
 
 const isSupabaseEnabled = () => !!import.meta.env.VITE_SUPABASE_URL && !!import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+const listeners = new Set<() => void>();
+
+const notify = () => {
+    listeners.forEach(cb => {
+        try {
+            cb();
+        } catch (e) {
+            console.error("Error in SampleService listener:", e);
+        }
+    });
+};
 
 const getStoredSamples = (): Sample[] => {
     try {
@@ -65,6 +78,14 @@ export const SampleService = {
         return getStoredSamples();
     },
 
+    async get(id: string): Promise<Sample | undefined> {
+        if (isSupabaseEnabled()) {
+            const { data, error } = await supabase.from('amostras').select('*').eq('id', id).single();
+            if (!error && data) return data;
+        }
+        return getStoredSamples().find(s => s.id === id);
+    },
+
     async listByLote(loteId: string): Promise<Sample[]> {
         if (isSupabaseEnabled()) {
             const { data, error } = await supabase.from('amostras').select('*').eq('lote_id', loteId).order('amostra_id');
@@ -80,6 +101,8 @@ export const SampleService = {
         if (isSupabaseEnabled()) {
             const { data: newSample, error } = await supabase.from('amostras').insert([data]).select().single();
             if (error) throw error;
+            AuditLogService.logAction('amostras', newSample.id, 'CREATE', null, newSample);
+            notify();
             return newSample;
         }
 
@@ -90,6 +113,8 @@ export const SampleService = {
         };
         samples.push(newSample);
         saveStoredSamples(samples);
+        AuditLogService.logAction('amostras', newSample.id, 'CREATE', null, newSample);
+        notify();
         return newSample;
     },
 
@@ -97,6 +122,8 @@ export const SampleService = {
         if (isSupabaseEnabled()) {
             const { data, error } = await supabase.from('amostras').insert(dataList).select();
             if (error) throw error;
+            data.forEach((s: any) => AuditLogService.logAction('amostras', s.id, 'CREATE', null, s));
+            notify();
             return data;
         }
 
@@ -107,13 +134,18 @@ export const SampleService = {
         }));
         samples.push(...newSamples);
         saveStoredSamples(samples);
+        newSamples.forEach(s => AuditLogService.logAction('amostras', s.id, 'CREATE', null, s));
+        notify();
         return newSamples;
     },
 
     async update(id: string, data: Partial<Sample>): Promise<Sample> {
+        const oldSample = await this.get(id);
         if (isSupabaseEnabled()) {
             const { data: updated, error } = await supabase.from('amostras').update(data).eq('id', id).select().single();
             if (error) throw error;
+            AuditLogService.logAction('amostras', id, 'UPDATE', oldSample, updated);
+            notify();
             return updated;
         }
 
@@ -121,19 +153,26 @@ export const SampleService = {
         const index = samples.findIndex(s => s.id === id);
         if (index === -1) throw new Error("Sample not found");
 
-        samples[index] = { ...samples[index], ...data };
+        const updated = { ...samples[index], ...data };
+        samples[index] = updated;
         saveStoredSamples(samples);
-        return samples[index];
+        AuditLogService.logAction('amostras', id, 'UPDATE', oldSample, updated);
+        notify();
+        return updated;
     },
 
     async bulkUpdate(updates: Record<string, Partial<Sample>>): Promise<void> {
         if (isSupabaseEnabled()) {
-            // Supabase doesn't have a direct "bulk update different rows with different data" in one call easily like this
-            // But we can use an RPC or multiple calls. For simplicity here, we'll do promise.all
-            const promises = Object.entries(updates).map(([id, data]) =>
-                supabase.from('amostras').update(data).eq('id', id)
-            );
+            const promises = Object.entries(updates).map(async ([id, data]) => {
+                const oldSample = await this.get(id);
+                const { data: updated, error } = await supabase.from('amostras').update(data).eq('id', id).select().single();
+                if (!error && updated) {
+                    AuditLogService.logAction('amostras', id, 'UPDATE', oldSample, updated);
+                }
+                return { updated, error };
+            });
             await Promise.all(promises);
+            notify();
             return;
         }
 
@@ -142,42 +181,60 @@ export const SampleService = {
         Object.entries(updates).forEach(([id, data]) => {
             const index = samples.findIndex(s => s.id === id);
             if (index !== -1) {
+                const oldSample = { ...samples[index] };
                 samples[index] = { ...samples[index], ...data };
+                AuditLogService.logAction('amostras', id, 'UPDATE', oldSample, samples[index]);
                 changed = true;
             }
         });
-        if (changed) saveStoredSamples(samples);
+        if (changed) {
+            saveStoredSamples(samples);
+            notify();
+        }
     },
 
     async delete(id: string): Promise<void> {
+        const oldSample = await this.get(id);
         if (isSupabaseEnabled()) {
             const { data, error } = await supabase.from('amostras').delete().eq('id', id).select();
             if (error) throw error;
             if (!data || data.length === 0) {
                 throw new Error("Permissão negada ou item já excluído.");
             }
+            AuditLogService.logAction('amostras', id, 'DELETE', oldSample, null);
+            notify();
             return;
         }
 
         const samples = getStoredSamples();
         const filtered = samples.filter(s => s.id !== id);
         saveStoredSamples(filtered);
+        AuditLogService.logAction('amostras', id, 'DELETE', oldSample, null);
+        notify();
     },
 
     subscribe(callback: () => void): () => void {
-        if (!isSupabaseEnabled()) return () => { };
+        listeners.add(callback);
 
-        const channel = supabase
-            .channel(`amostras-changes-${Math.random().toString(36).substr(2, 9)}`)
-            .on(
-                'postgres_changes',
-                { event: '*', schema: 'public', table: 'amostras' },
-                () => callback()
-            )
-            .subscribe();
+        let unsubscribeSupabase = () => {};
+        if (isSupabaseEnabled()) {
+            const channel = supabase
+                .channel(`amostras-changes-${Math.random().toString(36).substr(2, 9)}`)
+                .on(
+                    'postgres_changes',
+                    { event: '*', schema: 'public', table: 'amostras' },
+                    () => callback()
+                )
+                .subscribe();
+
+            unsubscribeSupabase = () => {
+                supabase.removeChannel(channel);
+            };
+        }
 
         return () => {
-            supabase.removeChannel(channel);
+            listeners.delete(callback);
+            unsubscribeSupabase();
         };
     }
 };

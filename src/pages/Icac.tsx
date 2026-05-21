@@ -4,6 +4,7 @@ import type { ErrorInfo, ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { AlertTriangle } from "lucide-react";
+import { AuditLogService } from "@/entities/AuditLog";
 
 // --- ERROR BOUNDARY ---
 class IcacErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean, error: Error | null }> {
@@ -169,6 +170,12 @@ function IcacContent() {
             timestamp: new Date().toLocaleString('pt-BR'),
             config: { ...config }
         }, ...prev]);
+
+        AuditLogService.logAction('icac', Date.now().toString(), 'CREATE', null, {
+            nome: `Simulação ICAC (${count} amostras)`,
+            alvo_mic: config.mic.target,
+            desvio_mic: config.mic.deviation
+        });
     };
 
     // --- ROBUST COPY FUNCTION ---

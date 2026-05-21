@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { cachedFetch, invalidateCachePrefix } from '../lib/queryCache';
 
 export interface ProducaoData {
     id?: string;
@@ -39,6 +40,8 @@ const saveStoredProducao = (data: ProducaoData[]) => {
 
 export const producaoService = {
     async uploadData(data: ProducaoData[]): Promise<boolean> {
+        // Invalida o cache após upload para forçar refetch na próxima leitura
+        invalidateCachePrefix('producao:');
         if (data.length === 0) return true;
 
         if (isSupabaseEnabled()) {
@@ -100,55 +103,61 @@ export const producaoService = {
     },
 
     async list(labId?: string): Promise<ProducaoData[]> {
-        if (isSupabaseEnabled()) {
-            try {
-                let allData: ProducaoData[] = [];
-                let from = 0;
-                const limit = 1000;
-                let hasMore = true;
+        // Chave de cache única por lab
+        const cacheKey = `producao:${labId ?? 'undefined'}`;
 
-                while (hasMore) {
-                    let query = supabase
-                        .from('operacao_producao')
-                        .select('*');
+        // Fetcher real — só executado quando o cache não tem dados válidos
+        const fetcher = async (): Promise<ProducaoData[]> => {
+            if (isSupabaseEnabled()) {
+                try {
+                    let allData: ProducaoData[] = [];
+                    let from = 0;
+                    const limit = 1000;
+                    let hasMore = true;
 
-                    if (labId && labId !== 'all') {
-                        query = query.eq('lab_id', labId);
-                    }
+                    while (hasMore) {
+                        let query = supabase
+                            .from('operacao_producao')
+                            .select('*');
 
-                    const { data, error } = await query
-                        .order('data_producao', { ascending: true })
-                        .range(from, from + limit - 1);
-
-                    if (error) throw error;
-                    
-                    if (data && data.length > 0) {
-                        allData = [...allData, ...data];
-                        if (data.length < limit) {
-                            hasMore = false;
-                        } else {
-                            from += limit;
-                            if (from > 5000000) hasMore = false;
+                        if (labId && labId !== 'all') {
+                            query = query.eq('lab_id', labId);
                         }
-                    } else {
-                        hasMore = false;
+
+                        const { data, error } = await query
+                            .order('data_producao', { ascending: true })
+                            .range(from, from + limit - 1);
+
+                        if (error) throw error;
+
+                        if (data && data.length > 0) {
+                            allData = [...allData, ...data];
+                            if (data.length < limit) {
+                                hasMore = false;
+                            } else {
+                                from += limit;
+                                if (from > 5000000) hasMore = false;
+                            }
+                        } else {
+                            hasMore = false;
+                        }
                     }
+
+                    // Atualiza cache local APÓS receber dados novos
+                    saveStoredProducao(allData);
+                    return allData;
+                } catch (err) {
+                    console.warn("Supabase list failed, falling back to local:", err);
                 }
-                
-                // Atualiza cache local APÓS receber dados novos
-                saveStoredProducao(allData);
-                
-                return allData;
-            } catch (err) {
-                console.warn("Supabase list failed, falling back to local:", err);
             }
-        }
 
-        // Local Storage filtering
-        const local = getStoredProducao();
-        const filtered = local;
+            // Fallback: Local Storage
+            const local = getStoredProducao();
+            return labId === 'all' ? local : (labId ? local.filter(p => p.lab_id === labId) : local);
+        };
 
-        return labId === 'all' ? filtered : (labId ? filtered.filter(p => p.lab_id === labId) : filtered);
+        // Retorna do cache se disponível (SWR — stale-while-revalidate)
+        return cachedFetch(cacheKey, fetcher, 45_000);
     },
 
     subscribe(callback: () => void): () => void {
@@ -172,6 +181,8 @@ export const producaoService = {
     },
 
     async deleteAll(labId: string) {
+        // Invalida o cache para o lab deletado
+        invalidateCachePrefix('producao:');
         // 1. Apaga do localStorage imediatamente
         if (!labId || labId === 'all') {
             localStorage.removeItem(STORAGE_KEY);

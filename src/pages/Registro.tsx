@@ -150,16 +150,31 @@ export default function Registro() {
 
             let rows = reviewItem.data.rows;
             
-            // Regra de Negócio: Se extraiu mais de uma linha, reprova a tabela, 
-            // mantém a Etiqueta e Mala extraídas, e zera as métricas para preenchimento manual.
+            // Regra de Negócio: Se extraiu mais de uma linha,
+            // tenta manter APENAS a linha de Média (numero === 'M').
+            // Se não encontrar Média, mantém a última linha extraída (geralmente a mais confiável).
+            // Antes zerávamos tudo — isso causava os valores zerados.
             if (rows.length > 1) {
-                addToast({
-                    title: "Imagem Reprovada (Múltiplas Linhas)",
-                    description: "Foram detectadas várias amostras. Apenas a etiqueta foi salva. Insira as métricas manualmente ou use outra imagem.",
-                    type: "warning"
-                });
-                rows = [];
+                const mediaRow = rows.find(r => r.numero === 'M');
+                if (mediaRow) {
+                    // Encontrou a linha de Média — usa ela
+                    rows = [mediaRow];
+                    addToast({
+                        title: "Linha Média Detectada",
+                        description: "O OCR encontrou múltiplas linhas e selecionou automaticamente a linha de Média.",
+                        type: "info"
+                    });
+                } else {
+                    // Não tem Média — usa a última linha (normalmente a Média da tabela CBRA)
+                    rows = [rows[rows.length - 1]];
+                    addToast({
+                        title: "Múltiplas Linhas",
+                        description: "Várias amostras detectadas. Última linha selecionada. Verifique os dados.",
+                        type: "warning"
+                    });
+                }
             }
+
 
             setEditingRows(rows.length > 0 ? [...rows] : [{
                 numero: '1', hvi: '1', data_analise: new Date().toLocaleDateString('pt-BR'), hora_analise: new Date().toLocaleTimeString('pt-BR'),

@@ -262,7 +262,9 @@ export default function MonitoramentoOS() {
         const stableClients = clienteStats.map((c: any) => c.name);
 
         osList.forEach((os: OSItem) => {
-            if (!os.cliente) return;
+            // Usa o mesmo campo de agrupamento que clienteStats (tomador ou fazenda)
+            const name = (rankingType === 'fazenda' ? os.fazenda : os.tomador) || os.cliente;
+            if (!name) return;
             const dateStr = os.data_recepcao;
 
             try {
@@ -272,8 +274,8 @@ export default function MonitoramentoOS() {
                 const displayDate = format(dateObj, 'dd/MM');
                 if (!grouped[dateKey]) grouped[dateKey] = { name: displayDate, rawDate: dateKey };
 
-                if (stableClients.includes(os.cliente)) {
-                    grouped[dateKey][os.cliente] = (grouped[dateKey][os.cliente] || 0) + os.total_amostras;
+                if (stableClients.includes(name)) {
+                    grouped[dateKey][name] = (grouped[dateKey][name] || 0) + os.total_amostras;
                 }
                 grouped[dateKey]['Total Recebido'] = (grouped[dateKey]['Total Recebido'] || 0) + os.total_amostras;
             } catch (e) { }
@@ -287,7 +289,7 @@ export default function MonitoramentoOS() {
         const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#6366f1', '#14b8a6', '#f97316', '#06b6d4'];
         const keyColors = keysList.reduce((acc: Record<string, string>, key: string, index: number) => {
             if (key === 'Total Recebido') {
-                acc[key] = '#000000'; // Black for Total Recebido
+                acc[key] = '#000000';
             } else {
                 acc[key] = colors[index % colors.length];
             }
@@ -295,7 +297,7 @@ export default function MonitoramentoOS() {
         }, {} as Record<string, string>);
 
         return { data: dataArr, keys: keysList, keyColors };
-    }, [osList, clienteStats]);
+    }, [osList, clienteStats, rankingType]);
 
     // const saldoChartData = React.useMemo(() => {
     //     let buckets = { 'No Prazo (<24h)': 0, 'Atenção (24-48h)': 0, 'Crítico (>48h)': 0 };
@@ -801,7 +803,8 @@ export default function MonitoramentoOS() {
         setSelectedChartClients(prev => {
             if (prev.length > 0) return prev;
             const topC = mappedData.reduce((acc: Record<string, number>, curr: OSItem) => {
-                const cli = curr.cliente || 'Não Informado';
+                // Usa tomador (produtor) como chave — igual ao clienteStats e clienteDailyStats
+                const cli = curr.tomador || curr.cliente || 'Não Informado';
                 acc[cli] = (acc[cli] || 0) + (curr.total_amostras || 0);
                 return acc;
             }, {} as Record<string, number>);

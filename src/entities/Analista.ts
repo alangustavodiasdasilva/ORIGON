@@ -1,5 +1,6 @@
 
 import { supabase } from "@/lib/supabase";
+import { AuditLogService } from "./AuditLog";
 
 export type AccessLevel = 'admin_global' | 'admin_lab' | 'user' | 'quality_admin';
 
@@ -85,6 +86,7 @@ export const AnalistaService = {
         if (isSupabaseEnabled()) {
             const { data: newAnalista, error } = await supabase.from('analistas').insert([data]).select().single();
             if (error) throw error;
+            AuditLogService.logAction('analistas', newAnalista.id, 'CREATE', null, newAnalista);
             return newAnalista;
         }
 
@@ -101,10 +103,12 @@ export const AnalistaService = {
         };
         analistas.push(newAnalista);
         saveStoredAnalistas(analistas);
+        AuditLogService.logAction('analistas', newAnalista.id, 'CREATE', null, newAnalista);
         return newAnalista;
     },
 
     async update(id: string, data: Partial<Analista>): Promise<Analista | undefined> {
+        const oldAnalista = await this.get(id);
         if (isSupabaseEnabled()) {
             try {
                 // Remove undefined fields which cause 400 Bad Request
@@ -119,6 +123,7 @@ export const AnalistaService = {
                     console.warn(`Supabase update warning for analista ${id}:`, error);
                     return undefined;
                 }
+                AuditLogService.logAction('analistas', id, 'UPDATE', oldAnalista, updated);
                 return updated;
             } catch (err) {
                 console.warn(`Unexpected error updating analista ${id}:`, err);
@@ -133,21 +138,27 @@ export const AnalistaService = {
         const updatedAnalista = { ...analistas[index], ...data, updated_at: new Date().toISOString() };
         analistas[index] = updatedAnalista;
         saveStoredAnalistas(analistas);
+        AuditLogService.logAction('analistas', id, 'UPDATE', oldAnalista, updatedAnalista);
         return updatedAnalista;
     },
 
     async delete(id: string): Promise<void> {
+        const oldAnalista = await this.get(id);
         if (isSupabaseEnabled()) {
             const { data, error } = await supabase.from('analistas').delete().eq('id', id).select();
             if (error) throw error;
             if (!data || data.length === 0) {
                 throw new Error("Permissão negada pelo servidor ou analista já excluído.");
             }
+            AuditLogService.logAction('analistas', id, 'DELETE', oldAnalista, null);
         }
         // SEMPRE sincroniza o localStorage após deletar — evita o "fantasma"
         // que voltava quando o Supabase estava lento ou era o fallback
         const analistas = getStoredAnalistas();
         saveStoredAnalistas(analistas.filter(a => a.id !== id));
+        if (!isSupabaseEnabled()) {
+            AuditLogService.logAction('analistas', id, 'DELETE', oldAnalista, null);
+        }
     },
 
     subscribe(callback: () => void): () => void {

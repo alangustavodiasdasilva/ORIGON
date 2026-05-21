@@ -13,34 +13,6 @@ import { producaoService } from "@/services/producao.service";
 import { statusOSService } from "@/services/statusOS.service";
 import { realtimeService } from "@/services/RealtimeService";
 
-// Limpeza diária à meia noite das tabelas "Operacao" e "Monitoramento O.S."
-function useDailyClear() {
-    useEffect(() => {
-        const checkAndClear = async () => {
-            const today = new Date().toDateString();
-            const lastCleared = localStorage.getItem('fibertech_last_daily_clear');
-
-            if (lastCleared !== today) {
-                try {
-                    console.log('Executando limpeza diária de Operação e O.S. (virada do dia)...');
-                    // 'all' vai limpar tudo na nuvem e no local
-                    await Promise.all([
-                        statusOSService.clearData('all'),
-                        producaoService.deleteAll('all')
-                    ]);
-                    localStorage.setItem('fibertech_last_daily_clear', today);
-                } catch (error) {
-                    console.error('Erro na limpeza diária de meia-noite:', error);
-                }
-            }
-        };
-
-        checkAndClear();
-        const interval = setInterval(checkAndClear, 60 * 1000); // Check every minute if midnight passed
-        return () => clearInterval(interval);
-    }, []);
-}
-
 // Lazy imports — cada página só é carregada quando o usuário navegar até ela
 const Inicio = lazy(() => import("@/pages/Inicio"));
 const Home = lazy(() => import("@/pages/Home"));
@@ -70,9 +42,6 @@ function AppRoutes() {
             }
         }
     }, [isAuthenticated, user?.id, user?.nome]);
-
-    // Executa o check de meia-noite se estiver logado
-    useDailyClear();
 
     if (authLoading) {
         return <LoadingScreen />;

@@ -688,4 +688,69 @@ body.dark,
 }
 .ctm-save-btn:hover {
   background: #0da872;
-}
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   OTIMIZAÇÕES DE RENDERING — Sem impacto visual, ganho de performance
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* Elementos com animações ativas: informa ao browser para criar layer GPU */
+.animate-scale-in,
+.animate-pulse-slow,
+.animate-draw-circle,
+.animate-scale-pulse,
+.animate-fade-in-up,
+.animate-slide-right,
+.animate-fade-slide-down,
+.animate-scan,
+.ctm-scanner-bar {
+  will-change: transform;
+}
+
+/* Sidebar desktop: isolamento de repaint (não afeta o layout do resto da página) */
+aside {
+  contain: layout style;
+}
+
+/* Cabeçalho fixo: isolado para não causar repaint em scroll */
+header {
+  contain: layout style;
+}
+
+/* Modais e overlays: compositing layer isolado */
+.ctm-overlay,
+.ctm-dialog {
+  will-change: opacity;
+  contain: layout style paint;
+}
+
+/* Tabelas grandes: renderização progressiva — só renderiza o que está visível */
+/* content-visibility: auto suspende renderização de linhas fora da viewport */
+.ctm-table-wrap {
+  content-visibility: auto;
+  contain-intrinsic-size: 0 600px; /* altura estimada para evitar layout shift */
+}
+
+/* Scrollbars otimizadas: paint layer isolado */
+::-webkit-scrollbar {
+  width: 6px;
+  /* Já definido acima, apenas garantindo camada isolada */
+}
+
+/* Transições globais: usa GPU quando possível */
+* {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Listas longas de itens: isolamento de layout para evitar reflow em cascata */
+nav {
+  contain: layout;
+}
+
+/* Evita reflow ao renderizar ícones SVG */
+svg {
+  overflow: visible;
+  vertical-align: middle;
+}
+

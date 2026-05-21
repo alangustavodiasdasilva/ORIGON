@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase";
+import { cachedFetch, invalidateCachePrefix } from "@/lib/queryCache";
 
 export interface StatusOS {
     id: string;
@@ -53,6 +54,8 @@ const saveStoredStatusOS = (data: StatusOS[]) => {
 
 export const statusOSService = {
     async uploadData(data: Partial<StatusOS>[], labId: string) {
+        // Invalida cache após upload — garante dados frescos na próxima leitura
+        invalidateCachePrefix('statusOS:');
         const now = new Date().toISOString();
         // Formata os dados para o banco
         // Se labId for 'all', não permite upload pois requer um UUID real
@@ -141,66 +144,73 @@ export const statusOSService = {
     },
 
     async getAll(labId: string): Promise<StatusOS[]> {
-        if (isSupabaseEnabled()) {
-            try {
-                let allData: StatusOS[] = [];
-                let from = 0;
-                const limit = 1000;
-                let hasMore = true;
+        // Chave de cache única por lab
+        const cacheKey = `statusOS:${labId}`;
 
-                // Filtro de data: busca apenas últimos 365 dias para reduzir volume de dados
-                const cutoffDate = new Date();
-                cutoffDate.setFullYear(cutoffDate.getFullYear() - 1);
-                const cutoffISO = cutoffDate.toISOString().split('T')[0];
+        // Fetcher real — só executado quando o cache não tem dados válidos
+        const fetcher = async (): Promise<StatusOS[]> => {
+            if (isSupabaseEnabled()) {
+                try {
+                    let allData: StatusOS[] = [];
+                    let from = 0;
+                    const limit = 1000;
+                    let hasMore = true;
 
-                while (hasMore) {
-                    let query = supabase
-                        .from('status_os_hvi')
-                        // Seleciona apenas colunas usadas nos componentes (evita trafegar dados desnecessários)
-                        .select('id,os_numero,romaneio,cliente,fazenda,usina,variedade,data_registro,data_recepcao,data_acondicionamento,data_finalizacao,revisor,status,total_amostras,peso_mala,peso_medio,horas,nota_fiscal,fatura,lab_id,created_at')
-                        .gte('data_recepcao', cutoffISO); // Filtro de data — só 1 ano
+                    // Filtro de data: busca apenas últimos 365 dias para reduzir volume de dados
+                    const cutoffDate = new Date();
+                    cutoffDate.setFullYear(cutoffDate.getFullYear() - 1);
+                    const cutoffISO = cutoffDate.toISOString().split('T')[0];
 
-                    if (labId && labId !== 'all') {
-                        query = query.eq('lab_id', labId);
-                    }
+                    while (hasMore) {
+                        let query = supabase
+                            .from('status_os_hvi')
+                            .select('id,os_numero,romaneio,cliente,fazenda,usina,variedade,data_registro,data_recepcao,data_acondicionamento,data_finalizacao,revisor,status,total_amostras,peso_mala,peso_medio,horas,nota_fiscal,fatura,lab_id,created_at')
+                            .gte('data_recepcao', cutoffISO);
 
-                    const { data, error } = await query
-                        .order('data_recepcao', { ascending: false })
-                        .order('os_numero', { ascending: false })
-                        .range(from, from + limit - 1);
-
-                    if (error) {
-                        console.error("Erro na busca paginada:", error);
-                        throw error;
-                    }
-
-                    if (data && data.length > 0) {
-                        allData = [...allData, ...data];
-                        if (data.length < limit) {
-                            hasMore = false;
-                        } else {
-                            from += limit;
-                            if (from > 500000) {
-                                console.warn("Limite de segurança de 500k atingido.");
-                                hasMore = false;
-                            }
+                        if (labId && labId !== 'all') {
+                            query = query.eq('lab_id', labId);
                         }
-                    } else {
-                        hasMore = false;
+
+                        const { data, error } = await query
+                            .order('data_recepcao', { ascending: false })
+                            .order('os_numero', { ascending: false })
+                            .range(from, from + limit - 1);
+
+                        if (error) {
+                            console.error("Erro na busca paginada:", error);
+                            throw error;
+                        }
+
+                        if (data && data.length > 0) {
+                            allData = [...allData, ...data];
+                            if (data.length < limit) {
+                                hasMore = false;
+                            } else {
+                                from += limit;
+                                if (from > 500000) {
+                                    console.warn("Limite de segurança de 500k atingido.");
+                                    hasMore = false;
+                                }
+                            }
+                        } else {
+                            hasMore = false;
+                        }
                     }
+
+                    // Atualiza cache local APÓS receber dados novos (não antes)
+                    saveStoredStatusOS(allData);
+                    return allData;
+                } catch (err) {
+                    console.warn("Supabase getAll failed, falling back to local:", err);
                 }
-
-                // Atualiza cache local APÓS receber dados novos (não antes)
-                saveStoredStatusOS(allData);
-
-                return allData;
-            } catch (err) {
-                console.warn("Supabase getAll failed, falling back to local:", err);
             }
-        }
 
-        const local = getStoredStatusOS();
-        return labId === 'all' ? local : local.filter(d => d.lab_id === labId);
+            const local = getStoredStatusOS();
+            return labId === 'all' ? local : local.filter(d => d.lab_id === labId);
+        };
+
+        // Retorna do cache se disponível (SWR — stale-while-revalidate)
+        return cachedFetch(cacheKey, fetcher, 45_000);
     },
 
     async getStats(labId: string) {
@@ -214,6 +224,8 @@ export const statusOSService = {
     },
 
     async clearData(labId: string) {
+        // Invalida o cache do lab limpo
+        invalidateCachePrefix('statusOS:');
         if (!labId || labId === 'all') {
             localStorage.removeItem(STORAGE_KEY);
         } else {

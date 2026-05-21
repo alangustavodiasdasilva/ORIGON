@@ -1,5 +1,5 @@
 import { Outlet, Link, useLocation } from "react-router-dom";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
     LayoutDashboard,
     ShieldCheck,
@@ -27,6 +27,7 @@ import ParticleBackground from "./ParticleBackground";
 import { BackupService } from "@/services/BackupService";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { PresenceIndicators } from "@/components/realtime/PresenceIndicators";
+import { NetworkMonitor } from "./NetworkMonitor";
 
 export default function Layout() {
     const location = useLocation();
@@ -63,16 +64,23 @@ export default function Layout() {
     // O Supabase Presence (RealtimeService) assumirá a parte visual.
 
     const navItems = [
-        { href: "/", label: t('nav.home'), icon: LayoutDashboard, public: true },
-        { href: "/lotes", label: t('nav.batches'), icon: Package, public: true },
-        { href: "/icac", label: t('nav.icac'), icon: Microscope, public: true },
-        { href: "/interlaboratorial", label: t('nav.interlab'), icon: Network, public: true },
-        { href: "/verificacao", label: "Verificação", icon: CheckCircle2, allowedRoles: ['admin_global', 'admin_lab', 'quality_admin'] },
-        { href: "/operacao", label: "Operação", icon: Zap, allowedRoles: ['admin_global', 'admin_lab', 'quality_admin'] },
-        { href: "/monitoramento-os", label: "Monitoramento O.S.", icon: FileSpreadsheet, allowedRoles: ['admin_global', 'admin_lab', 'quality_admin'] },
-        { href: "/producao-operadores", label: "Produção Turno", icon: ClipboardList, allowedRoles: ['admin_global', 'admin_lab', 'quality_admin'] },
-        { href: "/admin", label: t('nav.config'), icon: ShieldCheck, allowedRoles: ['admin_global', 'admin_lab'] },
+        { href: "/", label: t('nav.home'), icon: LayoutDashboard, public: true, prefetch: () => import("@/pages/Inicio") },
+        { href: "/lotes", label: t('nav.batches'), icon: Package, public: true, prefetch: () => import("@/pages/Home") },
+        { href: "/icac", label: t('nav.icac'), icon: Microscope, public: true, prefetch: () => import("@/pages/Icac") },
+        { href: "/interlaboratorial", label: t('nav.interlab'), icon: Network, public: true, prefetch: () => import("@/pages/Interlaboratorial") },
+        { href: "/verificacao", label: "Verificação", icon: CheckCircle2, allowedRoles: ['admin_global', 'admin_lab', 'quality_admin'], prefetch: () => import("@/pages/Verificacao") },
+        { href: "/operacao", label: "Operação", icon: Zap, allowedRoles: ['admin_global', 'admin_lab', 'quality_admin'], prefetch: () => import("@/pages/Operacao") },
+        { href: "/monitoramento-os", label: "Monitoramento O.S.", icon: FileSpreadsheet, allowedRoles: ['admin_global', 'admin_lab', 'quality_admin'], prefetch: () => import("@/pages/MonitoramentoOS") },
+        { href: "/producao-operadores", label: "Produção Turno", icon: ClipboardList, allowedRoles: ['admin_global', 'admin_lab', 'quality_admin'], prefetch: () => import("@/pages/ProducaoOperadores") },
+        { href: "/admin", label: t('nav.config'), icon: ShieldCheck, allowedRoles: ['admin_global', 'admin_lab'], prefetch: () => import("@/pages/Admin") },
     ];
+
+    // Prefetch de rota ao passar o mouse — carrega o chunk antes do clique
+    const handlePrefetch = useCallback((prefetch?: () => Promise<unknown>) => {
+        if (prefetch) {
+            prefetch().catch(() => { /* silencioso — falha de prefetch não afeta nada */ });
+        }
+    }, []);
 
     const getInitials = (name: string) => {
         if (!name) return "??";
@@ -118,6 +126,7 @@ export default function Layout() {
                                         key={item.href}
                                         to={item.href}
                                         onClick={() => setIsMobileMenuOpen(false)}
+                                        onMouseEnter={() => handlePrefetch(item.prefetch)}
                                         className={cn(
                                             "flex items-center gap-4 px-8 py-4 text-xs font-bold uppercase tracking-widest transition-colors border-l-4",
                                             isActive
@@ -186,6 +195,7 @@ export default function Layout() {
                             <Link
                                 key={item.href}
                                 to={item.href}
+                                onMouseEnter={() => handlePrefetch(item.prefetch)}
                                 className={cn(
                                     "group flex items-center justify-between px-10 py-5 text-xs font-bold uppercase tracking-widest transition-all duration-300 border-l-4",
                                     isActive
@@ -282,8 +292,10 @@ export default function Layout() {
                             {/* <GlobalSearch /> */}
                         </div>
 
-                        {/* Notification Center Removido */}
-                        {/* <NotificationCenter /> */}
+                        {/* Network Monitor */}
+                        <div className="block">
+                            <NetworkMonitor />
+                        </div>
 
                         {/* Admin Tools */}
                         {isAdmin && (

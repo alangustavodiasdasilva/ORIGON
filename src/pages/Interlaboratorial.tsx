@@ -3,6 +3,7 @@ import { FileDown, History, Trash2, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/contexts/AuthContext";
+import { AuditLogService } from "@/entities/AuditLog";
 
 
 type SystemType = "uster" | "premier";
@@ -116,11 +117,19 @@ export default function Interlaboratorial() {
         const updated = [newItem, ...history].slice(0, 50);
         setHistory(updated);
         localStorage.setItem("interlab_history", JSON.stringify(updated));
+        
+        // Log to Global Audit
+        AuditLogService.logAction('interlaboratorial', newItem.id.toString(), 'CREATE', null, { 
+            nome: `Teste ${newItem.system.toUpperCase()}`,
+            quantidade: newItem.quantity,
+            etiqueta: newItem.etiqueta 
+        });
     };
 
     const clearHistory = () => {
         setHistory([]);
         localStorage.removeItem("interlab_history");
+        AuditLogService.logAction('interlaboratorial', 'todos', 'DELETE', { nome: 'Limpeza Histórico Interlab' }, null);
     };
 
     const [deviations, setDeviations] = useState<HVIResults>({
