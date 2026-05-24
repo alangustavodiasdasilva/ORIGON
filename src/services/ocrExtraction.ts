@@ -58,7 +58,7 @@ const sanitizeValue = (val: number, type: 'mic' | 'len' | 'unf' | 'str' | 'rd' |
     if (val === 0) return 0;
     switch (type) {
         case 'mic':
-            // MIC típico: 2.0 a 6.0 (pode vir como 421 ou 4.21)
+            // MIC típico: 2.0 a 6.0
             if (val >= 20 && val < 100) return val / 10;
             if (val >= 200 && val < 1000) return val / 100;
             break;
@@ -162,7 +162,7 @@ const getNumbersFromLine = (line: string): string[] => {
 };
 
 // ============================================================
-// PARSER PRINCIPAL ULTRA-ROBUSTO v3.0
+// PARSER PRINCIPAL ULTRA-ROBUSTO v3.1
 // ============================================================
 const parseHVIData = (text: string): ExtractionResult => {
     const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
@@ -183,7 +183,7 @@ const parseHVIData = (text: string): ExtractionResult => {
     if (etiquetaMatch) result.etiqueta = etiquetaMatch[1];
 
     const individualRows: { numList: string[]; text: string }[] = [];
-    const possibleStatsRows: { numList: string[]; text: string; label: string; lineIndex: number }[] = [];
+    const possibleStatsRows: { numList: string[]; text: string; lineIndex: number }[] = [];
 
     for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
@@ -201,12 +201,9 @@ const parseHVIData = (text: string): ExtractionResult => {
         } else if (allNumbers.length >= 6) {
             // Linha de estatísticas (Mínimo, Máximo, Média, Desvio)
             const metrics = allNumbers.slice(-6);
-            const firstNumIdx = line.indexOf(allNumbers[0]);
-            const label = line.substring(0, firstNumIdx).trim();
             possibleStatsRows.push({
                 numList: metrics,
                 text: line,
-                label: label,
                 lineIndex: i
             });
         }
@@ -222,15 +219,15 @@ const parseHVIData = (text: string): ExtractionResult => {
     for (const candidate of possibleStatsRows) {
         let score = 0;
 
-        // Regra A: Rótulo contendo semântica de "Média"
-        if (/[Mm].{0,2}[dD][iI]?[aáà]/i.test(candidate.label)) {
+        // Regra A: Linha contendo semântica de "Média"
+        if (/[Mm].{0,2}[dD][iI]?[aáà]/i.test(candidate.text)) {
             score += 100;
         }
 
         // Regra B: Penalizar palavras de outras linhas de estatísticas
-        if (/[Mm][ií][nN]/i.test(candidate.label)) score -= 80;
-        if (/[Mm][aáA][xX]/i.test(candidate.label)) score -= 80;
-        if (/[dD]esv|[pP]adr|[sS]td/i.test(candidate.label)) score -= 80;
+        if (/[Mm][ií][nN]/i.test(candidate.text)) score -= 80;
+        if (/[Mm][aáA][xX]/i.test(candidate.text)) score -= 80;
+        if (/[dD]esv|[pP]adr|[sS]td/i.test(candidate.text)) score -= 80;
 
         // Regra C: Posição física (se Mínimo/Máximo aparecem antes no documento)
         const prevText = lines.slice(0, candidate.lineIndex).join('\n');
@@ -267,7 +264,7 @@ const parseHVIData = (text: string): ExtractionResult => {
             score -= 60;
         }
 
-        console.log(`[OCR] Candidato [${candidate.label} | ${candidate.numList.join(' ')}] Score:`, score);
+        console.log(`[OCR] Candidato [${candidate.text}] Score:`, score);
 
         if (score > maxScore && score > 0) {
             maxScore = score;
