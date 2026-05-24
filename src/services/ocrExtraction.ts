@@ -36,16 +36,12 @@ export interface SingleSampleData {
 // Extrai número decimal do texto (suporte ao padrão brasileiro: vírgula como decimal)
 const extractDecimal = (text: string): number => {
     if (!text) return 0;
-
     let cleaned = text.replace(/\s/g, '');
 
-    // "1.234,56" → ponto é milhar, vírgula é decimal
     if (cleaned.includes('.') && cleaned.includes(',')) {
         cleaned = cleaned.replace(/\./g, '');
         cleaned = cleaned.replace(',', '.');
-    }
-    // "4,20" → vírgula é decimal
-    else if (cleaned.includes(',')) {
+    } else if (cleaned.includes(',')) {
         cleaned = cleaned.replace(',', '.');
     }
 
@@ -60,35 +56,28 @@ const extractDecimal = (text: string): number => {
 // Correção inteligente de valores baseada nas faixas típicas de HVI
 const sanitizeValue = (val: number, type: 'mic' | 'len' | 'unf' | 'str' | 'rd' | 'b'): number => {
     if (val === 0) return 0;
-
     switch (type) {
         case 'mic':
-            // MIC típico: 2.0 a 6.0
             if (val >= 20 && val < 100) return val / 10;
             if (val >= 200 && val < 1000) return val / 100;
             break;
         case 'len':
-            // LEN típico: 20.0 a 40.0
             if (val >= 200 && val < 500) return val / 10;
             if (val >= 2000 && val < 5000) return val / 100;
             break;
         case 'unf':
-            // UNF típico: 70.0 a 90.0
             if (val >= 700 && val < 1000) return val / 10;
             if (val >= 7000 && val < 10000) return val / 100;
             break;
         case 'str':
-            // STR típico: 15.0 a 50.0
             if (val >= 100 && val <= 600) return val / 10;
             if (val >= 1000 && val <= 6000) return val / 100;
             break;
         case 'rd':
-            // RD típico: 70.0 a 90.0
             if (val >= 700 && val < 1000) return val / 10;
             if (val >= 7000 && val < 10000) return val / 100;
             break;
         case 'b':
-            // +b típico: 4.0 a 18.0
             if (val >= 40 && val < 200) return val / 10;
             if (val >= 400 && val < 2000) return val / 100;
             break;
@@ -104,42 +93,43 @@ export const formatDecimalBR = (value: number, decimals: number = 2): string => 
 // Extrai data e hora do texto
 const extractDateTime = (text: string): { data: string; hora: string } => {
     const match = text.match(/(\d{2}\/\d{2}\/\d{4})\s*(\d{2}:\d{2}:\d{2})/);
-    if (match) {
-        return { data: match[1], hora: match[2] };
-    }
+    if (match) return { data: match[1], hora: match[2] };
+
     const dateMatch = text.match(/(\d{2}\/\d{2}\/\d{4})/);
     const timeMatch = text.match(/(\d{2}:\d{2}:\d{2})/);
     return {
         data: dateMatch ? dateMatch[1] : new Date().toLocaleDateString('pt-BR'),
-        hora: timeMatch ? timeMatch[1] : new Date().toLocaleTimeString('pt-BR')
+        hora: timeMatch ? timeMatch[1] : new Date().toLocaleTimeString('pt-BR'),
     };
 };
 
 // Extrai o número HVI dominante das linhas da tabela principal
 const extractHVI = (text: string): string => {
-    // Tenta encontrar pelo cabeçalho "HVI: X"
     const labelMatch = text.match(/HVI\s*[:#]?\s*(\d+)/i) || text.match(/Inst\s*[:.]?\s*(\d+)/i);
     if (labelMatch) {
         const n = parseInt(labelMatch[1], 10);
         if (n >= 1 && n <= 7) return labelMatch[1];
     }
-
-    // Tenta achar nas linhas da tabela: padrão "Nº_sequencial HVI data"
-    // Ex: "1 6 28/10/2025 17:24:00 ..." → HVI = 6
-    const tableRowMatch = text.match(/^\s*\d+\s+(\d+)\s+\d{2}\/\d{2}/m);
-    if (tableRowMatch) {
-        const n = parseInt(tableRowMatch[1], 10);
-        if (n >= 1 && n <= 7) return tableRowMatch[1];
+    // Padrão da tabela principal: "Nº HVI Data ..." → pega o HVI mais frequente
+    const hviMatches = [...text.matchAll(/^\s*\d+\s+(\d+)\s+\d{2}\/\d{2}\/\d{4}/gm)];
+    if (hviMatches.length > 0) {
+        const hviCount: Record<string, number> = {};
+        for (const m of hviMatches) {
+            const h = m[1];
+            hviCount[h] = (hviCount[h] || 0) + 1;
+        }
+        // Retorna o HVI mais frequente
+        const mostFrequent = Object.entries(hviCount).sort((a, b) => b[1] - a[1])[0];
+        if (mostFrequent) {
+            const n = parseInt(mostFrequent[0], 10);
+            if (n >= 1 && n <= 7) return mostFrequent[0];
+        }
     }
-
     return '1';
 };
 
-// Constrói um HVIDataRow para a linha de Média com 6 valores capturados
-const buildMediaRow = (
-    nums: string[],
-    text: string
-): HVIDataRow => {
+// Constrói um HVIDataRow para a linha de Média
+const buildMediaRow = (nums: string[], text: string): HVIDataRow => {
     const dateTime = extractDateTime(text);
     const hvi = extractHVI(text);
     return {
@@ -161,12 +151,7 @@ const buildMediaRow = (
 // ============================================================
 const parseHVIData = (text: string): ExtractionResult => {
     const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
-    const result: ExtractionResult = {
-        mala: '',
-        etiqueta: '',
-        rows: [],
-        rawText: text
-    };
+    const result: ExtractionResult = { mala: '', etiqueta: '', rows: [], rawText: text };
 
     // --- Extrai Mala ---
     const malaMatch =
@@ -183,60 +168,100 @@ const parseHVIData = (text: string): ExtractionResult => {
     if (etiquetaMatch) result.etiqueta = etiquetaMatch[1];
 
     // ================================================================
-    // PRIORIDADE 1 — Localizar a linha "3- Média" / "Média" / "Media"
+    // ESTRATÉGIA PRINCIPAL: Âncora no cabeçalho "Descrição"
     //
-    // A tela CBRA tem uma tabela de estatísticas com 4 linhas:
-    //   1- Mínimo | 2- Máximo | 3- Média | 4- Desvio Padrão
+    // A tabela de estatísticas SEMPRE tem esta ordem:
+    //   [Cabeçalho] Descrição | Mic | Len | Unf | Str | Rd | +b
+    //   Linha 1: 1- Mínimo
+    //   Linha 2: 2- Máximo
+    //   Linha 3: N- Média   ← QUEREMOS ESTA
+    //   Linha 4: 4- Desvio Padrão
     //
-    // O OCR pode ler "Média" como: Média, Media, M6dia, Médias, Méd, etc.
-    // A estratégia usa 3 passes progressivamente mais flexíveis.
+    // Usamos posição, não reconhecimento do texto "Média",
+    // porque OCR frequentemente distorce caracteres acentuados.
     // ================================================================
 
-    // --- Passo 1A: regex direto na linha com variante de "Média" + 6 números ---
-    for (const line of lines) {
-        // Padrão: "3- Média  4,14  28,79  80,4  29,5  77,7  10,4"
-        // O prefixo "3-" é opcional; aceita "Média", "Media", "M6dia", "Medias", etc.
-        const m = line.match(
-            /(?:\d[-.\s]*)?\s*[Mm][eé6][d][i]?[aáà][a-z]*[^0-9]{0,10}([\d,.]+)\s+([\d,.]+)\s+([\d,.]+)\s+([\d,.]+)\s+([\d,.]+)\s+([\d,.]+)/i
-        );
-        if (m) {
-            console.log('[OCR] Média encontrada (Passo 1A):', line);
-            result.rows.push(buildMediaRow([m[1], m[2], m[3], m[4], m[5], m[6]], text));
-            return result;
+    // Encontrar a linha do cabeçalho "Descrição" (OCR pode distorcer como
+    // "Descricao", "Descri§ao", "Descri¢ao", "Descrigao", "Oescricao", etc.)
+    let descricaoIdx = -1;
+    for (let i = 0; i < lines.length; i++) {
+        // Padrão muito flexível: linha que contém "escri" (parte de "Descrição")
+        // seguida de vogais/caracteres — evita falsos positivos na tabela principal
+        if (/descri/i.test(lines[i])) {
+            descricaoIdx = i;
+            console.log('[OCR] Cabeçalho "Descrição" encontrado na linha', i, ':', lines[i]);
+            break;
         }
     }
 
-    // --- Passo 1B: qualquer linha contendo "media" ou "média" com >= 6 números ---
+    if (descricaoIdx >= 0) {
+        // Coletar linhas de dados da tabela de estatísticas.
+        // Usamos /\d+[,.]\d+/g para capturar SOMENTE valores decimais (vírgula ou ponto).
+        // Isso exclui automaticamente os rótulos como "1-", "2-", "3-", "4-".
+        const statsRows: string[][] = [];
+
+        for (let i = descricaoIdx + 1; i < lines.length; i++) {
+            const decimalNums = lines[i].match(/\d+[,.]\d+/g);
+            if (decimalNums && decimalNums.length >= 6) {
+                statsRows.push(decimalNums);
+                console.log(`[OCR] Linha stats[${statsRows.length - 1}]:`, lines[i], '→ nums:', decimalNums);
+            }
+            // Para quando encontra 4 linhas de dados (Mínimo, Máximo, Média, Desvio)
+            if (statsRows.length >= 4) break;
+        }
+
+        // A 3ª linha (índice 2) é sempre a Média
+        if (statsRows.length >= 3) {
+            const mediaNums = statsRows[2];
+            console.log('[OCR] MÉDIA extraída (posição 2):', mediaNums);
+            result.rows.push(buildMediaRow(mediaNums.slice(0, 6), text));
+            return result;
+        }
+
+        // Se não encontrou 3 linhas, mas tem pelo menos 1,
+        // verifica se alguma linha é claramente a Média pelo conteúdo
+        if (statsRows.length > 0 && statsRows.length < 3) {
+            console.warn('[OCR] Tabela de estatísticas incompleta, tentando alternativas...');
+        }
+    }
+
+    // ================================================================
+    // FALLBACK 1: Busca pela palavra "Média" / "Media" e variantes
+    // Cobre casos onde o OCR lê razoavelmente bem o texto
+    // ================================================================
     for (const line of lines) {
-        if (/m[eé6][d][i]?[aáà]/i.test(line)) {
-            const nums = line.match(/([\d,.]+)/g);
-            if (nums && nums.length >= 6) {
-                console.log('[OCR] Média encontrada (Passo 1B):', line);
-                result.rows.push(buildMediaRow(nums.slice(0, 6), text));
+        // Aceita: Média, Media, M6dia, Medias, M-dia, Madia, etc.
+        // O padrão [Mm].{0,2}[dD] captura a maioria das distorções de "Mé"
+        if (/[Mm].{0,2}[dD][iI]?[aáà]/i.test(line) && !/[Mm][aáA][xX]/i.test(line) && !/[Mm][ií][nN]/i.test(line)) {
+            const decimalNums = line.match(/\d+[,.]\d+/g);
+            if (decimalNums && decimalNums.length >= 6) {
+                console.log('[OCR] MÉDIA encontrada por keyword (Fallback 1):', line);
+                result.rows.push(buildMediaRow(decimalNums.slice(0, 6), text));
                 return result;
             }
         }
     }
 
-    // --- Passo 1C: por POSIÇÃO na tabela de estatísticas ---
-    // Procura a sequência: Mínimo → Máximo → (próxima linha com 6 números = Média)
+    // ================================================================
+    // FALLBACK 2: Posição relativa — Mínimo → Máximo → próxima = Média
+    // ================================================================
     {
         let foundMin = false;
         let foundMax = false;
         for (const line of lines) {
-            const isMin = /m[ií]n[i]?m/i.test(line);
-            const isMax = /m[aá]x[i]?m/i.test(line);
-            const isDesvio = /desvio|padr[aã]o|std|desvpad/i.test(line);
+            const isMin = /[Mm][ií][nN]/i.test(line);
+            const isMax = /[Mm][aáA][xX]/i.test(line);
+            const isDesvio = /[dD]esv|[pP]adr|[sS]td/i.test(line);
 
             if (isMin && !foundMin) { foundMin = true; continue; }
             if (isMax && foundMin && !foundMax) { foundMax = true; continue; }
-            if (isDesvio) break; // passou da Média sem encontrar
+            if (isDesvio && foundMax) break;
 
-            if (foundMax) {
-                const nums = line.match(/([\d,.]+)/g);
-                if (nums && nums.length >= 6) {
-                    console.log('[OCR] Média encontrada (Passo 1C - posição):', line);
-                    result.rows.push(buildMediaRow(nums.slice(0, 6), text));
+            if (foundMax && !isDesvio) {
+                const decimalNums = line.match(/\d+[,.]\d+/g);
+                if (decimalNums && decimalNums.length >= 6) {
+                    console.log('[OCR] MÉDIA encontrada por posição Min→Max→? (Fallback 2):', line);
+                    result.rows.push(buildMediaRow(decimalNums.slice(0, 6), text));
                     return result;
                 }
             }
@@ -244,10 +269,11 @@ const parseHVIData = (text: string): ExtractionResult => {
     }
 
     // ================================================================
-    // PRIORIDADE 2 — Fallback: linhas individuais da tabela HVI principal
-    // (com data e hora explícitas na coluna Análise)
+    // FALLBACK 3: Linhas individuais da tabela HVI principal
+    // (apenas se todas as estratégias acima falharem)
     // ================================================================
     if (result.rows.length === 0) {
+        console.warn('[OCR] Usando Fallback 3: linhas individuais da tabela HVI');
         for (const line of lines) {
             const rowMatch = line.match(
                 /^\s*(\d+)\s+(\d+)\s+(\d{2}\/\d{2}\/\d{4})\s*(\d{2}:\d{2}:\d{2})\s+([\d,.]+)\s+([\d,.]+)\s+([\d,.]+)\s+([\d,.]+)\s+([\d,.]+)\s+([\d,.]+)/
@@ -269,30 +295,25 @@ const parseHVIData = (text: string): ExtractionResult => {
                 });
             }
         }
-    }
-
-    // ================================================================
-    // PRIORIDADE 3 — Fallback genérico: qualquer linha com >= 6 decimais
-    // ================================================================
-    if (result.rows.length === 0) {
-        for (const line of lines) {
-            const numbers = line.match(/([\d,.]+)/g);
-            if (numbers && numbers.length >= 6) {
-                const dateTime = extractDateTime(line);
-                const numMatch = line.match(/^\s*(\d+)/);
-                result.rows.push({
-                    numero: numMatch ? numMatch[1] : '1',
-                    hvi: '1',
-                    data_analise: dateTime.data,
-                    hora_analise: dateTime.hora,
-                    mic: sanitizeValue(extractDecimal(numbers[0]), 'mic'),
-                    len: sanitizeValue(extractDecimal(numbers[1]), 'len'),
-                    unf: sanitizeValue(extractDecimal(numbers[2]), 'unf'),
-                    str: sanitizeValue(extractDecimal(numbers[3]), 'str'),
-                    rd: sanitizeValue(extractDecimal(numbers[4]), 'rd'),
-                    b: sanitizeValue(extractDecimal(numbers[5]), 'b'),
-                });
-            }
+        // Se encontrou múltiplas linhas individuais, tenta calcular a média delas
+        if (result.rows.length > 1) {
+            const avg = (arr: number[]) => arr.reduce((a, b) => a + b, 0) / arr.length;
+            const dateTime = extractDateTime(text);
+            const hvi = extractHVI(text);
+            const avgRow: HVIDataRow = {
+                numero: 'M',
+                hvi,
+                data_analise: dateTime.data,
+                hora_analise: dateTime.hora,
+                mic: parseFloat(avg(result.rows.map(r => r.mic)).toFixed(2)),
+                len: parseFloat(avg(result.rows.map(r => r.len)).toFixed(2)),
+                unf: parseFloat(avg(result.rows.map(r => r.unf)).toFixed(1)),
+                str: parseFloat(avg(result.rows.map(r => r.str)).toFixed(1)),
+                rd: parseFloat(avg(result.rows.map(r => r.rd)).toFixed(1)),
+                b: parseFloat(avg(result.rows.map(r => r.b)).toFixed(1)),
+            };
+            result.rows = [avgRow];
+            console.log('[OCR] Média calculada das linhas individuais:', avgRow);
         }
     }
 
@@ -307,37 +328,55 @@ export const OCRExtractionService = {
         try {
             const imageUrl = URL.createObjectURL(file);
 
-            const result = await Tesseract.recognize(
-                imageUrl,
-                'por+eng', // Português + Inglês para melhor leitura de "Média"
-                {
-                    logger: (m) => {
-                        if (m.status === 'recognizing text' && onProgress) {
-                            onProgress(Math.round(m.progress * 100));
+            // Tenta primeiro com português (melhor para acentos),
+            // se falhar usa inglês (mais confiável para números)
+            let ocrResult: Tesseract.RecognizeResult;
+            try {
+                ocrResult = await Tesseract.recognize(
+                    imageUrl,
+                    'por+eng',
+                    {
+                        logger: (m) => {
+                            if (m.status === 'recognizing text' && onProgress) {
+                                onProgress(Math.round(m.progress * 100));
+                            }
                         }
                     }
-                }
-            );
+                );
+            } catch {
+                console.warn('[OCR] Falha com por+eng, tentando apenas eng...');
+                ocrResult = await Tesseract.recognize(
+                    imageUrl,
+                    'eng',
+                    {
+                        logger: (m) => {
+                            if (m.status === 'recognizing text' && onProgress) {
+                                onProgress(Math.round(m.progress * 100));
+                            }
+                        }
+                    }
+                );
+            }
 
             URL.revokeObjectURL(imageUrl);
 
-            const rawText = result.data.text;
+            const rawText = ocrResult.data.text;
 
             // Normaliza o texto preservando a estrutura de linhas
             const normalizedText = rawText
-                .replace(/\r\n/g, '\n')        // quebras de linha Windows
-                .replace(/[ \t]+/g, ' ')        // colapsa espaços múltiplos
-                .replace(/[|\\]/g, ' ')          // remove separadores de coluna
-                .replace(/—|–/g, '-');           // normaliza traços
+                .replace(/\r\n/g, '\n')     // quebras de linha Windows
+                .replace(/[ \t]+/g, ' ')     // colapsa espaços múltiplos
+                .replace(/[|\\]/g, ' ')       // remove separadores de coluna OCR
+                .replace(/—|–/g, '-');        // normaliza traços
 
             console.log('[OCR] Raw text:', rawText);
             console.log('[OCR] Normalized text:', normalizedText);
 
             const extractedData = parseHVIData(normalizedText);
 
-            // Fallback de último recurso: pega os primeiros 6 decimais encontrados
+            // Último recurso: pega os primeiros 6 decimais encontrados no texto
             if (extractedData.rows.length === 0) {
-                console.warn('[OCR] Nenhuma linha encontrada. Aplicando fallback de último recurso.');
+                console.warn('[OCR] ÚLTIMO RECURSO: extraindo primeiros 6 decimais do texto bruto');
                 const allNumbers = rawText.match(/\d+[,.]\d+/g) || [];
                 if (allNumbers.length >= 6) {
                     extractedData.rows.push({
@@ -362,7 +401,6 @@ export const OCRExtractionService = {
         }
     },
 
-    // Converte uma linha de dados para o formato SingleSampleData
     rowToSingleSample(row: HVIDataRow, mala: string, etiqueta: string): SingleSampleData {
         return {
             mic: row.mic,
