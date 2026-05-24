@@ -33,24 +33,21 @@ export interface SingleSampleData {
     hora_analise: string;
 }
 
-// Função para extrair número decimal do texto (padrão brasileiro: vírgula = decimal)
-// Função para extrair número decimal do texto (padrão brasileiro: vírgula = decimal)
+// Extrai número decimal do texto (suporte ao padrão brasileiro: vírgula como decimal)
 const extractDecimal = (text: string): number => {
     if (!text) return 0;
 
-    // Remove espaços
     let cleaned = text.replace(/\s/g, '');
 
-    // Se tem vírgula E ponto, o ponto é milhar e vírgula é decimal (ex: 1.234,56)
+    // "1.234,56" → ponto é milhar, vírgula é decimal
     if (cleaned.includes('.') && cleaned.includes(',')) {
-        cleaned = cleaned.replace(/\./g, ''); // Remove pontos de milhar
-        cleaned = cleaned.replace(',', '.'); // Vírgula vira ponto decimal
+        cleaned = cleaned.replace(/\./g, '');
+        cleaned = cleaned.replace(',', '.');
     }
-    // Se só tem vírgula, ela é o separador decimal (ex: 4,20)
+    // "4,20" → vírgula é decimal
     else if (cleaned.includes(',')) {
         cleaned = cleaned.replace(',', '.');
     }
-    // Se só tem ponto, mantém como está (ex: 4.20)
 
     const match = cleaned.match(/(\d+\.?\d*)/);
     if (match) {
@@ -60,12 +57,9 @@ const extractDecimal = (text: string): number => {
     return 0;
 };
 
-// Funções de correção inteligente baseadas em faixas típicas de HVI
+// Correção inteligente de valores baseada nas faixas típicas de HVI
 const sanitizeValue = (val: number, type: 'mic' | 'len' | 'unf' | 'str' | 'rd' | 'b'): number => {
     if (val === 0) return 0;
-
-    // Remove casas decimais extras se for um número inteiro muito grande que parece ser erro de ponto
-    // Ex: 301.0 -> 301 -> tratado abaixo
 
     switch (type) {
         case 'mic':
@@ -84,10 +78,9 @@ const sanitizeValue = (val: number, type: 'mic' | 'len' | 'unf' | 'str' | 'rd' |
             if (val >= 7000 && val < 10000) return val / 100;
             break;
         case 'str':
-            // STR típico: 15.0 a 50.0 (Resistência)
-            // Range aceitável expandido: 10.0 a 60.0
-            if (val >= 100 && val <= 600) return val / 10; // ex: 301 -> 30.1
-            if (val >= 1000 && val <= 6000) return val / 100; // ex: 3010 -> 30.1
+            // STR típico: 15.0 a 50.0
+            if (val >= 100 && val <= 600) return val / 10;
+            if (val >= 1000 && val <= 6000) return val / 100;
             break;
         case 'rd':
             // RD típico: 70.0 a 90.0
@@ -103,19 +96,17 @@ const sanitizeValue = (val: number, type: 'mic' | 'len' | 'unf' | 'str' | 'rd' |
     return val;
 };
 
-// Função para formatar número para exibição (padrão brasileiro)
+// Formata número para exibição em padrão brasileiro
 export const formatDecimalBR = (value: number, decimals: number = 2): string => {
     return value.toFixed(decimals).replace('.', ',');
 };
 
-// Função para extrair a data e hora da coluna Análise
+// Extrai data e hora do texto
 const extractDateTime = (text: string): { data: string; hora: string } => {
-    // Procura por padrão de data DD/MM/YYYY HH:MM:SS
     const match = text.match(/(\d{2}\/\d{2}\/\d{4})\s*(\d{2}:\d{2}:\d{2})/);
     if (match) {
         return { data: match[1], hora: match[2] };
     }
-    // Tenta padrão alternativo
     const dateMatch = text.match(/(\d{2}\/\d{2}\/\d{4})/);
     const timeMatch = text.match(/(\d{2}:\d{2}:\d{2})/);
     return {
@@ -124,7 +115,50 @@ const extractDateTime = (text: string): { data: string; hora: string } => {
     };
 };
 
-// Parser principal para extrair dados do texto OCR
+// Extrai o número HVI dominante das linhas da tabela principal
+const extractHVI = (text: string): string => {
+    // Tenta encontrar pelo cabeçalho "HVI: X"
+    const labelMatch = text.match(/HVI\s*[:#]?\s*(\d+)/i) || text.match(/Inst\s*[:.]?\s*(\d+)/i);
+    if (labelMatch) {
+        const n = parseInt(labelMatch[1], 10);
+        if (n >= 1 && n <= 7) return labelMatch[1];
+    }
+
+    // Tenta achar nas linhas da tabela: padrão "Nº_sequencial HVI data"
+    // Ex: "1 6 28/10/2025 17:24:00 ..." → HVI = 6
+    const tableRowMatch = text.match(/^\s*\d+\s+(\d+)\s+\d{2}\/\d{2}/m);
+    if (tableRowMatch) {
+        const n = parseInt(tableRowMatch[1], 10);
+        if (n >= 1 && n <= 7) return tableRowMatch[1];
+    }
+
+    return '1';
+};
+
+// Constrói um HVIDataRow para a linha de Média com 6 valores capturados
+const buildMediaRow = (
+    nums: string[],
+    text: string
+): HVIDataRow => {
+    const dateTime = extractDateTime(text);
+    const hvi = extractHVI(text);
+    return {
+        numero: 'M',
+        hvi,
+        data_analise: dateTime.data,
+        hora_analise: dateTime.hora,
+        mic: sanitizeValue(extractDecimal(nums[0]), 'mic'),
+        len: sanitizeValue(extractDecimal(nums[1]), 'len'),
+        unf: sanitizeValue(extractDecimal(nums[2]), 'unf'),
+        str: sanitizeValue(extractDecimal(nums[3]), 'str'),
+        rd: sanitizeValue(extractDecimal(nums[4]), 'rd'),
+        b: sanitizeValue(extractDecimal(nums[5]), 'b'),
+    };
+};
+
+// ============================================================
+// PARSER PRINCIPAL
+// ============================================================
 const parseHVIData = (text: string): ExtractionResult => {
     const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
     const result: ExtractionResult = {
@@ -134,86 +168,90 @@ const parseHVIData = (text: string): ExtractionResult => {
         rawText: text
     };
 
-    // Extrai Mala - procura por padrão próximo a "Mala" ou número de 8 dígitos no início
-    const malaMatch = text.match(/Mala[:\s]*(\d{6,10})/i) ||
+    // --- Extrai Mala ---
+    const malaMatch =
+        text.match(/Mala[:\s]*(\d{6,10})/i) ||
         text.match(/^(\d{8})/m) ||
         text.match(/(\d{8})\s+\d{15,}/);
-    if (malaMatch) {
-        result.mala = malaMatch[1];
-    }
+    if (malaMatch) result.mala = malaMatch[1];
 
-    // Extrai Etiqueta - número longo de 15+ dígitos
-    const etiquetaMatch = text.match(/Etiqueta[:\s]*(\d{12,25})/i) ||
+    // --- Extrai Etiqueta ---
+    const etiquetaMatch =
+        text.match(/Etiqueta[:\s]*(\d{12,25})/i) ||
         text.match(/\d{8}\s+(\d{15,25})/) ||
         text.match(/(\d{18,25})/);
-    if (etiquetaMatch) {
-        result.etiqueta = etiquetaMatch[1];
-    }
+    if (etiquetaMatch) result.etiqueta = etiquetaMatch[1];
 
-    // PRIORIDADE 1: Procura pela linha "Média" ou "Media" na tabela de descrição
-    // Esta é a linha que o usuário quer extrair (destacada em vermelho)
-    // O OCR pode ler como: "Media", "Média", "Méd", "Medias", "2- Média", "2 Media", etc.
+    // ================================================================
+    // PRIORIDADE 1 — Localizar a linha "3- Média" / "Média" / "Media"
+    //
+    // A tela CBRA tem uma tabela de estatísticas com 4 linhas:
+    //   1- Mínimo | 2- Máximo | 3- Média | 4- Desvio Padrão
+    //
+    // O OCR pode ler "Média" como: Média, Media, M6dia, Médias, Méd, etc.
+    // A estratégia usa 3 passes progressivamente mais flexíveis.
+    // ================================================================
+
+    // --- Passo 1A: regex direto na linha com variante de "Média" + 6 números ---
     for (const line of lines) {
-        // Regex muito flexível: aceita qualquer variante de "Media" com 1+ espaços entre colunas
-        const mediaMatch = line.match(
-            /(?:2[-.]?\s*)?M[eé][d]?[i]?[a-z.]*[:\s]+([\d,.]+)\s+([\d,.]+)\s+([\d,.]+)\s+([\d,.]+)\s+([\d,.]+)\s+([\d,.]+)/i
-        ) ||
-        // Fallback: linha que começa com "Media" ou "Média" sem prefixo numérico
-        line.match(
-            /^\s*M[eé][a-z.]*\s+([\d,.]+)\s+([\d,.]+)\s+([\d,.]+)\s+([\d,.]+)\s+([\d,.]+)\s+([\d,.]+)/i
+        // Padrão: "3- Média  4,14  28,79  80,4  29,5  77,7  10,4"
+        // O prefixo "3-" é opcional; aceita "Média", "Media", "M6dia", "Medias", etc.
+        const m = line.match(
+            /(?:\d[-.\s]*)?\s*[Mm][eé6][d][i]?[aáà][a-z]*[^0-9]{0,10}([\d,.]+)\s+([\d,.]+)\s+([\d,.]+)\s+([\d,.]+)\s+([\d,.]+)\s+([\d,.]+)/i
         );
-
-        if (mediaMatch) {
-            const dateTime = extractDateTime(text); // Pega data/hora do texto geral
-
-            // Tenta encontrar o número da máquina HVI:
-            // 1. Procura explicitamente por HVI: X ou Inst: X
-            // 2. Procura nas linhas da tabela (padrão: Num HVI Data ...)
-            let hviNumber = '1';
-
-            const labelMatch = text.match(/HVI\s*[:#]?\s*(\d+)/i) || text.match(/Inst\s*[:.]?\s*(\d+)/i);
-            if (labelMatch) {
-                hviNumber = labelMatch[1];
-            } else {
-                // Tenta achar na tabela. Padrão comum: Número Sequencial | HVI | Data
-                // Ex: "1 2 25/01/2024..." -> HVI é 2
-                const tableRowMatch = text.match(/^\s*\d+\s+(\d+)\s+\d{2}\/\d{2}/m) ||
-                    text.match(/^\s*\d+\s+(\d+)\s+\d{2}:\d{2}/m);
-                if (tableRowMatch) {
-                    hviNumber = tableRowMatch[1];
-                }
-            }
-
-            // Validar que o HVI está no range 1-7 (máquinas cadastradas)
-            const hviNum = parseInt(hviNumber, 10);
-            if (isNaN(hviNum) || hviNum < 1 || hviNum > 7) {
-                hviNumber = '1';
-            }
-
-            result.rows.push({
-                numero: 'M', // M de Média
-                hvi: hviNumber,
-                data_analise: dateTime.data,
-                hora_analise: dateTime.hora,
-                mic: sanitizeValue(extractDecimal(mediaMatch[1]), 'mic'),
-                len: sanitizeValue(extractDecimal(mediaMatch[2]), 'len'),
-                unf: sanitizeValue(extractDecimal(mediaMatch[3]), 'unf'),
-                str: sanitizeValue(extractDecimal(mediaMatch[4]), 'str'),
-                rd: sanitizeValue(extractDecimal(mediaMatch[5]), 'rd'),
-                b: sanitizeValue(extractDecimal(mediaMatch[6]), 'b')
-            });
-            break; // Encontrou a média, para de procurar
+        if (m) {
+            console.log('[OCR] Média encontrada (Passo 1A):', line);
+            result.rows.push(buildMediaRow([m[1], m[2], m[3], m[4], m[5], m[6]], text));
+            return result;
         }
     }
 
-    // PRIORIDADE 2: Se não encontrou Média, tenta extrair linhas individuais da tabela HVI
+    // --- Passo 1B: qualquer linha contendo "media" ou "média" com >= 6 números ---
+    for (const line of lines) {
+        if (/m[eé6][d][i]?[aáà]/i.test(line)) {
+            const nums = line.match(/([\d,.]+)/g);
+            if (nums && nums.length >= 6) {
+                console.log('[OCR] Média encontrada (Passo 1B):', line);
+                result.rows.push(buildMediaRow(nums.slice(0, 6), text));
+                return result;
+            }
+        }
+    }
+
+    // --- Passo 1C: por POSIÇÃO na tabela de estatísticas ---
+    // Procura a sequência: Mínimo → Máximo → (próxima linha com 6 números = Média)
+    {
+        let foundMin = false;
+        let foundMax = false;
+        for (const line of lines) {
+            const isMin = /m[ií]n[i]?m/i.test(line);
+            const isMax = /m[aá]x[i]?m/i.test(line);
+            const isDesvio = /desvio|padr[aã]o|std|desvpad/i.test(line);
+
+            if (isMin && !foundMin) { foundMin = true; continue; }
+            if (isMax && foundMin && !foundMax) { foundMax = true; continue; }
+            if (isDesvio) break; // passou da Média sem encontrar
+
+            if (foundMax) {
+                const nums = line.match(/([\d,.]+)/g);
+                if (nums && nums.length >= 6) {
+                    console.log('[OCR] Média encontrada (Passo 1C - posição):', line);
+                    result.rows.push(buildMediaRow(nums.slice(0, 6), text));
+                    return result;
+                }
+            }
+        }
+    }
+
+    // ================================================================
+    // PRIORIDADE 2 — Fallback: linhas individuais da tabela HVI principal
+    // (com data e hora explícitas na coluna Análise)
+    // ================================================================
     if (result.rows.length === 0) {
         for (const line of lines) {
-            // Procura por linha que começa com número e contém padrão de data
             const rowMatch = line.match(
                 /^\s*(\d+)\s+(\d+)\s+(\d{2}\/\d{2}\/\d{4})\s*(\d{2}:\d{2}:\d{2})\s+([\d,.]+)\s+([\d,.]+)\s+([\d,.]+)\s+([\d,.]+)\s+([\d,.]+)\s+([\d,.]+)/
             );
-
             if (rowMatch) {
                 const rawHvi = parseInt(rowMatch[2], 10);
                 const validHvi = (!isNaN(rawHvi) && rawHvi >= 1 && rawHvi <= 7) ? rowMatch[2] : '1';
@@ -227,23 +265,21 @@ const parseHVIData = (text: string): ExtractionResult => {
                     unf: sanitizeValue(extractDecimal(rowMatch[7]), 'unf'),
                     str: sanitizeValue(extractDecimal(rowMatch[8]), 'str'),
                     rd: sanitizeValue(extractDecimal(rowMatch[9]), 'rd'),
-                    b: sanitizeValue(extractDecimal(rowMatch[10]), 'b')
+                    b: sanitizeValue(extractDecimal(rowMatch[10]), 'b'),
                 });
             }
         }
     }
 
-    // PRIORIDADE 3: Se ainda não encontrou, tenta padrão mais flexível
+    // ================================================================
+    // PRIORIDADE 3 — Fallback genérico: qualquer linha com >= 6 decimais
+    // ================================================================
     if (result.rows.length === 0) {
-        const numberPattern = /(\d+[,.]\d+)/g;
-
         for (const line of lines) {
-            const numbers = line.match(numberPattern);
-            // Uma linha de dados típica tem 6 valores numéricos (Mic, Len, Unf, Str, Rd, +b)
+            const numbers = line.match(/([\d,.]+)/g);
             if (numbers && numbers.length >= 6) {
                 const dateTime = extractDateTime(line);
                 const numMatch = line.match(/^\s*(\d+)/);
-
                 result.rows.push({
                     numero: numMatch ? numMatch[1] : '1',
                     hvi: '1',
@@ -254,7 +290,7 @@ const parseHVIData = (text: string): ExtractionResult => {
                     unf: sanitizeValue(extractDecimal(numbers[2]), 'unf'),
                     str: sanitizeValue(extractDecimal(numbers[3]), 'str'),
                     rd: sanitizeValue(extractDecimal(numbers[4]), 'rd'),
-                    b: sanitizeValue(extractDecimal(numbers[5]), 'b')
+                    b: sanitizeValue(extractDecimal(numbers[5]), 'b'),
                 });
             }
         }
@@ -263,6 +299,9 @@ const parseHVIData = (text: string): ExtractionResult => {
     return result;
 };
 
+// ============================================================
+// SERVIÇO PÚBLICO
+// ============================================================
 export const OCRExtractionService = {
     async extractFromImage(file: File, onProgress?: (progress: number) => void): Promise<ExtractionResult> {
         try {
@@ -270,7 +309,7 @@ export const OCRExtractionService = {
 
             const result = await Tesseract.recognize(
                 imageUrl,
-                'eng', // 'eng' é muito mais preciso para tabelas numéricas com vírgula
+                'por+eng', // Português + Inglês para melhor leitura de "Média"
                 {
                     logger: (m) => {
                         if (m.status === 'recognizing text' && onProgress) {
@@ -282,27 +321,24 @@ export const OCRExtractionService = {
 
             URL.revokeObjectURL(imageUrl);
 
-            // Normaliza o texto antes do parsing:
-            // colapsa múltiplos espaços em um único, remove chars que não são texto/números
             const rawText = result.data.text;
+
+            // Normaliza o texto preservando a estrutura de linhas
             const normalizedText = rawText
-                .replace(/\r\n/g, '\n')          // normaliza quebras de linha Windows
-                .replace(/[ \t]+/g, ' ')          // colapsa múltiplos espaços/tabs em um só
-                .replace(/[|\\]/g, ' ')            // remove barras e pipes (lidos como separadores)
-                .replace(/—|–/g, '-');             // normaliza traços especiais
+                .replace(/\r\n/g, '\n')        // quebras de linha Windows
+                .replace(/[ \t]+/g, ' ')        // colapsa espaços múltiplos
+                .replace(/[|\\]/g, ' ')          // remove separadores de coluna
+                .replace(/—|–/g, '-');           // normaliza traços
 
             console.log('[OCR] Raw text:', rawText);
             console.log('[OCR] Normalized text:', normalizedText);
 
             const extractedData = parseHVIData(normalizedText);
 
-            // Se não conseguiu extrair dados, retorna erro
-            if (extractedData.rows.length === 0 && !extractedData.mala && !extractedData.etiqueta) {
-                // Tenta extrair com um parsing mais agressivo
-                console.log('OCR Raw Text:', result.data.text);
-
-                // Fallback: extrai valores numéricos encontrados
-                const allNumbers = result.data.text.match(/\d+[,.]\d+/g) || [];
+            // Fallback de último recurso: pega os primeiros 6 decimais encontrados
+            if (extractedData.rows.length === 0) {
+                console.warn('[OCR] Nenhuma linha encontrada. Aplicando fallback de último recurso.');
+                const allNumbers = rawText.match(/\d+[,.]\d+/g) || [];
                 if (allNumbers.length >= 6) {
                     extractedData.rows.push({
                         numero: '1',
@@ -314,14 +350,14 @@ export const OCRExtractionService = {
                         unf: extractDecimal(allNumbers[2] ?? '0'),
                         str: extractDecimal(allNumbers[3] ?? '0'),
                         rd: extractDecimal(allNumbers[4] ?? '0'),
-                        b: extractDecimal(allNumbers[5] ?? '0')
+                        b: extractDecimal(allNumbers[5] ?? '0'),
                     });
                 }
             }
 
             return extractedData;
         } catch (error) {
-            console.error('OCR Error:', error);
+            console.error('[OCR] Erro:', error);
             throw error;
         }
     },
@@ -335,10 +371,10 @@ export const OCRExtractionService = {
             str: row.str,
             rd: row.rd,
             b: row.b,
-            mala: mala,
-            etiqueta: etiqueta,
+            mala,
+            etiqueta,
             data_analise: row.data_analise,
-            hora_analise: row.hora_analise
+            hora_analise: row.hora_analise,
         };
     }
 };
