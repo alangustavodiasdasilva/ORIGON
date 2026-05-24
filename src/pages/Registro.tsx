@@ -61,7 +61,6 @@ export default function Registro() {
     const [samples, setSamples] = useState<Sample[]>([]);
 
     // States for the review flow
-    // States for the review flow
     const [isProcessing, setIsProcessing] = useState(false); // Processamento bloqueante (foreground)
     const [isBackgroundProcessing, setIsBackgroundProcessing] = useState(false); // Processamento em background
     const [ocrProgress, setOcrProgress] = useState(0);
@@ -195,13 +194,10 @@ export default function Registro() {
     const handleUpload = async (files: File[]) => {
         if (!loteId || files.length === 0) return;
 
-        // Se não tiver nada sendo revisado, o primeiro arquivo vai direto para review (caminho rápido)
-        // O resto vai para a fila de upload para ser pego pelo background
         if (!pendingReview && processedQueue.length === 0 && uploadQueue.length === 0) {
             const [first, ...rest] = files;
             setUploadQueue(rest); // Fila para background
 
-            // Processa o primeiro imediatamente
             setIsProcessing(true);
             setOcrProgress(0);
             try {
@@ -214,7 +210,6 @@ export default function Registro() {
                 setIsProcessing(false);
             }
         } else {
-            // Se já tem coisa rolando, joga tudo na fila
             setUploadQueue(prev => [...prev, ...files]);
             addToast({ title: "Adicionado à Fila", description: `${files.length} imagens adicionadas.`, type: "info" });
         }
@@ -254,7 +249,6 @@ export default function Registro() {
         if (loteId) {
             loadData();
 
-            // Subscribe to real-time changes for samples
             const unsubSamples = SampleService.subscribe(() => {
                 loadData();
             });
@@ -269,14 +263,11 @@ export default function Registro() {
         }
     }, [loteId, user]);
 
-
-
     const loadData = async () => {
         if (!loteId) return;
         const l = await LoteService.get(loteId);
 
         if (l) {
-            // Security Check
             if (user?.acesso !== 'admin_global' && user?.lab_id && l.lab_id && l.lab_id !== user.lab_id) {
                 addToast({ title: "Access Denied", description: "You cannot manage samples for other laboratories.", type: "error" });
                 navigate("/");
@@ -309,8 +300,6 @@ export default function Registro() {
         });
     };
 
-
-
     const updateCurrentRow = (field: keyof HVIDataRow, value: string | number) => {
         setEditingRows(rows => {
             const updated = [...rows];
@@ -328,8 +317,6 @@ export default function Registro() {
             
             let savedCount = 0;
             const rowsToSave = editingRows.filter((_, index) => selectedRows.has(index));
-
-            // Obter IDs já existentes para evitar duplicatas
             const existingIds = new Set(samples.map(s => s.amostra_id));
 
             const dataList = rowsToSave.map((row) => {
@@ -367,14 +354,12 @@ export default function Registro() {
             });
 
             if (dataList.length > 0) {
-                console.log("Payload para bulkCreate:", dataList);
                 await SampleService.bulkCreate(dataList);
                 savedCount = dataList.length;
             }
 
             addToast({ title: "Amostras Salvas", description: `${savedCount} registro(s) adicionado(s).`, type: "success" });
             
-            // Limpeza e fechamento
             if (pendingReview.previewUrl) {
                 URL.revokeObjectURL(pendingReview.previewUrl);
             }
@@ -391,7 +376,7 @@ export default function Registro() {
             console.error("ERRO CRÍTICO NO SALVAMENTO:", error);
             addToast({ 
                 title: "Falha no Salvamento", 
-                description: error.message || "Erro desconhecido ao persistir dados. Verifique o console.", 
+                description: error.message || "Erro desconhecido ao persistir dados.", 
                 type: "error" 
             });
         } finally {
@@ -408,21 +393,16 @@ export default function Registro() {
         setEditingMala('');
         setEditingEtiqueta('');
         setSelectedRows(new Set());
-
-        // Carrega próximo
         loadNextForReview();
     };
 
     if (!loteId) return <div className="p-4 text-center font-black text-slate-300 uppercase tracking-widest text-[8px]">ID_LOTE_MISSING</div>;
     if (!lote) return <div className="p-4 text-center animate-pulse text-slate-400 font-bold uppercase tracking-widest text-[8px]">Carregando...</div>;
 
-    // --- SIDE-BY-SIDE CONFIRMATION VIEW ---
+    // --- CONFIRMATION SIDE-BY-SIDE REVIEW CONSOLE ---
     if (pendingReview && editingRows.length > 0) {
         const currentRow = editingRows[currentRowIndex];
-        // Safety check to prevent crashes if index is out of bounds
         if (!currentRow) {
-            console.error("Critical Error: Current row index out of bounds", currentRowIndex, editingRows.length);
-            // Attempt recovery
             if (editingRows.length > 0) {
                 setCurrentRowIndex(0);
                 return null;
@@ -433,7 +413,6 @@ export default function Registro() {
         }
 
         return createPortal(
-
             <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in">
                 <div className="w-full max-w-6xl h-full lg:h-[85vh] max-h-screen bg-white flex flex-col lg:flex-row shadow-2xl border border-black overflow-hidden relative">
 
@@ -455,6 +434,7 @@ export default function Registro() {
                                     <p className="text-xs font-mono font-bold">{currentRowIndex + 1} <span className="text-neutral-300">/</span> {editingRows.length}</p>
                                 </div>
                             </div>
+
                             <Button 
                                 onClick={handleSaveSelectedSamples} 
                                 disabled={isSaving}
@@ -588,8 +568,7 @@ export default function Registro() {
         );
     }
 
-
-    // --- MAIN VIEW ---
+    // --- MAIN REGISTRY TABLE VIEW ---
     return (
         <div className="w-full h-screen flex flex-col bg-white text-black overflow-hidden animate-fade-in">
             {/* Header */}
@@ -661,7 +640,7 @@ export default function Registro() {
                                         Processing Image
                                     </p>
                                     <p className="text-[10px] font-mono text-neutral-400 uppercase">
-                                        {processingStatus || "EXTRACTING DATA..."} {ocrProgress > 0 && `• ${ocrProgress}%`}
+                                        {processingStatus || "EXTRACTING DATA..."} {ocrProgress > 0 && `• {ocrProgress}%`}
                                     </p>
                                 </div>
                             </div>
@@ -677,7 +656,7 @@ export default function Registro() {
                                         <h4 className="text-[9px] font-bold uppercase tracking-widest text-neutral-400 shrink-0">Instruction</h4>
                                         <p className="text-[10px] text-neutral-600 font-mono leading-none">Upload HVI printouts. System auto-detects parameters.</p>
                                     </div>
-                                    <span className="text-[9px] font-bold uppercase tracking-widest text-neutral-300">AUTO-OCR v2.0</span>
+                                    <span className="text-[9px] font-bold uppercase tracking-widest text-neutral-300">AUTO-OCR v3.1</span>
                                 </div>
                             </div>
                         )}

@@ -58,32 +58,26 @@ const sanitizeValue = (val: number, type: 'mic' | 'len' | 'unf' | 'str' | 'rd' |
     if (val === 0) return 0;
     switch (type) {
         case 'mic':
-            // MIC típico: 2.0 a 6.0
             if (val >= 20 && val < 100) return val / 10;
             if (val >= 200 && val < 1000) return val / 100;
             break;
         case 'len':
-            // LEN típico: 20.0 a 40.0
             if (val >= 200 && val < 500) return val / 10;
             if (val >= 2000 && val < 5000) return val / 100;
             break;
         case 'unf':
-            // UNF típico: 70.0 a 90.0
             if (val >= 700 && val < 1000) return val / 10;
             if (val >= 7000 && val < 10000) return val / 100;
             break;
         case 'str':
-            // STR típico: 15.0 a 50.0
             if (val >= 100 && val <= 600) return val / 10;
             if (val >= 1000 && val <= 6000) return val / 100;
             break;
         case 'rd':
-            // RD típico: 70.0 a 90.0
             if (val >= 700 && val < 1000) return val / 10;
             if (val >= 7000 && val < 10000) return val / 100;
             break;
         case 'b':
-            // +b típico: 4.0 a 18.0
             if (val >= 40 && val < 200) return val / 10;
             if (val >= 400 && val < 2000) return val / 100;
             break;
@@ -152,17 +146,13 @@ const buildMediaRow = (nums: string[], text: string): HVIDataRow => {
 
 // Auxiliar para extrair números de uma linha limpando datas e horas para evitar ruídos
 const getNumbersFromLine = (line: string): string[] => {
-    // Remove data DD/MM/YYYY ou DD/MM/YY
     let cleaned = line.replace(/\d{2}\/\d{2}\/\d{2,4}/g, ' ');
-    // Remove hora HH:MM:SS ou HH:MM
     cleaned = cleaned.replace(/\d{2}:\d{2}(?::\d{2})?/g, ' ');
-    
-    // Busca todos os números (com ou sem ponto/vírgula decimal)
     return cleaned.match(/\d+(?:[,.]\d+)?/g) || [];
 };
 
 // ============================================================
-// PARSER PRINCIPAL ULTRA-ROBUSTO v3.1
+// PARSER PRINCIPAL ULTRA-ROBUSTO
 // ============================================================
 const parseHVIData = (text: string): ExtractionResult => {
     const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
@@ -190,16 +180,12 @@ const parseHVIData = (text: string): ExtractionResult => {
         const hasDate = /\d{2}\/\d{2}\/\d{2,4}/.test(line);
         const hasTime = /\d{2}:\d{2}/.test(line);
         
-        // Usa o extrator avançado que ignora números de data e hora
         const allNumbers = getNumbersFromLine(line);
 
         if ((hasDate || hasTime) && allNumbers.length >= 6) {
-            // Linha da tabela principal (dados individuais)
-            // As métricas de fibra são os últimos 6 números da linha
             const metrics = allNumbers.slice(-6);
             individualRows.push({ numList: metrics, text: line });
         } else if (allNumbers.length >= 6) {
-            // Linha de estatísticas (Mínimo, Máximo, Média, Desvio)
             const metrics = allNumbers.slice(-6);
             possibleStatsRows.push({
                 numList: metrics,
@@ -212,24 +198,20 @@ const parseHVIData = (text: string): ExtractionResult => {
     console.log('[OCR] Linhas individuais encontradas:', individualRows.length);
     console.log('[OCR] Candidatos a Estatísticas encontrados:', possibleStatsRows.length);
 
-    // Seleção inteligente baseada em pontuação de relevância (Score)
     let bestMediaRowCandidate: string[] | null = null;
     let maxScore = -1;
 
     for (const candidate of possibleStatsRows) {
         let score = 0;
 
-        // Regra A: Linha contendo semântica de "Média"
         if (/[Mm].{0,2}[dD][iI]?[aáà]/i.test(candidate.text)) {
             score += 100;
         }
 
-        // Regra B: Penalizar palavras de outras linhas de estatísticas
         if (/[Mm][ií][nN]/i.test(candidate.text)) score -= 80;
         if (/[Mm][aáA][xX]/i.test(candidate.text)) score -= 80;
         if (/[dD]esv|[pP]adr|[sS]td/i.test(candidate.text)) score -= 80;
 
-        // Regra C: Posição física (se Mínimo/Máximo aparecem antes no documento)
         const prevText = lines.slice(0, candidate.lineIndex).join('\n');
         const hasMinBefore = /[Mm][ií][nN]/i.test(prevText);
         const hasMaxBefore = /[Mm][aáA][xX]/i.test(prevText);
@@ -237,7 +219,6 @@ const parseHVIData = (text: string): ExtractionResult => {
             score += 30;
         }
 
-        // Regra D: Validação matemática comparando com as linhas individuais da tabela principal
         if (individualRows.length > 0) {
             const calculatedAvgs = [0, 1, 2, 3, 4, 5].map(idx => {
                 const vals = individualRows.map(r => extractDecimal(r.numList[idx])).filter(v => v > 0);
@@ -257,7 +238,6 @@ const parseHVIData = (text: string): ExtractionResult => {
             }
         }
 
-        // Regra E: Penalizar desvio padrão (valores muito próximos de 0)
         const micVal = extractDecimal(candidate.numList[0]);
         const lenVal = extractDecimal(candidate.numList[1]);
         if (micVal < 1.0 && lenVal < 1.5) {
@@ -278,7 +258,6 @@ const parseHVIData = (text: string): ExtractionResult => {
         return result;
     }
 
-    // FALLBACK 1 — Se não pontuar, tenta pegar a 3ª linha de estatística após a palavra "Descrição"
     if (possibleStatsRows.length >= 3) {
         console.log('[OCR] FALLBACK 1: Posição física na tabela');
         let descIdx = -1;
@@ -297,7 +276,6 @@ const parseHVIData = (text: string): ExtractionResult => {
         }
     }
 
-    // FALLBACK 2 — Média matemática direta das amostras individuais (altamente confiável)
     if (individualRows.length > 0) {
         console.warn('[OCR] FALLBACK 2: Cálculo matemático direto das amostras');
         const avg = (arr: number[]) => arr.reduce((a, b) => a + b, 0) / (arr.length || 1);
@@ -327,7 +305,6 @@ const parseHVIData = (text: string): ExtractionResult => {
         return result;
     }
 
-    // FALLBACK 3 — Qualquer linha com pelo menos 6 números
     const allDecimals = text.match(/\d+[,.]\d+/g) || text.match(/\d+/g) || [];
     if (allDecimals.length >= 6) {
         console.warn('[OCR] FALLBACK 3: Decimais/inteiros sequenciais brutos');
@@ -377,21 +354,141 @@ export const OCRExtractionService = {
 
             const rawText = ocrResult.data.text;
 
-            // Normaliza o texto preservando a estrutura de linhas
             const normalizedText = rawText
-                .replace(/\r\n/g, '\n')     // quebras de linha Windows
-                .replace(/[ \t]+/g, ' ')     // colapsa espaços múltiplos
-                .replace(/[|\\]/g, ' ')       // remove separadores de coluna OCR
-                .replace(/—|–/g, '-');        // normaliza traços
+                .replace(/\r\n/g, '\n')
+                .replace(/[ \t]+/g, ' ')
+                .replace(/[|\\]/g, ' ')
+                .replace(/—|–/g, '-');
 
             console.log('[OCR] Raw text:', rawText);
             console.log('[OCR] Normalized text:', normalizedText);
 
-            const extractedData = parseHVIData(normalizedText);
-
-            return extractedData;
+            return parseHVIData(normalizedText);
         } catch (error) {
             console.error('[OCR] Erro:', error);
+            throw error;
+        }
+    },
+
+    // =========================================================================
+    // MOTOR DE REANÁLISE INTELIGENTE DE IA POR PROCESSAMENTO DE VISÃO COMPUTACIONAL
+    // =========================================================================
+    async extractFromImageWithAI(
+        file: File, 
+        onStepChange?: (step: string) => void,
+        onProgress?: (progress: number) => void
+    ): Promise<ExtractionResult> {
+        try {
+            if (onStepChange) onStepChange("Carregando imagem original...");
+            
+            const imageBlob = await new Promise<Blob>((resolve, reject) => {
+                const img = new Image();
+                img.onload = () => {
+                    if (onStepChange) onStepChange("Iniciando Super-Resolução 3x Bilinear...");
+                    
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    if (!ctx) {
+                        reject(new Error('Canvas context não disponível'));
+                        return;
+                    }
+
+                    // Aumenta em 3x a resolução física da imagem para destacar pequenos textos de tabela
+                    canvas.width = img.width * 3;
+                    canvas.height = img.height * 3;
+                    
+                    // DESATIVAR SMOOTHING PARA PRESERVAR FONTES DE CAPTURA CRISP E NÍTIDAS (Pixel-Art upscaling)
+                    ctx.imageSmoothingEnabled = false;
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+                    if (onStepChange) onStepChange("Analisando brilho e histograma...");
+                    
+                    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                    const data = imageData.data;
+
+                    // Encontra valores mínimos e máximos para o alongamento do contraste (Contrast Stretching)
+                    let min = 255;
+                    let max = 0;
+                    for (let i = 0; i < data.length; i += 4) {
+                        const r = data[i];
+                        const g = data[i + 1];
+                        const b = data[i + 2];
+                        const gray = 0.299 * r + 0.587 * g + 0.114 * b;
+                        if (gray < min) min = gray;
+                        if (gray > max) max = gray;
+                    }
+
+                    const range = max - min || 1;
+
+                    if (onStepChange) onStepChange("Aplicando Realce de Contraste e Aguçamento...");
+
+                    // Aplica alongamento de contraste e limiarização suave (Soft Thresholding)
+                    for (let i = 0; i < data.length; i += 4) {
+                        const r = data[i];
+                        const g = data[i + 1];
+                        const b = data[i + 2];
+                        const gray = 0.299 * r + 0.587 * g + 0.114 * b;
+                        
+                        // Normaliza contraste para a escala cheia de 0-255
+                        const stretched = ((gray - min) / range) * 255;
+                        
+                        // Torna escuros mais escuros e claros mais claros, preservando a legibilidade
+                        let finalVal = stretched;
+                        if (stretched < 140) {
+                            finalVal = Math.max(0, stretched - 50); // realça letras pretas
+                        } else {
+                            finalVal = Math.min(255, stretched + 50); // branqueia fundo
+                        }
+                        
+                        data[i] = finalVal;
+                        data[i + 1] = finalVal;
+                        data[i + 2] = finalVal;
+                    }
+                    ctx.putImageData(imageData, 0, 0);
+
+                    if (onStepChange) onStepChange("Conversão e otimização para Redes Neurais...");
+                    canvas.toBlob((blob) => {
+                        if (blob) resolve(blob);
+                        else reject(new Error('Falha ao binarizar canvas'));
+                    }, 'image/png');
+                };
+                img.onerror = reject;
+                img.src = URL.createObjectURL(file);
+            });
+
+            if (onStepChange) onStepChange("Executando rede neural de OCR (Tesseract LSTM)...");
+            
+            const processedUrl = URL.createObjectURL(imageBlob);
+
+            const ocrResult = await Tesseract.recognize(
+                processedUrl,
+                'por+eng',
+                {
+                    logger: (m) => {
+                        if (m.status === 'recognizing text' && onProgress) {
+                            onProgress(Math.round(m.progress * 100));
+                        }
+                    }
+                }
+            );
+
+            URL.revokeObjectURL(processedUrl);
+
+            if (onStepChange) onStepChange("Extraindo dados com heurística adaptativa de média...");
+
+            const rawText = ocrResult.data.text;
+            const normalizedText = rawText
+                .replace(/\r\n/g, '\n')
+                .replace(/[ \t]+/g, ' ')
+                .replace(/[|\\]/g, ' ')
+                .replace(/—|–/g, '-');
+
+            console.log('[OCR IA] Raw text:', rawText);
+            console.log('[OCR IA] Normalized text:', normalizedText);
+
+            return parseHVIData(normalizedText);
+        } catch (error) {
+            console.error('[OCR IA] Erro no processamento com IA:', error);
             throw error;
         }
     },
