@@ -28,7 +28,9 @@ export interface HVIPreviewData {
         rd: number;
         b: number;
     };
+    files?: Array<{ content: string; filename: string }>;
 }
+
 
 interface ColorAverage {
     mic: number;
@@ -603,6 +605,226 @@ export class HVIFileGeneratorService {
     }
 
     /**
+     * Helper to clean string to pure ASCII (no accents, no BOM)
+     */
+    private static cleanToASCII(str: string): string {
+        return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\x00-\x7F]/g, "");
+    }
+
+    /**
+     * Helper to format date in DD-MMM-AA format (e.g. 24-OCT-25)
+     */
+    private static formatH1Date(dateInput?: string): string {
+        let day = 24;
+        let monthIdx = 9; // 0-indexed, so 9 is October
+        let year = 25; // 2 digits
+
+        if (dateInput) {
+            const parts = dateInput.split(/[-/]/);
+            if (parts.length === 3) {
+                if (parts[0].length === 4) {
+                    // YYYY-MM-DD
+                    day = parseInt(parts[2]) || 24;
+                    monthIdx = (parseInt(parts[1]) || 10) - 1;
+                    year = parseInt(parts[0].substring(2)) || 25;
+                } else {
+                    // DD/MM/YYYY
+                    day = parseInt(parts[0]) || 24;
+                    monthIdx = (parseInt(parts[1]) || 10) - 1;
+                    year = parseInt(parts[2].substring(2)) || 25;
+                }
+            }
+        } else {
+            const d = new Date();
+            day = d.getDate();
+            monthIdx = d.getMonth();
+            year = d.getFullYear() % 100;
+        }
+
+        const months = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+        const mStr = months[monthIdx] || "OCT";
+        
+        return `${String(day).padStart(2, '0')}-${mStr}-${String(year).padStart(2, '0')}`;
+    }
+
+    /**
+     * Gera um target de amostra variado deterministicamente dentro de uma fração da tolerância
+     */
+    private static getVariedSampleTarget(
+        targetGeneral: number,
+        tolerance: number,
+        decimals: number,
+        seedModifier: string
+    ): number {
+        if (tolerance <= 0) return targetGeneral;
+
+        // Hash determinístico 32-bit exclusivo para a variação da média
+        let hash = 0;
+        const seedStr = `${seedModifier}_targetvar_${targetGeneral.toFixed(decimals)}_${tolerance.toFixed(decimals)}`;
+        for (let i = 0; i < seedStr.length; i++) {
+            hash = (hash << 5) - hash + seedStr.charCodeAt(i);
+            hash |= 0;
+        }
+
+        let seed = Math.abs(hash) || 1;
+        const rand = () => {
+            seed ^= seed << 13;
+            seed ^= seed >>> 17;
+            seed ^= seed << 5;
+            return (Math.abs(seed) % 1000000) / 1000000;
+        };
+
+        // Variação máxima da média: 40% da tolerância configurada
+        const maxMeanVar = tolerance * 0.4;
+        const variation = (rand() * 2 - 1) * maxMeanVar;
+        
+        return parseFloat((targetGeneral + variation).toFixed(decimals));
+    }
+
+    /**
+     * Gera count leituras aleatórias dentro da tolerância cuja média é exatamente o alvo.
+     * As primeiras count-1 são aleatórias dentro de [-maxVar, +maxVar].
+     * A última é calculada para fechar a soma (e depois clampada à tolerância, reajustando a 1ª se necessário).
+     * Usa seed determinística para que o mesmo lote gere os mesmos arquivos.
+     */
+    private static getBalancedReadings(target: number, maxVar: number, decimals: number, seedModifier: string, count: number = 6): number[] {
+        // Gera um hash determinístico 32-bit a partir de seedModifier, target e maxVar
+        let hash = 0;
+        const seedStr = `${seedModifier}_${target.toFixed(decimals)}_${maxVar.toFixed(decimals)}`;
+        for (let i = 0; i < seedStr.length; i++) {
+            hash = (hash << 5) - hash + seedStr.charCodeAt(i);
+            hash |= 0; // Converte para inteiro de 32 bits
+        }
+
+        let seed = Math.abs(hash) || 1;
+
+        // XorShift32 PRNG (seguro e determinístico)
+        const rand = () => {
+            seed ^= seed << 13;
+            seed ^= seed >>> 17;
+            seed ^= seed << 5;
+            return (Math.abs(seed) % 1000000) / 1000000;
+        };
+
+        const randInRange = () => (rand() * 2 - 1) * maxVar; // [-maxVar, +maxVar]
+
+        // Gera count - 1 leituras aleatórias
+        const r = Array(count - 1).fill(0).map(() => {
+            const v = target + randInRange();
+            return parseFloat(v.toFixed(decimals));
+        });
+
+        // A última leitura fecha a média
+        const sumOfPrev = r.reduce((a, b) => a + b, 0);
+        const targetSum = parseFloat((target * count).toFixed(decimals));
+        let lastVal = parseFloat((targetSum - sumOfPrev).toFixed(decimals));
+
+        // Se a última caiu fora da tolerância, clamp nela e ajusta a 1ª
+        const lo = parseFloat((target - maxVar).toFixed(decimals));
+        const hi = parseFloat((target + maxVar).toFixed(decimals));
+        if (lastVal < lo || lastVal > hi) {
+            lastVal = Math.max(lo, Math.min(hi, lastVal));
+            // Recalcula a 1ª para compensar
+            const sumOfOthers = r.slice(1).reduce((a, b) => a + b, 0) + lastVal;
+            r[0] = parseFloat((targetSum - sumOfOthers).toFixed(decimals));
+            r[0] = Math.max(lo, Math.min(hi, r[0]));
+        }
+
+        return [...r, lastVal];
+    }
+
+    /**
+     * Formats one .H1 file with 7 mandatory lines
+     */
+    private static generateH1FileContent(
+        sample: Sample,
+        date: string,
+        time: string,
+        seq: number,
+        repIndex: number,
+        lineName: string,
+        mic: number,
+        uhml: number,
+        ui: number,
+        str: number,
+        elg: number,
+        sfi: number,
+        len: number,
+        count: number,
+        sci: number,
+        rd: number,
+        plusB: number,
+        grau: string,
+        area: number,
+        leaf: number,
+        mat: number,
+        csp: number
+    ): string {
+        // AMOSTRA: formato '{mala}#{repIndex}' — ex: '89801#01'
+        const amostraBase = `${sample.mala || ''}#${String(repIndex).padStart(2, '0')}`;
+        const amostraPad = amostraBase.substring(0, 40).padEnd(40, ' ');
+        const etiquetaPad = (sample.etiqueta || '').substring(0, 40).padEnd(40, ' ');
+
+        const seqStrStart = String(seq).padStart(2, '0');
+        const seqStrEnd = String(seq + 1).padStart(2, '0');
+
+        // ── Clamping de segurança para evitar erro -2 da máquina ─────────────
+        const safeMic  = Math.max(3.5, Math.min(5.5, mic));
+        const safeUi   = Math.max(79.0, Math.min(90.0, ui));
+        const safeStr  = Math.max(20.0, Math.min(45.0, str));
+        const safeElg  = Math.max(3.0, Math.min(10.0, elg));
+        const safeSfi  = Math.max(5.0, Math.min(25.0, sfi));
+        const safeRd   = Math.max(60.0, Math.min(95.0, rd));
+        const safePlusB = Math.max(4.0, Math.min(20.0, plusB));
+        const safeMat  = Math.max(0.75, Math.min(1.0, mat));
+        // SCI: mínimo 80 e máximo 160 — abaixo de 80 o HVI gera erro -2
+        const safeSci  = Math.max(80, Math.min(160, Math.round(sci)));
+        // CSP: mínimo 100 — abaixo disso o HVI gera erro -2
+        const safeCsp  = Math.max(100, Math.min(9999, Math.round(csp)));
+        // LEAF: 1 a 8 (escala da máquina)
+        const safeLeaf = Math.max(1, Math.min(8, Math.round(leaf)));
+        // AREA: nunca negativa
+        const safeArea = Math.max(0.01, area);
+        // UHML e LEN: sempre positivos
+        const safeUhml = Math.max(20.0, uhml);
+        const safeLen  = Math.max(15.0, len);
+        const safeCount = Math.max(1.0, count);
+
+        const uhmlStr = safeUhml.toFixed(2);
+        const uiStr = safeUi.toFixed(1);
+        const strStr = safeStr.toFixed(1);
+        const elgStr = safeElg.toFixed(1).padStart(4, ' ');
+        const sfiStr = safeSfi.toFixed(1);
+        const lenStr = safeLen.toFixed(1).padStart(5, ' ');
+        const countStr = safeCount.toFixed(1).padStart(5, ' ');
+
+        const micStr = safeMic.toFixed(2);
+        const sciStr = String(safeSci).padStart(4, '0');
+
+        const rdStr = safeRd.toFixed(1);
+        const bStr = safePlusB.toFixed(1).padStart(4, ' ');
+        const areaNStr = Math.round(safeArea * 100).toString().padStart(3, ' ');
+        const areaStr = safeArea.toFixed(2);
+        const leafStr = safeLeaf.toString();
+
+        const matStr = safeMat.toFixed(2);
+        const cspStr = safeCsp.toString();
+
+        const lines = [
+            `HVI1000@@05@${lineName}@${date}@${time}@${seqStrStart}@`,
+            `HVI1000@L&S@02@${lineName}@${date}@${time}@${amostraPad}@${etiquetaPad}@${uhmlStr}@n@n@${uiStr}@n@n@${strStr}@n@n@${elgStr}@${sfiStr}@      @${lenStr}@${countStr}@25@`,
+            `HVI1000@MIC@02@${lineName}@${date}@${time}@${amostraPad}@${etiquetaPad}@${micStr}@n@40@`,
+            `HVI1000@SCI@02@${lineName}@${date}@${time}@${amostraPad}@${etiquetaPad}@${sciStr}@n@0000@@38@`,
+            `HVI1000@C&T@02@${lineName}@${date}@${time}@${amostraPad}@${etiquetaPad}@n@${rdStr}@n@${bStr}@n@${grau}@n@n@${areaNStr}@${areaStr}@n@${leafStr}@n@10@`,
+            `HVI1000@MAT@02@${lineName}@${date}@${time}@${amostraPad}@${etiquetaPad}@${matStr}@n@@@@${cspStr}@`,
+            `HVI1000@@06@${lineName}@${date}@${time}@${seqStrEnd}@`
+        ];
+
+        const content = lines.join('\r\n') + '\r\n';
+        return this.cleanToASCII(content);
+    }
+
+    /**
      * Generate preview data for a sample (does NOT download)
      */
     static async generatePreviewForSample(
@@ -622,7 +844,7 @@ export class HVIFileGeneratorService {
                 const colorLabel = colorNames[sample.cor || ""] || "não definida";
                 return {
                     success: false,
-                    message: `Amostra da cor ${colorLabel} não possui print vinculado. O arquivo TXT só pode ser gerado após configurar o print no painel 'Metas por Cor'.`
+                    message: `Amostra da cor ${colorLabel} não possui print vinculado. O arquivo só pode ser gerado após configurar o print no painel 'Metas por Cor'.`
                 };
             }
 
@@ -646,116 +868,237 @@ export class HVIFileGeneratorService {
             // Get the averages (Sample values or Color Average)
             const averages = this.getSampleTargetValues(sample, allSamples);
 
-            // For preview modal: show EXACT average values (no variation)
-            const generatedValues = {
-                mic: averages.mic,
-                len: averages.len,
-                unf: averages.unf,
-                str: averages.str,
-                rd: averages.rd,
-                b: averages.b
-            };
-
-            // For file content: generate 6 readings with balanced variation
             const count = 6;
-            const tols = tolerancias || { mic: 0.05, len: 0.25, unf: 0.5, str: 0.75, rd: 0.5, b: 0.25 };
-            
-            // Parâmetros primários: variação balanceada sobre o valor exato da amostra
-            const micReadings  = this.generateBalancedReadings(averages.mic, count, tols.mic, 2);
-            const lenReadings  = this.generateBalancedReadings(averages.len, count, tols.len, 2);
-            const unfReadings  = this.generateBalancedReadings(averages.unf, count, tols.unf, 1);
-            const strReadings  = this.generateBalancedReadings(averages.str, count, tols.str, 1);
-            const rdReadings   = this.generateBalancedReadings(averages.rd,  count, tols.rd,  1);
-            const bReadings    = this.generateBalancedReadings(averages.b,   count, tols.b,   1);
+            const tols = tolerancias || { mic: 0.10, len: 0.30, unf: 0.5, str: 0.5, rd: 0.5, b: 0.3 };
+            const seedMod = sample.id || sample.amostra_id || "default";
 
-            // Parâmetros secundários: usar EXATAMENTE o valor do template (sem variação)
-            // Apenas SFI e SCI permitem uma variação mínima que não distorce o significado
-            const elg   = averages.elg  ?? 6.4;
-            const area  = averages.area ?? 0.25;
-            const cnt   = averages.count ?? 30;
-            const mat   = averages.mat   ?? 0.85;
-            const sfi   = averages.sfi   ?? 10.0;
-            const sci   = averages.sci   ?? 125.0;
-            const csp   = averages.csp   ?? 0;
-            const leaf  = averages.leaf  ?? 2;
+            // ── Variação determinística das médias por amostra (máx 40% da tolerância) ──
+            const sampleMic = this.getVariedSampleTarget(averages.mic, tols.mic, 2, seedMod);
+            const sampleLen = this.getVariedSampleTarget(averages.len, tols.len, 2, seedMod);
+            const sampleUnf = this.getVariedSampleTarget(averages.unf, tols.unf, 1, seedMod);
+            const sampleStr = this.getVariedSampleTarget(averages.str, tols.str, 1, seedMod);
+            const sampleRd  = this.getVariedSampleTarget(averages.rd,  tols.rd,  1, seedMod);
+            const sampleB   = this.getVariedSampleTarget(averages.b,   tols.b,   1, seedMod);
 
-            // Parâmetros secundários: se a imagem/OCR extraiu 6 linhas exatas, usar EXATAMENTE elas, para não congelar o TXT.
-            const getRaw = (idx: number, prop: string, fallback: any) => {
-                if (averages.rawRows && averages.rawRows[idx] && averages.rawRows[idx][prop] !== undefined) {
-                    const val = averages.rawRows[idx][prop];
-                    if (typeof val === 'number' || typeof val === 'string') return val;
-                }
-                return fallback;
+            // For preview modal: show the actual varied averages generated in the HVI file
+            const generatedValues = {
+                mic: sampleMic,
+                len: sampleLen,
+                unf: sampleUnf,
+                str: sampleStr,
+                rd: sampleRd,
+                b: sampleB
             };
 
-            const elgReadings  = Array(count).fill(0).map((_, i) => getRaw(i, 'elg', elg));
-            const areaReadings = Array(count).fill(0).map((_, i) => getRaw(i, 'area', area));
-            const cntReadings  = Array(count).fill(0).map((_, i) => getRaw(i, 'count', cnt));
-            const matReadings  = Array(count).fill(0).map((_, i) => getRaw(i, 'mat', mat));
-            const sfiReadings  = Array(count).fill(0).map((_, i) => getRaw(i, 'sfi', sfi));
-            const sciReadings  = Array(count).fill(0).map((_, i) => getRaw(i, 'sci', sci));
-            const leafArr      = Array(count).fill(0).map((_, i) => getRaw(i, 'leaf', leaf));
-            const cgArr        = Array(count).fill(0).map((_, i) => getRaw(i, 'cg', averages.cg));
+            // ── Geração balanceada das 6 repetições respeitando a tolerância máxima global ──
+            const micVarLimit = Math.max(0.01, tols.mic - Math.abs(sampleMic - averages.mic));
+            const micReadings = this.getBalancedReadings(sampleMic, micVarLimit, 2, seedMod, count);
 
-            const cspReadings  = Array(count).fill(csp); // CSP: valor fixo do template
-            const mlReadings   = lenReadings.map(v => parseFloat((v * 0.75).toFixed(2)));
+            const lenVarLimit = Math.max(0.01, tols.len - Math.abs(sampleLen - averages.len));
+            const lenReadings = this.getBalancedReadings(sampleLen, lenVarLimit, 2, seedMod, count); // UHML
 
-            console.log(`[HVI] Amostra ${sample.amostra_id} cor=${sample.cor}`);
-            console.log(`[HVI] Primária: mic=${averages.mic} len=${averages.len} unf=${averages.unf} str=${averages.str} rd=${averages.rd} b=${averages.b}`);
-            console.log(`[HVI] Secundária: cg=${averages.cg} elg=${elg} area=${area} count=${cnt} mat=${mat} sfi=${sfi} sci=${sci} leaf=${leaf}`);
+            const unfVarLimit = Math.max(0.1, tols.unf - Math.abs(sampleUnf - averages.unf));
+            const unfReadings = this.getBalancedReadings(sampleUnf, unfVarLimit, 1, seedMod, count);  // UI
+
+            const strVarLimit = Math.max(0.1, tols.str - Math.abs(sampleStr - averages.str));
+            const strReadings = this.getBalancedReadings(sampleStr, strVarLimit, 1, seedMod, count);
+
+            const rdVarLimit  = Math.max(0.1, tols.rd - Math.abs(sampleRd - averages.rd));
+            const rdReadings  = this.getBalancedReadings(sampleRd, rdVarLimit,  1, seedMod, count);
+
+            const bVarLimit   = Math.max(0.1, tols.b - Math.abs(sampleB - averages.b));
+            const bReadings   = this.getBalancedReadings(sampleB, bVarLimit,   1, seedMod, count);
+
+            const elg          = averages.elg ?? 6.4;
+            const sampleElg    = this.getVariedSampleTarget(elg, 0.2, 1, seedMod);
+            const elgVarLimit  = Math.max(0.1, 0.2 - Math.abs(sampleElg - elg));
+            const elgReadings  = this.getBalancedReadings(sampleElg, elgVarLimit, 1, seedMod, count);
+
+            const sfi          = averages.sfi ?? 10.0;
+            const sampleSfi    = this.getVariedSampleTarget(sfi, 1.0, 1, seedMod);
+            const sfiVarLimit  = Math.max(0.1, 1.0 - Math.abs(sampleSfi - sfi));
+            const sfiReadings  = this.getBalancedReadings(sampleSfi, sfiVarLimit, 1, seedMod, count);
+
+            // SCI: se o template retornou 0 (não preenchido), usa fallback de 120
+            const sciRaw       = (averages.sci && averages.sci > 10) ? averages.sci : 120;
+            const sci          = Math.max(80, Math.min(160, sciRaw));
+            const sampleSci    = this.getVariedSampleTarget(sci, 3, 0, seedMod);
+            const sciVarLimit  = Math.max(1, 3 - Math.abs(sampleSci - sci));
+            const sciReadings  = this.getBalancedReadings(sampleSci, sciVarLimit, 0, seedMod, count);
+
+            const mat          = Math.max(0.75, Math.min(1.0, averages.mat ?? 0.85));
+            const sampleMat    = this.getVariedSampleTarget(mat, 0.01, 2, seedMod);
+            const matVarLimit  = Math.max(0.001, 0.01 - Math.abs(sampleMat - mat));
+            const matReadings  = this.getBalancedReadings(sampleMat, matVarLimit, 2, seedMod, count);
+
+            // CSP: se o template retornou 0 (não preenchido), usa fallback de 115
+            const cspRaw       = (averages.csp && averages.csp > 10) ? averages.csp : 115;
+            const csp          = Math.max(100, Math.min(9999, cspRaw));
+            const sampleCsp    = this.getVariedSampleTarget(csp, 3, 0, seedMod);
+            const cspVarLimit  = Math.max(1, 3 - Math.abs(sampleCsp - csp));
+            const cspReadings  = this.getBalancedReadings(sampleCsp, cspVarLimit, 0, seedMod, count);
+
+            // LEAF: clampa entre 1 e 8
+            const leaf         = Math.max(1, Math.min(8, averages.leaf ?? 2));
+            const sampleLeaf   = this.getVariedSampleTarget(leaf, 1, 0, seedMod);
+            const leafVarLimit = Math.max(0, 1 - Math.abs(sampleLeaf - leaf));
+            const leafReadings = this.getBalancedReadings(sampleLeaf, leafVarLimit, 0, seedMod, count);
+
+            const area         = Math.max(0.01, averages.area ?? 0.25);
+            const sampleArea   = this.getVariedSampleTarget(area, 0.05, 2, seedMod);
+            const areaVarLimit = Math.max(0.01, 0.05 - Math.abs(sampleArea - area));
+            const areaReadings = this.getBalancedReadings(sampleArea, areaVarLimit, 2, seedMod, count);
+
+            // cnt usado no fallback Premier
+            const cnt          = averages.count ?? 30;
+
+            // Date & time formatting
+            const date = this.formatH1Date(sample.data_analise);
+            const timeBase = sample.hora_analise || "09:00";
+            const timeParts = timeBase.split(':');
+            const hours = parseInt(timeParts[0]) || 9;
+            const minutes = parseInt(timeParts[1]) || 0;
+            const timeBaseFormatted = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+
+            // REP 4 time: +1 minute
+            let rep4Min = minutes + 1;
+            let rep4Hour = hours;
+            if (rep4Min >= 60) {
+                rep4Min = 0;
+                rep4Hour = (rep4Hour + 1) % 24;
+            }
+            const timeRep4 = `${String(rep4Hour).padStart(2, '0')}:${String(rep4Min).padStart(2, '0')}`;
+
+            // ── lineName derivado do número real da máquina ─────────────────────
+            // machineId ex: 'HVI 01', 'HVI 5', 'HVI05' → extrai o número → 'Line5       '
+            const machineNum = parseInt(machine.machineId.replace(/\D/g, ''), 10);
+            const lineName = `Line${isNaN(machineNum) ? '5' : machineNum}`.padEnd(12, ' ');
+
+            console.log(`[HVI] Amostra ${sample.amostra_id} cor=${sample.cor} modelo=${machine.model} linha=${lineName.trim()}`);
 
             let content: string;
-            let extension: string;
+            let filename: string;
+            let files: Array<{ content: string; filename: string }> = [];
 
             if (machine.model === 'USTER') {
-                const usterLines = [];
-                for (let i = 0; i < count; i++) {
-                    const rowAverages = {
-                        ...averages,
-                        mic: micReadings[i],
-                        len: lenReadings[i],
-                        unf: unfReadings[i],
-                        str: strReadings[i],
-                        rd:  rdReadings[i],
-                        b:   bReadings[i],
-                        elg:   elgReadings[i],
-                        area:  areaReadings[i],
-                        count: cntReadings[i],
-                        mat:   matReadings[i],
-                        sfi:   sfiReadings[i],
-                        sci:   sciReadings[i],
-                        csp:   cspReadings[i],
-                        leaf:  leafArr[i],
-                        cg:    cgArr[i],
-                    };
-                    usterLines.push(this.generateUsterOneLine(sample, rowAverages));
-                }
-                content = usterLines.join('\n');
-                extension = 'txt';
-            } else {
-                content = this.generatePremierFormatMultipleBalanced(sample, count, averages, {
-                    mic:   micReadings,
-                    uhml:  lenReadings,
-                    ml:    mlReadings,
-                    ui:    unfReadings,
-                    str:   strReadings,
-                    rd:    rdReadings,
-                    b:     bReadings,
-                    elg:   elgReadings,
-                    area:  areaReadings,
-                    count: cntReadings,
-                    mat:   matReadings,
-                    sfi:   sfiReadings,
-                    sci:   sciReadings,
-                    csp:   cspReadings,
-                });
-                extension = 'txt';
-            }
+                const baseNum = parseInt(sample.amostra_id);
+                const repContents: string[] = [];
 
-            // Create filename
-            const timestamp = this.formatDateForFilename();
-            const sampleLabel = sample.etiqueta?.replace(/[^a-zA-Z0-9]/g, '_') || sample.amostra_id;
-            const filename = `HVI_${machine.model}_${sampleLabel}_${timestamp}.${extension}`;
+                // ── Horários aleatórios por repetição (máx 5 min de diferença) ───
+                // Seed determinística por amostra_id para que re-download gere iguais
+                let tHash = 0;
+                const tSeedStr = `${sample.id || sample.amostra_id || "time"}_time`;
+                for (let i = 0; i < tSeedStr.length; i++) {
+                    tHash = (tHash << 5) - tHash + tSeedStr.charCodeAt(i);
+                    tHash |= 0;
+                }
+                let tSeed = Math.abs(tHash) || 1;
+                const tRand = () => {
+                    tSeed ^= tSeed << 13;
+                    tSeed ^= tSeed >>> 17;
+                    tSeed ^= tSeed << 5;
+                    return (Math.abs(tSeed) % 1000000) / 1000000;
+                };
+
+                const offsets = [0];
+                let currentOffset = 0;
+                for (let j = 1; j < count; j++) {
+                    currentOffset += Math.floor(tRand() * 2); // Adiciona 0 a 1 min para cada repetição
+                    offsets.push(currentOffset);
+                }
+
+                for (let i = 0; i < count; i++) {
+                    const repIndex = i + 1;
+                    const offsetMin = offsets[i];
+                    const repMinutes = minutes + offsetMin;
+                    const repHour = (hours + Math.floor(repMinutes / 60)) % 24;
+                    const repMin = repMinutes % 60;
+                    const repTime = `${String(repHour).padStart(2, '0')}:${String(repMin).padStart(2, '0')}`;
+                    const seqStart = repIndex * 2 - 1;
+
+                    // Calculate on the fly for LEN and COUNT based on this rep's UHML
+                    const repLen = parseFloat(((lenReadings[i] / 25.4) * 21).toFixed(1));
+                    const repCount = parseFloat((repLen * 2.45 - 0.3).toFixed(1));
+
+                    const repContent = this.generateH1FileContent(
+                        sample,
+                        date,
+                        repTime,
+                        seqStart,
+                        repIndex,
+                        lineName,          // <<< número real da máquina
+                        micReadings[i],
+                        lenReadings[i],
+                        unfReadings[i],
+                        strReadings[i],
+                        elgReadings[i],
+                        sfiReadings[i],
+                        repLen,
+                        repCount,
+                        sciReadings[i],
+                        rdReadings[i],
+                        bReadings[i],
+                        averages.cg || "31-3",
+                        areaReadings[i],
+                        leafReadings[i],
+                        matReadings[i],
+                        cspReadings[i]
+                    );
+
+                    let repFilename = "";
+                    if (!isNaN(baseNum)) {
+                        const fileNum = baseNum * count - count + repIndex;
+                        repFilename = `RAX${String(fileNum).padStart(6, '0')}.H1`;
+                    } else {
+                        const sampleLabel = sample.etiqueta?.replace(/[^a-zA-Z0-9]/g, '_') || sample.amostra_id;
+                        repFilename = `RAX${sampleLabel}_REP${repIndex}.H1`;
+                    }
+
+                    files.push({ content: repContent, filename: repFilename });
+                    repContents.push(`=== ARQUIVO: ${repFilename} ===\n${repContent}`);
+                }
+
+                content = repContents.join('\n\n');
+                filename = files[0].filename;
+            } else {
+                // PREMIER fallback logic
+                const count6 = 6;
+                const micReadings6  = this.generateBalancedReadings(averages.mic, count6, tols.mic, 2);
+                const lenReadings6  = this.generateBalancedReadings(averages.len, count6, tols.len, 2);
+                const unfReadings6  = this.generateBalancedReadings(averages.unf, count6, tols.unf, 1);
+                const strReadings6  = this.generateBalancedReadings(averages.str, count6, tols.str, 1);
+                const rdReadings6   = this.generateBalancedReadings(averages.rd,  count6, tols.rd,  1);
+                const bReadings6    = this.generateBalancedReadings(averages.b,   count6, tols.b,   1);
+                const elgReadings6  = Array(count6).fill(elg);
+                const areaReadings6 = Array(count6).fill(area);
+                const cntReadings6  = Array(count6).fill(cnt); // cnt definido acima
+                const matReadings6  = Array(count6).fill(mat);
+                const sfiReadings6  = Array(count6).fill(sfi);
+                const sciReadings6  = Array(count6).fill(sci);
+                const cspReadings6  = Array(count6).fill(csp);
+                const mlReadings6   = lenReadings6.map(v => parseFloat((v * 0.75).toFixed(2)));
+
+                content = this.generatePremierFormatMultipleBalanced(sample, count6, averages, {
+                    mic:   micReadings6,
+                    uhml:  lenReadings6,
+                    ml:    mlReadings6,
+                    ui:    unfReadings6,
+                    str:   strReadings6,
+                    rd:    rdReadings6,
+                    b:     bReadings6,
+                    elg:   elgReadings6,
+                    area:  areaReadings6,
+                    count: cntReadings6,
+                    mat:   matReadings6,
+                    sfi:   sfiReadings6,
+                    sci:   sciReadings6,
+                    csp:   cspReadings6,
+                });
+                
+                const timestamp = this.formatDateForFilename();
+                const sampleLabel = sample.etiqueta?.replace(/[^a-zA-Z0-9]/g, '_') || sample.amostra_id;
+                filename = `HVI_PREMIER_${sampleLabel}_${timestamp}.txt`;
+            }
 
             return {
                 success: true,
@@ -763,7 +1106,8 @@ export class HVIFileGeneratorService {
                     content,
                     filename,
                     machineModel: machine.model,
-                    generatedValues
+                    generatedValues,
+                    files: files.length > 0 ? files : undefined
                 }
             };
 
@@ -789,7 +1133,7 @@ export class HVIFileGeneratorService {
             };
         }
 
-        this.downloadHVIFile(result.data.content, result.data.filename);
+        this.downloadHVIFile(result.data.content, result.data.filename, result.data.files);
 
         return {
             success: true,
@@ -798,17 +1142,45 @@ export class HVIFileGeneratorService {
     }
 
     /**
+     * Encodes a string to ASCII bytes, preserving CRLF exactly
+     */
+    private static toASCIIBytes(str: string): Uint8Array {
+        const bytes = new Uint8Array(str.length);
+        for (let i = 0; i < str.length; i++) {
+            bytes[i] = str.charCodeAt(i) & 0x7F;
+        }
+        return bytes;
+    }
+
+    /**
      * Download the HVI file content
      */
-    static downloadHVIFile(content: string, filename: string): void {
-        const blob = new Blob([content], { type: 'text/plain' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+    static downloadHVIFile(content: string, filename: string, files?: Array<{ content: string; filename: string }>): void {
+        if (files && files.length > 0) {
+            files.forEach(f => {
+                // Usa bytes brutos para garantir CRLF (\r\n) no arquivo final
+                const bytes = this.toASCIIBytes(f.content);
+                const blob = new Blob([bytes], { type: 'application/octet-stream' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = f.filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            });
+        } else {
+            const blob = new Blob([content], { type: 'text/plain;charset=ascii' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
     }
 }
+

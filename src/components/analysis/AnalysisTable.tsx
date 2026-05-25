@@ -102,16 +102,17 @@ export default function AnalysisTable({ samples, onUpdateSample, onColorChange, 
                             </div>
                         </th>
                         <th
-                            className="px-1 text-center w-[35px] cursor-pointer hover:text-blue-600 transition-colors"
-                            onClick={() => handleSort('hvi')}
-                        >
-                            <div className="flex items-center justify-center gap-1">
-                                <Cpu className="h-3.5 w-3.5 inline" />
-                                {sortConfig?.key === 'hvi' ? (
-                                    sortConfig.direction === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
-                                ) : null}
-                            </div>
-                        </th>
+                             className="px-1 text-center w-[75px] cursor-pointer hover:text-blue-600 transition-colors"
+                             onClick={() => handleSort('hvi')}
+                         >
+                             <div className="flex items-center justify-center gap-1">
+                                 <Cpu className="h-3.5 w-3.5 inline" />
+                                 <span className="hidden lg:inline text-[9px] font-black">HVI</span>
+                                 {sortConfig?.key === 'hvi' ? (
+                                     sortConfig.direction === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+                                 ) : null}
+                             </div>
+                         </th>
                         <th
                             className="px-1 text-center w-[130px] cursor-pointer hover:text-blue-600 transition-colors"
                             onClick={() => handleSort('cor')}
@@ -195,7 +196,18 @@ export default function AnalysisTable({ samples, onUpdateSample, onColorChange, 
                                         <span className="text-[8px] opacity-70">{sample.hora_analise || "--:--"}</span>
                                     </div>
                                 </td>
-                                <td className="px-1 py-4 font-black text-blue-600 text-center border-r border-slate-100/50">{sample.hvi || "-"}</td>
+                                <td className="px-1 py-4 text-center border-r border-slate-100/50">
+                                     <select
+                                         value={sample.hvi || "1"}
+                                         disabled={isProcessing || sample.locked}
+                                         onChange={(e) => onUpdateSample(sample.id, 'hvi', e.target.value)}
+                                         className="font-black text-blue-600 bg-transparent hover:bg-neutral-50 p-1 border-0 focus:ring-0 focus:outline-none cursor-pointer rounded text-[11px] text-center w-full focus:bg-white appearance-none"
+                                     >
+                                         {[1, 2, 3, 4, 5, 6, 7].map(n => (
+                                             <option key={n} value={String(n)}>HVI 0{n}</option>
+                                         ))}
+                                     </select>
+                                 </td>
                                 <td className="px-2 py-4 border-r border-slate-100/50">
                                     <div className="flex gap-1 justify-center items-center min-w-fit px-1">
                                         {COLORS.map((c) => (
@@ -357,11 +369,12 @@ export default function AnalysisTable({ samples, onUpdateSample, onColorChange, 
                     onClose={() => setPreviewModal({ isOpen: false, data: null, sample: null })}
                     onConfirm={() => {
                         if (previewModal.data) {
-                            HVIFileGeneratorService.downloadHVIFile(previewModal.data.content, previewModal.data.filename);
+                            HVIFileGeneratorService.downloadHVIFile(previewModal.data.content, previewModal.data.filename, previewModal.data.files);
                             if (previewModal.sample) {
                                 onUpdateSample(previewModal.sample.id, 'locked', true);
                             }
                             setPreviewModal({ isOpen: false, data: null, sample: null });
+
                         }
                     }}
                     content={previewModal.data.content}

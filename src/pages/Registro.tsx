@@ -503,8 +503,7 @@ export default function Registro() {
                                     <div className="h-2 w-2 bg-blue-600 rounded-full animate-pulse" />
                                     <h3 className="text-sm font-bold uppercase tracking-[0.2em]">Identification</h3>
                                 </div>
-
-                                <div className="grid grid-cols-2 gap-6">
+                                <div className="grid grid-cols-3 gap-6">
                                     <div className="space-y-2">
                                         <label className="text-[9px] font-bold text-neutral-400 uppercase tracking-widest">Bag ID</label>
                                         <Input
@@ -522,6 +521,18 @@ export default function Registro() {
                                             className="h-12 border-b-2 border-l-0 border-r-0 border-t-0 border-neutral-200 rounded-none font-mono text-lg bg-transparent px-0 focus:border-black focus:ring-0 placeholder:text-neutral-200"
                                             placeholder="NO TAG"
                                         />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-[9px] font-bold text-neutral-400 uppercase tracking-widest">Máquina HVI</label>
+                                        <select
+                                            value={currentRow.hvi || '1'}
+                                            onChange={(e) => updateCurrentRow('hvi', e.target.value)}
+                                            className="w-full h-12 border-b-2 border-l-0 border-r-0 border-t-0 border-neutral-200 rounded-none font-mono text-lg bg-transparent px-0 focus:border-black focus:ring-0 cursor-pointer focus:outline-none"
+                                        >
+                                            {[1, 2, 3, 4, 5, 6, 7].map(n => (
+                                                <option key={n} value={String(n)}>HVI 0{n}</option>
+                                            ))}
+                                        </select>
                                     </div>
                                 </div>
                             </div>
