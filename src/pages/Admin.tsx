@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
-import { Activity, Database, Server, ShieldCheck, Users, Trash2, Edit, LogOut } from "lucide-react";
+import { Activity, Database, Server, ShieldCheck, Users, Trash2, Edit, LogOut, FileSpreadsheet } from "lucide-react";
 import { Navigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { AnalistaService, type Analista } from "@/entities/Analista";
@@ -14,6 +14,7 @@ import { MigrationService } from "@/services/MigrationService";
 import { Loader2 } from "lucide-react";
 import { usePresence } from "@/hooks/usePresence";
 import AuditLogsTab from "@/components/admin/AuditLogsTab";
+import ImportBITab from "@/components/admin/ImportBITab";
 
 const isSupabaseEnabled = () => {
     const url = import.meta.env.VITE_SUPABASE_URL;
@@ -104,6 +105,7 @@ export default function Admin() {
         { id: "analysts", label: "Access Control", icon: Users },
         { id: "machines", label: "Máquinas", icon: Server },
         { id: "audit", label: "Auditoria", icon: ShieldCheck },
+        ...(user?.acesso === 'admin_global' ? [{ id: "import_bi", label: "Importar BI", icon: FileSpreadsheet }] : [])
     ];
 
     // Se não for admin_global, removemos a aba de labs (ou podemos mantê-la e restringir dentro do componente)
@@ -197,6 +199,7 @@ export default function Admin() {
                 {activeTab === "analysts" && <AnalystsTab />}
                 {activeTab === "machines" && <SystemConfigTab />}
                 {activeTab === "audit" && <AuditLogsTab />}
+                {activeTab === "import_bi" && <ImportBITab />}
             </div>
         </div>
     );

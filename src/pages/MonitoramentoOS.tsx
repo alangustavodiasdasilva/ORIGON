@@ -1040,6 +1040,7 @@ export default function MonitoramentoOS() {
                         </Button>
                     </div>
 
+                    {['admin_global', 'quality_admin'].includes(user?.acesso || '') && (
                     <div className="relative group w-full md:w-auto">
                         <input type="file" accept=".xlsx,.xls" onChange={handleFileUpload} disabled={isUploading} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20" title="Importar Excel" aria-label="Importar Excel" />
                         <Button className="h-12 w-full md:w-auto px-8 bg-black hover:bg-neutral-800 text-white rounded-xl shadow-[0_10px_20px_rgba(0,0,0,0.1)] flex items-center justify-center gap-3 active:scale-95 transition-all">
@@ -1047,6 +1048,7 @@ export default function MonitoramentoOS() {
                             <span className="text-[11px] font-black uppercase tracking-widest">Importar Planilha</span>
                         </Button>
                     </div>
+                    )}
                 </div>
             </div>
 

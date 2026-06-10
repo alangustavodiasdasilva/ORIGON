@@ -754,25 +754,29 @@ export default function Verificacao() {
                             <RefreshCw className="h-4 w-4 mr-2" />
                             Sincronizar
                         </Button>
-                        <Button
-                            onClick={() => {
-                                fileInputRef.current?.click();
-                                addToast({ title: "Importação", description: "Certifique-se de que o relatório abranja obrigatoriamente um período de 1 semana (7 dias) retroativos.", type: "info" });
-                            }}
-                            className="h-10 bg-gradient-to-r from-[#1c3664] to-[#2a5196] text-white hover:opacity-90 rounded-lg text-[10px] font-bold uppercase tracking-widest px-6 transition-all shadow-md shadow-[#1c3664]/30"
-                            title="Carregar planilha .xlsx"
-                        >
-                            <Upload className="h-4 w-4 mr-2" />
-                            Importar Dados
-                        </Button>
-                        <input
-                            type="file"
-                            accept=".xlsx, .xls"
-                            className="hidden"
-                            ref={fileInputRef}
-                            onChange={handleFileUpload}
-                            title="Input de arquivo excel"
-                        />
+                        {['admin_global', 'quality_admin'].includes(user?.acesso || '') && (
+                            <>
+                                <Button
+                                    onClick={() => {
+                                        fileInputRef.current?.click();
+                                        addToast({ title: "Importação", description: "Certifique-se de que o relatório abranja obrigatoriamente um período de 1 semana (7 dias) retroativos.", type: "info" });
+                                    }}
+                                    className="h-10 bg-gradient-to-r from-[#1c3664] to-[#2a5196] text-white hover:opacity-90 rounded-lg text-[10px] font-bold uppercase tracking-widest px-6 transition-all shadow-md shadow-[#1c3664]/30"
+                                    title="Carregar planilha .xlsx"
+                                >
+                                    <Upload className="h-4 w-4 mr-2" />
+                                    Importar Dados
+                                </Button>
+                                <input
+                                    type="file"
+                                    accept=".xlsx, .xls"
+                                    className="hidden"
+                                    ref={fileInputRef}
+                                    onChange={handleFileUpload}
+                                    title="Input de arquivo excel"
+                                />
+                            </>
+                        )}
                     </div>
                 </div>
             </div>

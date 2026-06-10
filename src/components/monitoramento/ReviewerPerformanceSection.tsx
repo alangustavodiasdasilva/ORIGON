@@ -258,16 +258,16 @@ export const ReviewerPerformanceSection: React.FC<ReviewerPerformanceSectionProp
                             />
                             <RechartsTooltip content={<CustomTooltip />} />
                             {selectedReviewers.includes('Volume Produzido (Análise)') && (
-                                <Line type="monotone" name="Volume Produzido" dataKey="Volume Produzido (Análise)" stroke="#000" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
+                                <Line type="monotone" name="Volume Produzido" dataKey="Volume Produzido (Análise)" stroke="#000" strokeWidth={1.5} dot={{ r: 4 }} activeDot={{ r: 6 }} />
                             )}
                             {selectedReviewers.includes('Total Revisado (Analistas)') && (
-                                <Line type="monotone" name="Total Revisado" dataKey="Total Revisado (Analistas)" stroke="#dc2626" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
+                                <Line type="monotone" name="Total Revisado" dataKey="Total Revisado (Analistas)" stroke="#dc2626" strokeWidth={1.5} dot={{ r: 4 }} activeDot={{ r: 6 }} />
                             )}
                             {(activeTab === 'geral' && selectedReviewers.includes('Volume Recebido')) && (
-                                <Line type="monotone" name="Volume Recebido" dataKey="Volume Recebido" stroke="#2563eb" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
+                                <Line type="monotone" name="Volume Recebido" dataKey="Volume Recebido" stroke="#2563eb" strokeWidth={1.5} dot={{ r: 4 }} activeDot={{ r: 6 }} />
                             )}
                             {activeTab === 'revisores' && revisorDailyStats.keys.filter((k: string) => selectedReviewers.includes(k)).map((rev: string) => (
-                                <Line key={rev} type="monotone" dataKey={rev} stroke={revisorDailyStats.keyColors[rev]} strokeWidth={2} dot={false} />
+                                <Line key={rev} type="monotone" dataKey={rev} stroke={revisorDailyStats.keyColors[rev]} strokeWidth={1.5} dot={false} />
                             ))}
                             {revisorDailyStats.data.length > 15 && (
                                 <Brush dataKey="name" height={30} stroke="#e5e5e5" />

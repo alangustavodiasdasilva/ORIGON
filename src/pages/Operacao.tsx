@@ -417,6 +417,7 @@ export default function Operacao() {
                         Sincronizar
                     </Button>
                     <Button variant="outline" onClick={() => setIsClearConfirmOpen(true)} className="text-red-600 border-red-100 hover:bg-red-50">Limpar Histórico</Button>
+                    {['admin_global', 'quality_admin'].includes(user?.acesso || '') && (
                     <div className="relative">
                         <input type="file" accept=".xlsx,.xls" onChange={handleFileUpload} disabled={isUploading} className="absolute inset-0 opacity-0 cursor-pointer z-10" title="Importar Excel" aria-label="Importar Excel" />
                         <Button className="bg-emerald-600 text-white relative z-0">
@@ -424,6 +425,7 @@ export default function Operacao() {
                             <span>Importar Excel</span>
                         </Button>
                     </div>
+                    )}
                 </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6 mb-12 animate-in fade-in slide-in-from-bottom-4 duration-700">

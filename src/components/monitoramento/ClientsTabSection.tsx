@@ -201,7 +201,7 @@ export const ClientsTabSection: React.FC<ClientsTabSectionProps> = ({
                             <RechartsTooltip content={<CustomTooltip />} />
                             {clienteDailyStats.keys.filter((key: string) => selectedChartClients.includes(key)).map((key: string) => (
                                 <Line key={key} type="monotone" connectNulls={true} dataKey={key}
-                                    stroke={clienteDailyStats.keyColors[key]} strokeWidth={3}
+                                    stroke={clienteDailyStats.keyColors[key]} strokeWidth={1.5}
                                     dot={{ r: 4, fill: clienteDailyStats.keyColors[key] }}
                                     activeDot={{ r: 7, fill: clienteDailyStats.keyColors[key] }} />
                             ))}

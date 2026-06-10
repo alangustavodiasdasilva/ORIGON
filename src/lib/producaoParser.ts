@@ -21,7 +21,7 @@ const parseDate = (cell: any): string | null => {
     if (!cell) return null;
     if (typeof cell === 'number' && cell > 30000) {
         const date = XLSX.SSF.parse_date_code(cell);
-        return `${date.y}-${String(date.m).padStart(2, '0')}-${String(date.d).padStart(2, '0')}`;
+        return `${date.y}-${String(date.m).padStart(2, '0')}-${String(date.d).padStart(2, '0')} ${String(date.H).padStart(2, '0')}:${String(date.M).padStart(2, '0')}:${String(date.S).padStart(2, '0')}`;
     }
     if (typeof cell === 'string') {
         const trimmed = cell.trim();

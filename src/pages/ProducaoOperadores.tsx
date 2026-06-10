@@ -321,6 +321,7 @@ export default function ProducaoOperadores() {
                 </div>
 
                 {/* Drop Zone */}
+                {['admin_global', 'quality_admin'].includes(user?.acesso || '') && (
                 <div
                     onClick={() => fileRef.current?.click()}
                     onDragOver={handleDragOver}
@@ -366,6 +367,7 @@ export default function ProducaoOperadores() {
                         onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }}
                     />
                 </div>
+                )}
             </div>
         );
     }
@@ -405,6 +407,7 @@ export default function ProducaoOperadores() {
                             <ChevronDown className="absolute right-2.5 top-3 h-4 w-4 text-neutral-400 pointer-events-none" />
                         </div>
                     )}
+                    {['admin_global', 'quality_admin'].includes(user?.acesso || '') && (
                     <Button
                         variant="outline"
                         className="text-black border-neutral-200 hover:bg-neutral-50"
@@ -416,6 +419,7 @@ export default function ProducaoOperadores() {
                         <Upload className="h-4 w-4 mr-2" />
                         Trocar Arquivo
                     </Button>
+                    )}
                 </div>
             </div>
 
