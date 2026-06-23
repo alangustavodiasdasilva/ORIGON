@@ -1057,43 +1057,34 @@ export class HVIFileGeneratorService {
                 filename = files[0].filename;
             } else {
                 // PREMIER fallback logic
-                const count6 = 6;
-                const micReadings6  = this.generateBalancedReadings(averages.mic, count6, tols.mic, 2);
-                const lenReadings6  = this.generateBalancedReadings(averages.len, count6, tols.len, 2);
-                const unfReadings6  = this.generateBalancedReadings(averages.unf, count6, tols.unf, 1);
-                const strReadings6  = this.generateBalancedReadings(averages.str, count6, tols.str, 1);
-                const rdReadings6   = this.generateBalancedReadings(averages.rd,  count6, tols.rd,  1);
-                const bReadings6    = this.generateBalancedReadings(averages.b,   count6, tols.b,   1);
-                const elgReadings6  = Array(count6).fill(elg);
-                const areaReadings6 = Array(count6).fill(area);
-                const cntReadings6  = Array(count6).fill(cnt); // cnt definido acima
-                const matReadings6  = Array(count6).fill(mat);
-                const sfiReadings6  = Array(count6).fill(sfi);
-                const sciReadings6  = Array(count6).fill(sci);
-                const cspReadings6  = Array(count6).fill(csp);
-                const mlReadings6   = lenReadings6.map(v => parseFloat((v * 0.75).toFixed(2)));
-
                 const repContents: string[] = [];
                 const timestamp = this.formatDateForFilename();
                 const sampleLabel = sample.etiqueta?.replace(/[^a-zA-Z0-9]/g, '_') || sample.amostra_id;
 
-                for (let i = 0; i < count6; i++) {
+                for (let i = 0; i < count; i++) {
                     const repIndex = i + 1;
+
+                    // Calculates ml, count and area on the fly just like Uster
+                    const repLen = parseFloat(((lenReadings[i] / 25.4) * 21).toFixed(1));
+                    const repCount = parseFloat((repLen * 2.45 - 0.3).toFixed(1));
+                    const repArea = parseFloat((Math.random() * 0.15 + 0.35).toFixed(2));
+                    const repMl = parseFloat((lenReadings[i] * 0.75).toFixed(2));
+
                     const singleReadings = {
-                        mic:   [micReadings6[i]],
-                        uhml:  [lenReadings6[i]],
-                        ml:    [mlReadings6[i]],
-                        ui:    [unfReadings6[i]],
-                        str:   [strReadings6[i]],
-                        rd:    [rdReadings6[i]],
-                        b:     [bReadings6[i]],
-                        elg:   [elgReadings6[i]],
-                        area:  [areaReadings6[i]],
-                        count: [cntReadings6[i]],
-                        mat:   [matReadings6[i]],
-                        sfi:   [sfiReadings6[i]],
-                        sci:   [sciReadings6[i]],
-                        csp:   [cspReadings6[i]],
+                        mic:   [micReadings[i]],
+                        uhml:  [lenReadings[i]],
+                        ml:    [repMl],
+                        ui:    [unfReadings[i]],
+                        str:   [strReadings[i]],
+                        rd:    [rdReadings[i]],
+                        b:     [bReadings[i]],
+                        elg:   [elgReadings[i]],
+                        area:  [repArea],
+                        count: [repCount],
+                        mat:   [matReadings[i]],
+                        sfi:   [sfiReadings[i]],
+                        sci:   [sciReadings[i]],
+                        csp:   [cspReadings[i]],
                     };
 
                     const repContent = this.generatePremierFormatMultipleBalanced(sample, 1, averages, singleReadings);
@@ -1162,9 +1153,9 @@ export class HVIFileGeneratorService {
     /**
      * Download the HVI file content
      */
-    static downloadHVIFile(content: string, filename: string, files?: Array<{ content: string; filename: string }>): void {
+    static async downloadHVIFile(content: string, filename: string, files?: Array<{ content: string; filename: string }>): Promise<void> {
         if (files && files.length > 0) {
-            files.forEach(f => {
+            for (const f of files) {
                 // Usa bytes brutos para garantir CRLF (\r\n) no arquivo final
                 const bytes = this.toASCIIBytes(f.content);
                 const blob = new Blob([bytes as unknown as BlobPart], { type: 'application/octet-stream' });
@@ -1176,7 +1167,10 @@ export class HVIFileGeneratorService {
                 a.click();
                 document.body.removeChild(a);
                 URL.revokeObjectURL(url);
-            });
+                
+                // Pequeno delay para evitar que o navegador bloqueie downloads paralelos
+                await new Promise(resolve => setTimeout(resolve, 300));
+            }
         } else {
             const blob = new Blob([content], { type: 'text/plain;charset=ascii' });
             const url = URL.createObjectURL(blob);
