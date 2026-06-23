@@ -1,0 +1,138 @@
+import React from "react";
+import { BarChart3 } from "lucide-react";
+import { cn } from "@/lib/utils";
+
+interface IntelligenceAnalyticsProps {
+    innerRef: React.RefObject<HTMLDivElement | null>;
+    analysisMetrics: any;
+    analysisPeriod: number;
+    setAnalysisPeriod: (period: number) => void;
+    handleExportAnaliticoPDF: () => void;
+    isGeneratingPDF: boolean;
+    labs: any[];
+    globalLabId?: string;
+    analyticsLabId: string;
+    setAnalyticsLabId: (labId: string) => void;
+}
+
+const SimpleWeekAverage = ({
+    title,
+    data,
+    dataKey,
+}: {
+    title: string;
+    data: any[];
+    dataKey: string;
+}) => {
+    if (!data || data.length === 0) return null;
+
+    const sum = data.reduce((acc, d) => acc + (Number(d[dataKey]) || 0), 0);
+    const avg = data.length > 0 ? sum / data.length : 0;
+
+    return (
+        <div className="flex flex-col mb-10 overflow-hidden w-full border border-neutral-200 rounded-3xl bg-white shadow-sm font-sans animate-fade-in group/container">
+            <div className="p-5 border-b border-neutral-200 bg-neutral-50/50 flex items-center gap-3">
+                <div className="w-2 h-2 rounded-full bg-black shrink-0"></div>
+                <h4 className="font-serif text-lg font-bold text-black uppercase tracking-widest">{title}</h4>
+            </div>
+
+            <div className="w-full overflow-x-auto overflow-y-hidden custom-scrollbar pb-2 bg-white">
+                <table className="w-full border-collapse text-[11px] min-w-max">
+                    <thead>
+                        <tr>
+                            <th className="border-b-2 border-r-2 border-black bg-white p-0 w-[180px] min-w-[180px] h-[40px] align-middle sticky left-0 z-30 shadow-[4px_0_10px_rgba(0,0,0,0.03)] focus:outline-none">
+                                <div className="flex items-center justify-center w-full h-full text-center font-bold tracking-widest uppercase text-[10px] text-black">
+                                    Últimos {data.length} Dias
+                                </div>
+                            </th>
+                            {data.map((d, i) => (
+                                <th key={i} className="border-b-2 border-r border-black/10 bg-white p-0 w-[60px] min-w-[60px] h-[40px] align-top z-10 transition-colors hover:bg-neutral-50 focus:outline-none">
+                                    <div className="flex flex-col h-full w-full">
+                                        <div className="h-1/2 flex items-center justify-center border-b border-black/10 text-black font-bold bg-neutral-100/30 text-[10px]">
+                                            {d.name}
+                                        </div>
+                                    </div>
+                                </th>
+                            ))}
+                            <th className="border-b-2 border-l-2 border-black bg-neutral-900 p-0 w-[100px] min-w-[100px] h-[40px] align-middle sticky right-0 z-30 shadow-[-4px_0_10px_rgba(0,0,0,0.1)] focus:outline-none">
+                                <div className="flex items-center justify-center w-full h-full text-center font-bold tracking-widest uppercase text-[10px] text-white">
+                                    Média Diária
+                                </div>
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr className="hover:bg-neutral-50/50 transition-colors group">
+                            <td className="border-b border-r-2 border-black/10 border-r-black bg-white p-0 h-[32px] sticky left-0 z-20 shadow-[4px_0_10px_rgba(0,0,0,0.03)]">
+                                <div className="flex h-full w-full relative">
+                                    <div className="w-[105px] flex items-center justify-center font-bold px-1 text-[9px] relative z-10 border-r border-black/10 shadow-sm bg-highlight-yellow text-black">
+                                        {data[0]?.name} a {data[data.length - 1]?.name}
+                                        <div className="absolute right-[-4px] top-1/2 -translate-y-1/2 w-0 h-0 border-y-[4px] border-y-transparent border-l-[4px] border-l-highlight-yellow"></div>
+                                    </div>
+                                    <div className="flex-1 flex items-center justify-end pr-4 pl-2 font-mono font-black text-[12px] text-black bg-white">
+                                        Total: {sum.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
+                                    </div>
+                                </div>
+                            </td>
+
+                            {data.map((d, i) => (
+                                <td key={i} className="p-0 h-[32px] relative border-b border-r border-black/5 align-middle">
+                                    <div
+                                        className={cn(
+                                            "absolute inset-0 z-10 transition-colors border-y border-black/20 group-hover:brightness-105 shadow-sm bg-highlight-yellow",
+                                            i === 0 && "border-l border-black/20",
+                                            i === data.length - 1 && "border-r border-black/20"
+                                        )}
+                                    />
+                                    <div className="relative z-20 flex items-center justify-center h-full w-full font-mono font-black text-[11px] text-black">
+                                        {(Number(d[dataKey]) || 0).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}
+                                    </div>
+                                </td>
+                            ))}
+
+                            <td className="border-b border-l-2 border-black bg-black p-0 h-[32px] sticky right-0 z-20 shadow-[-4px_0_10px_rgba(0,0,0,0.1)]">
+                                <div className="flex items-center justify-center w-full h-full font-mono font-black text-[14px] text-white">
+                                    {avg.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    );
+}
+
+export const IntelligenceAnalytics: React.FC<IntelligenceAnalyticsProps> = ({
+    innerRef,
+    analysisMetrics
+}) => {
+
+    const chartData = [...analysisMetrics.smoothedData];
+
+    return (
+        <div ref={innerRef} className="space-y-6 mb-12 animate-fade-in transition-all duration-700 bg-white/50 p-6 rounded-[3rem] border border-neutral-100 mt-8">
+            <div className="flex flex-col lg:flex-row items-stretch gap-6">
+            </div>
+
+            {/* Novo Gráfico Cascata (Gantt) - Balanço Operacional */}
+            <div className="bg-white border border-neutral-200 rounded-3xl p-6 shadow-sm">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8 border-b border-neutral-100 pb-6">
+                    <div>
+                        <h3 className="text-xl font-serif text-black leading-tight flex items-center gap-2">
+                            <BarChart3 className="h-5 w-5 text-neutral-400" />
+                            Balanço Operacional Dinâmico (Últimos 7 Dias)
+                        </h3>
+                        <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400 mt-1">Comparação de volumes com média diária ponderada</p>
+                    </div>
+                </div>
+
+                <div className="w-full bg-neutral-50/50 rounded-2xl p-6 border border-neutral-100 overflow-hidden">
+                    <SimpleWeekAverage title="PRODUÇÃO HVI" data={chartData} dataKey="Volume Produzido (Análise)" />
+                    <SimpleWeekAverage title="RECEBIMENTO (VIA STATUS O.S)" data={chartData} dataKey="Volume Recebido" />
+                    <SimpleWeekAverage title="REVISÃO ANALISTAS" data={chartData} dataKey="Total Revisado (Analistas)" />
+                </div>
+            </div>
+        </div>
+    );
+};

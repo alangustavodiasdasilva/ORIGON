@@ -1,0 +1,25 @@
+﻿node.exe : npm notice
+No linha:1 caractere:1
++ & "C:\Program 
+Files\nodejs/node.exe" "C:\Us
+ers\alang\AppData\Roaming\ 
+...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~
+    + CategoryInfo           
+   : NotSpecified: (npm not  
+  ice:String) [], RemoteEx   
+ ception
+    + FullyQualifiedErrorId  
+   : NativeCommandError
+ 
+npm notice New major version 
+of npm available! 10.9.1 -> 
+11.10.1
+npm notice Changelog: https:/
+/github.com/npm/cli/releases/
+tag/v11.10.1
+npm notice To update run: 
+npm install -g npm@11.10.1
+npm notice

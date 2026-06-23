@@ -1,0 +1,24 @@
+L1: ["","","","Relatório de  Produção por Turno","","","","","","","",""]
+L2: ["","","","","","","","","","","",""]
+L3: ["","","","Laboratório:","","Kuhlmann Sorriso","","","","","",""]
+L4: ["","","","Turno:","","","","","","","",""]
+L5: ["","","","HVI:","","","","","","","",""]
+L6: ["","","","Operador:","","","","","","","",""]
+L7: ["","","","Período:","","01/10/2025 a 31/10/2025","","","","","",""]
+L8: ["","","","","","","","","","","",""]
+L9: ["","Data","Turno","Operador","","Amostras","","","","","",""]
+L10: ["","10/1/25","","","","","","","","","",""]
+L11: ["","","TURNO 1","","","","","","","","",""]
+L12: ["","","","","","","","","","","",""]
+L13: ["","","","300012342 - ALBA ELEN SOUZA SERRA","865","","","","","","",""]
+L14: ["","","","300012928- GRAZIELE APARECIDA PEREIRA ARRUDA","1,019","","","","","","",""]
+L15: ["","","","300012929 - ILKA PIMENTEL JARDIM","752","","","","","","",""]
+HEADER na linha 9: ["","Data","Turno","Operador","","Amostras","","","","","",""]
+Colunas: __EMPTY | Data | Turno | Operador | __EMPTY_1 | Amostras | __EMPTY_2 | __EMPTY_3 | __EMPTY_4 | __EMPTY_5 | __EMPTY_6 | __EMPTY_7
+Row0: {"__EMPTY":"","Data":"10/1/25","Turno":"","Operador":"","__EMPTY_1":"","Amostras":"","__EMPTY_2":"","__EMPTY_3":"","__EMPTY_4":"","__EMPTY_5":"","__EMPTY_6":"","__EMPTY_7":""}
+Row1: {"__EMPTY":"","Data":"","Turno":"TURNO 1","Operador":"","__EMPTY_1":"","Amostras":"","__EMPTY_2":"","__EMPTY_3":"","__EMPTY_4":"","__EMPTY_5":"","__EMPTY_6":"","__EMPTY_7":""}
+Row2: {"__EMPTY":"","Data":"","Turno":"","Operador":"300012342 - ALBA ELEN SOUZA SERRA","__EMPTY_1":"865","Amostras":"","__EMPTY_2":"","__EMPTY_3":"","__EMPTY_4":"","__EMPTY_5":"","__EMPTY_6":"","__EMPTY_7":""}
+Row3: {"__EMPTY":"","Data":"","Turno":"","Operador":"300012928- GRAZIELE APARECIDA PEREIRA ARRUDA","__EMPTY_1":"1,019","Amostras":"","__EMPTY_2":"","__EMPTY_3":"","__EMPTY_4":"","__EMPTY_5":"","__EMPTY_6":"","__EMPTY_7":""}
+Row4: {"__EMPTY":"","Data":"","Turno":"","Operador":"300012929 - ILKA PIMENTEL JARDIM","__EMPTY_1":"752","Amostras":"","__EMPTY_2":"","__EMPTY_3":"","__EMPTY_4":"","__EMPTY_5":"","__EMPTY_6":"","__EMPTY_7":""}
+
+RESUMO: valid=0, rejected=737, totalAmostras=0

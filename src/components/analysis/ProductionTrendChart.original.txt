@@ -1,0 +1,381 @@
+import React, { useEffect, useMemo, useState } from "react";
+import { cn } from "@/lib/utils";
+import { TrendingUp, Activity, BarChart3, Target, ChevronDown } from "lucide-react";
+import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/contexts/AuthContext";
+
+
+interface ProductionData {
+    id?: string;
+    data_producao: string;
+    turno: string;
+    peso: number;
+    produto?: string;
+    offset_peso?: number;
+}
+
+interface ProductionTrendChartProps {
+    data: ProductionData[];
+}
+
+interface SHIFT_CONFIG {
+    hex: string;
+    bg: string;
+    text: string;
+}
+
+const SHIFT_COLORS_CONFIG: Record<string, SHIFT_CONFIG> = {
+    "TURNO 1": { hex: "#1d4ed8", bg: "bg-blue-700", text: "text-blue-700" },
+    "TURNO 2": { hex: "#047857", bg: "bg-emerald-700", text: "text-emerald-700" },
+    "TURNO 3": { hex: "#b45309", bg: "bg-amber-700", text: "text-amber-700" },
+    "GERAL": { hex: "#4b5563", bg: "bg-gray-600", text: "text-gray-600" },
+    "TOTAL DIA": { hex: "#000000", bg: "bg-black", text: "text-black" }
+};
+
+const MACHINE_COLORS_CONFIG: SHIFT_CONFIG[] = [
+    { hex: "#dc2626", bg: "bg-red-600", text: "text-red-600" },
+    { hex: "#ea580c", bg: "bg-orange-600", text: "text-orange-600" },
+    { hex: "#ca8a04", bg: "bg-yellow-600", text: "text-yellow-600" },
+    { hex: "#65a30d", bg: "bg-lime-600", text: "text-lime-600" },
+    { hex: "#0d9488", bg: "bg-teal-600", text: "text-teal-600" },
+    { hex: "#0891b2", bg: "bg-cyan-600", text: "text-cyan-600" },
+    { hex: "#4f46e5", bg: "bg-indigo-600", text: "text-indigo-600" },
+    { hex: "#c026d3", bg: "bg-fuchsia-600", text: "text-fuchsia-600" },
+    { hex: "#e11d48", bg: "bg-rose-600", text: "text-rose-600" },
+    { hex: "#7c3aed", bg: "bg-violet-600", text: "text-violet-600" }
+];
+
+interface ChartPoint {
+    date: string;
+    val: number;
+    id: string;
+    type: string;
+}
+
+interface HoveredPoint extends ChartPoint {
+    color: string;
+    seriesName: string;
+}
+
+export default function ProductionTrendChart({ data }: ProductionTrendChartProps) {
+    const { currentLab, user } = useAuth();
+    const labId = currentLab?.id || user?.lab_id;
+
+    const [hoveredPoint, setHoveredPoint] = useState<HoveredPoint | null>(null);
+    type ViewMode = 'general' | 'detailed' | 'machine_comparison' | 'compare_machines_total';
+    const [viewMode, setViewMode] = useState<ViewMode>('general');
+    const [selectedShift, setSelectedShift] = useState<string>("TURNO 1");
+    const [selectedMachine, setSelectedMachine] = useState<string>("");
+
+    const [dateStart, setDateStart] = useState<string>('');
+    const [dateEnd, setDateEnd] = useState<string>('');
+
+    const [targetValue, setTargetValue] = useState<number | null>(null);
+    const [isSavingTarget, setIsSavingTarget] = useState(false);
+    const [showTargetLine, setShowTargetLine] = useState(false);
+    const [showMovingAverage, setShowMovingAverage] = useState(false);
+    const [selectedSeries, setSelectedSeries] = useState<string[] | null>(null);
+    const [granularity, setGranularity] = useState<'day' | 'week' | 'month'>('day');
+
+    useEffect(() => {
+        const loadTarget = async () => {
+            if (!labId) return;
+            const { data: config } = await supabase
+                .from('operacao_producao_config')
+                .select('meta_producao')
+                .eq('lab_id', labId)
+                .maybeSingle();
+
+            if (config?.meta_producao) {
+                setTargetValue(config.meta_producao);
+                setShowTargetLine(true);
+            }
+        };
+        loadTarget();
+    }, [labId]);
+
+    const saveTargetToDB = async (val: number) => {
+        if (!labId) return;
+        setIsSavingTarget(true);
+        try {
+            await supabase
+                .from('operacao_producao_config')
+                .upsert({
+                    lab_id: labId,
+                    meta_producao: val,
+                    updated_at: new Date().toISOString()
+                }, { onConflict: 'lab_id' });
+        } catch (e) {
+            console.error("Erro ao salvar meta:", e);
+        } finally {
+            setIsSavingTarget(false);
+        }
+    };
+
+    const formatName = (name: string) => {
+        return name.replace(/Linha\/Mq/gi, "MAQ").replace(/LINHA\/MQ/gi, "MAQ");
+    };
+
+    const availableShifts = useMemo(() => Array.from(new Set(data.map(d => d.turno))).sort(), [data]);
+    const availableMachines = useMemo(() => {
+        const productSums: Record<string, number> = {};
+        data.forEach(d => {
+            const name = d.produto || "Desconhecido";
+            productSums[name] = (productSums[name] || 0) + (d.peso || 0);
+        });
+        return Array.from(new Set(data.map(d => d.produto || "Desconhecido")))
+            .filter(m => productSums[m] > 0)
+            .sort();
+    }, [data]);
+
+    useEffect(() => {
+        if (!selectedMachine && availableMachines.length > 0) {
+            setSelectedMachine(availableMachines[0]);
+        }
+    }, [availableMachines, selectedMachine]);
+
+    const filteredData = useMemo(() => {
+        if (data.length === 0) return [];
+        if (!dateStart || !dateEnd) return data;
+
+        const start = new Date(dateStart).setHours(0, 0, 0, 0);
+        const end = new Date(dateEnd).setHours(23, 59, 59, 999);
+
+        return data.filter(d => {
+            const dTime = new Date(d.data_producao).getTime();
+            return dTime >= start && dTime <= end;
+        }).sort((a, b) => new Date(a.data_producao).getTime() - new Date(b.data_producao).getTime());
+    }, [data, dateStart, dateEnd]);
+
+    const kpis = useMemo(() => {
+        if (filteredData.length === 0) return { total: 0, avg: 0, peak: 0, peakDate: '-' };
+        const dayMap = new Map<string, number>();
+        filteredData.forEach(d => {
+            const current = dayMap.get(d.data_producao) || 0;
+            dayMap.set(d.data_producao, current + d.peso);
+        });
+        const dailyValues = Array.from(dayMap.values());
+        const total = dailyValues.reduce((a, b) => a + b, 0);
+        const avg = total / (dailyValues.length || 1);
+        const peak = Math.max(...dailyValues);
+        const peakEntry = Array.from(dayMap.entries()).find(([, val]) => val === peak);
+        const peakDate = peakEntry ? peakEntry[0].split('-').reverse().slice(0, 2).join('/') : '-';
+        return { total, avg, peak, peakDate };
+    }, [filteredData]);
+
+    const sortedDataResult = useMemo(() => {
+        const seriesMap = new Map<string, ChartPoint[]>();
+        if (viewMode === 'general') {
+            availableShifts.forEach(t => seriesMap.set(t, []));
+            seriesMap.set("TOTAL DIA", []);
+            const aggregatedMap = new Map<string, Record<string, number>>();
+            filteredData.forEach(d => {
+                const date = new Date(d.data_producao);
+                let key = d.data_producao;
+                if (granularity === 'week') {
+                    const day = date.getDay() || 7;
+                    if (day !== 1) date.setHours(-24 * (day - 1));
+                    key = date.toISOString().split('T')[0];
+                } else if (granularity === 'month') {
+                    key = d.data_producao.substring(0, 7) + '-01';
+                }
+                if (!aggregatedMap.has(key)) aggregatedMap.set(key, {});
+                const periodData = aggregatedMap.get(key)!;
+                periodData[d.turno] = (periodData[d.turno] || 0) + d.peso;
+                periodData['TOTAL DIA'] = (periodData['TOTAL DIA'] || 0) + d.peso;
+            });
+            const sortedKeys = Array.from(aggregatedMap.keys()).sort();
+            sortedKeys.forEach(dateKey => {
+                const values = aggregatedMap.get(dateKey)!;
+                availableShifts.forEach(turno => {
+                    if (values[turno] > 0) {
+                        seriesMap.get(turno)?.push({ date: dateKey, val: values[turno], id: `${dateKey}-${turno}`, type: turno });
+                    }
+                });
+                if (values['TOTAL DIA'] > 0) {
+                    seriesMap.get("TOTAL DIA")?.push({ date: dateKey, val: values['TOTAL DIA'], id: `${dateKey}-TOTAL`, type: "TOTAL DIA" });
+                }
+            });
+            return { uniqueDates: sortedKeys, series: seriesMap };
+        } else if (viewMode === 'detailed') {
+            const shiftData = filteredData.filter(d => d.turno === selectedShift);
+            availableMachines.forEach(m => seriesMap.set(m, []));
+            const aggregatedMap = new Map<string, Record<string, number>>();
+            shiftData.forEach(d => {
+                const date = new Date(d.data_producao);
+                let key = d.data_producao;
+                if (granularity === 'week') {
+                    const day = date.getDay() || 7;
+                    if (day !== 1) date.setHours(-24 * (day - 1));
+                    key = date.toISOString().split('T')[0];
+                } else if (granularity === 'month') {
+                    key = d.data_producao.substring(0, 7) + '-01';
+                }
+                if (!aggregatedMap.has(key)) aggregatedMap.set(key, {});
+                const periodData = aggregatedMap.get(key)!;
+                if (d.produto) periodData[d.produto] = (periodData[d.produto] || 0) + (d.offset_peso ?? d.peso);
+                else periodData['???'] = (periodData['???'] || 0) + d.peso;
+            });
+            const sortedKeys = Array.from(aggregatedMap.keys()).sort();
+            sortedKeys.forEach(dateKey => {
+                const values = aggregatedMap.get(dateKey)!;
+                availableMachines.forEach(mq => {
+                    if (values[mq] > 0) seriesMap.get(mq)?.push({ date: dateKey, val: values[mq], id: `${dateKey}-${mq}`, type: mq });
+                });
+            });
+            return { uniqueDates: sortedKeys, series: seriesMap };
+        } else if (viewMode === 'machine_comparison') {
+            const machineData = filteredData.filter(d => d.produto === selectedMachine);
+            availableShifts.forEach(t => seriesMap.set(t, []));
+            const aggregatedMap = new Map<string, Record<string, number>>();
+            machineData.forEach(d => {
+                const date = new Date(d.data_producao);
+                let key = d.data_producao;
+                if (granularity === 'week') {
+                    const day = date.getDay() || 7;
+                    if (day !== 1) date.setHours(-24 * (day - 1));
+                    key = date.toISOString().split('T')[0];
+                } else if (granularity === 'month') {
+                    key = d.data_producao.substring(0, 7) + '-01';
+                }
+                if (!aggregatedMap.has(key)) aggregatedMap.set(key, {});
+                const periodData = aggregatedMap.get(key)!;
+                periodData[d.turno] = (periodData[d.turno] || 0) + d.peso;
+            });
+            const sortedKeys = Array.from(aggregatedMap.keys()).sort();
+            sortedKeys.forEach(dateKey => {
+                const values = aggregatedMap.get(dateKey)!;
+                availableShifts.forEach(turno => {
+                    const val = values[turno] || 0;
+                    if (val > 0) seriesMap.get(turno)?.push({ date: dateKey, val, id: `${dateKey}-${turno}-${selectedMachine}`, type: turno });
+                });
+            });
+            return { uniqueDates: sortedKeys, series: seriesMap };
+        } else {
+            availableMachines.forEach(m => seriesMap.set(m, []));
+            const aggregatedMap = new Map<string, Record<string, number>>();
+            filteredData.forEach(d => {
+                const date = new Date(d.data_producao);
+                let key = d.data_producao;
+                if (granularity === 'week') {
+                    const day = date.getDay() || 7;
+                    if (day !== 1) date.setHours(-24 * (day - 1));
+                    key = date.toISOString().split('T')[0];
+                } else if (granularity === 'month') {
+                    key = d.data_producao.substring(0, 7) + '-01';
+                }
+                if (!aggregatedMap.has(key)) aggregatedMap.set(key, {});
+                const periodData = aggregatedMap.get(key)!;
+                if (d.produto) periodData[d.produto] = (periodData[d.produto] || 0) + d.peso;
+            });
+            const sortedKeys = Array.from(aggregatedMap.keys()).sort();
+            sortedKeys.forEach(dateKey => {
+                const values = aggregatedMap.get(dateKey)!;
+                availableMachines.forEach(mq => {
+                    if (values[mq] > 0) seriesMap.get(mq)?.push({ date: dateKey, val: values[mq], id: `${dateKey}-${mq}-TOTAL`, type: mq });
+                });
+            });
+            return { uniqueDates: sortedKeys, series: seriesMap };
+        }
+    }, [filteredData, viewMode, selectedShift, selectedMachine, availableShifts, availableMachines, granularity]);
+
+    useEffect(() => {
+        setSelectedSeries(Array.from(sortedDataResult.series.keys()));
+    }, [sortedDataResult.series]);
+
+    const activeSelections = selectedSeries || Array.from(sortedDataResult.series.keys());
+
+    const chartCalculations = useMemo(() => {
+        const uniqueDates = sortedDataResult.uniqueDates;
+        if (uniqueDates.length === 0) return null;
+        const allValues: number[] = [];
+        sortedDataResult.series.forEach((points) => points.forEach(p => allValues.push(p.val)));
+        if (showTargetLine && targetValue !== null && targetValue > 0) allValues.push(targetValue);
+        if (allValues.length === 0) return null;
+        const maxVal = Math.max(...allValues);
+        const margin = maxVal * 0.1 || 10;
+        const yMax = maxVal + margin;
+        const yRange = yMax || 1;
+        const width = 1200;
+        const height = 500;
+        const padding = { left: 60, right: 40, top: 40, bottom: 60 };
+        const chartWidth = width - padding.left - padding.right;
+        const chartHeight = height - padding.top - padding.bottom;
+        const stepX = chartWidth / Math.max(uniqueDates.length - 1, 1);
+        const dateToX = (dateStr: string) => {
+            const index = uniqueDates.indexOf(dateStr);
+            return padding.left + (index * stepX);
+        };
+        const valToY = (val: number) => padding.top + chartHeight - (val / yRange) * chartHeight;
+        const finalSeries = Array.from(sortedDataResult.series.entries())
+            .filter(([name]) => activeSelections.includes(name))
+            .map(([name, points], idx) => {
+                const chartPoints = points.map(p => ({ x: dateToX(p.date), y: valToY(p.val), original: p, date: p.date }));
+                const path = chartPoints.length > 1 ? `M ${chartPoints[0].x},${chartPoints[0].y} ` + chartPoints.slice(1).map(p => `L ${p.x},${p.y}`).join(" ") : null;
+                const config = (viewMode === 'general' || viewMode === 'machine_comparison') ? (SHIFT_COLORS_CONFIG[name] || { hex: "#888", bg: "bg-neutral-400", text: "text-neutral-400" }) : MACHINE_COLORS_CONFIG[idx % MACHINE_COLORS_CONFIG.length];
+                return { name, color: config.hex, config, points: chartPoints, path, isTotal: name === 'TOTAL DIA' };
+            });
+        const gridLines = Array.from({ length: 6 }).map((_, i) => { const val = (yRange * i) / 5; return { y: valToY(val), val }; });
+        const targetY = (showTargetLine && targetValue !== null && targetValue > 0) ? valToY(targetValue) : null;
+        let movingAveragePath = null;
+        if (showMovingAverage) {
+            const sourceSeries = finalSeries.find(s => s.name === 'TOTAL DIA' || (viewMode !== 'general' && s.points.length > 5));
+            if (sourceSeries && sourceSeries.points.length >= 2) {
+                const subsetSize = 3;
+                const smaPoints: { x: number; y: number }[] = [];
+                for (let i = 0; i < sourceSeries.points.length; i++) {
+                    if (i < subsetSize - 1) continue;
+                    const avg = sourceSeries.points.slice(i - subsetSize + 1, i + 1).reduce((sum, curr) => sum + curr.original.val, 0) / subsetSize;
+                    smaPoints.push({ x: sourceSeries.points[i].x, y: valToY(avg) });
+                }
+                if (smaPoints.length > 1) movingAveragePath = `M ${smaPoints[0].x},${smaPoints[0].y} ` + smaPoints.slice(1).map(p => `L ${p.x},${p.y}`).join(" ");
+            }
+        }
+        return { width, height, padding, dateToX, valToY, finalSeries, gridLines, targetY, uniqueDates, movingAveragePath, chartHeight };
+    }, [sortedDataResult, activeSelections, showTargetLine, targetValue, showMovingAverage, viewMode]);
+
+    if (!chartCalculations) return (
+        <div className="w-full h-64 flex flex-col items-center justify-center bg-neutral-50 border border-neutral-200 rounded-xl">
+            <BarChart3 className="h-8 w-8 text-neutral-300 mb-2" />
+            <span className="text-xs font-bold uppercase tracking-widest text-neutral-400">Dados insuficiente para o período</span>
+        </div>
+    );
+
+    const { width, height, finalSeries, gridLines, uniqueDates, dateToX, targetY, movingAveragePath } = chartCalculations;
+
+    return (
+        <div className="w-full bg-white border border-black p-6 animate-fade-in relative flex flex-col gap-6 shadow-[8px_8px_0px_rgba(0,0,0,1)] rounded-xl">
+            <div className="flex flex-col md:flex-row items-start md:items-end justify-between gap-6 border-b border-black pb-6">
+                <div className="flex items-center gap-4"><div className="p-3 bg-black text-white rounded shrink-0 shadow-lg"><TrendingUp className="h-6 w-6" /></div><div><h3 className="text-xl font-serif text-black leading-none mb-1">Análise de Produção</h3><p className="text-[10px] text-neutral-500 font-bold uppercase tracking-widest">{viewMode === 'general' ? 'Visão Geral da Fábrica' : viewMode === 'detailed' ? 'Performance por Máquina' : 'Detalhamento'}</p></div></div>
+                <div className="flex items-center gap-2 overflow-x-auto pb-1 md:pb-0 w-full md:w-auto">
+                    <div className="px-4 py-2 bg-neutral-50 border border-neutral-100 rounded-lg text-center min-w-[100px]"><span className="text-[9px] font-bold text-neutral-400 uppercase block">Total</span><span className="text-lg font-mono font-black text-black leading-none">{kpis.total.toLocaleString('pt-BR')}</span></div>
+                    <div className="w-px h-8 bg-neutral-200 hidden md:block" /><div className="px-4 py-2 bg-neutral-50 border border-neutral-100 rounded-lg text-center min-w-[100px]"><span className="text-[9px] font-bold text-neutral-400 uppercase block">Média</span><span className="text-lg font-mono font-black text-emerald-600 leading-none">{Math.round(kpis.avg).toLocaleString('pt-BR')}</span></div>
+                    <div className="w-px h-8 bg-neutral-200 hidden md:block" /><div className="px-4 py-2 bg-neutral-50 border border-neutral-100 rounded-lg text-center min-w-[100px]"><span className="text-[9px] font-bold text-neutral-400 uppercase block">Pico ({kpis.peakDate})</span><span className="text-lg font-mono font-black text-blue-600 leading-none">{kpis.peak.toLocaleString('pt-BR')}</span></div>
+                </div>
+            </div>
+            <div className="bg-neutral-50/50 p-2 rounded-lg border border-neutral-100 flex flex-col lg:flex-row items-center justify-between gap-4">
+                <div className="flex flex-col sm:flex-row items-center gap-4 w-full lg:w-auto overflow-x-auto">
+                    <div className="flex items-center gap-2 bg-white border border-neutral-200 rounded p-1.5 shadow-sm"><span className="text-[10px] font-bold text-neutral-500 uppercase">De:</span><input type="date" aria-label="Início" value={dateStart} onChange={(e) => setDateStart(e.target.value)} className="bg-transparent border-none p-0 text-[10px] font-bold uppercase" /><span className="text-neutral-300 mx-1">|</span><span className="text-[10px] font-bold text-neutral-500 uppercase">Até:</span><input type="date" aria-label="Fim" value={dateEnd} onChange={(e) => setDateEnd(e.target.value)} className="bg-transparent border-none p-0 text-[10px] font-bold uppercase" /></div>
+                    <div className="h-6 w-px bg-neutral-300 hidden sm:block" />
+                    <div className="flex items-center bg-white border border-neutral-200 rounded p-1 shadow-sm">{(['day', 'week', 'month'] as const).map(opt => (<button key={opt} onClick={() => setGranularity(opt)} className={cn("px-3 py-1.5 text-[10px] font-bold uppercase rounded transition-all", granularity === opt ? "bg-neutral-800 text-white shadow" : "text-neutral-400 hover:text-black hover:bg-neutral-50")}>{opt === 'day' ? 'Dia' : opt === 'week' ? 'Sem' : 'Mês'}</button>))}</div>
+                </div>
+                <div className="flex flex-wrap items-center gap-3 justify-end w-full lg:w-auto">
+                    <button onClick={() => setShowMovingAverage(!showMovingAverage)} className={cn("flex items-center gap-2 px-3 h-9 rounded border transition-all text-[10px] font-bold uppercase tracking-wide", showMovingAverage ? "bg-orange-50 border-orange-200 text-orange-600 shadow-sm" : "bg-white border-neutral-200 text-neutral-400 hover:border-neutral-300 hover:text-neutral-600")}><Activity className="h-3.5 w-3.5" /><span className="hidden sm:inline">Tendência</span></button>
+                    <div className={cn("flex items-center gap-2 px-3 h-9 bg-white border rounded transition-all focus-within:ring-1 focus-within:ring-red-500", showTargetLine ? "border-red-200 shadow-sm" : "border-neutral-200")}><Target className={cn("h-3.5 w-3.5", showTargetLine ? "text-red-500" : "text-neutral-300")} /><input type="number" placeholder="Meta" className="w-20 text-[10px] border-none p-0 font-mono focus:ring-0" value={targetValue || ''} onChange={(e) => { const v = Number(e.target.value); setTargetValue(v); setShowTargetLine(true); }} onBlur={() => targetValue && saveTargetToDB(targetValue)} />{isSavingTarget && <span className="text-[10px]">...</span>}</div>
+                    <select title="Modo de Exibição" value={viewMode} onChange={(e) => setViewMode(e.target.value as ViewMode)} className="h-9 px-3 text-[10px] font-bold uppercase bg-white border border-neutral-200 rounded shadow-sm focus:outline-none focus:ring-1 focus:ring-black cursor-pointer"><option value="general">Geral</option><option value="detailed">Por Máquina (Turno)</option><option value="compare_machines_total">Máquinas (Total)</option><option value="machine_comparison">Detalhamento</option></select>
+                    {viewMode === 'detailed' && <select title="Turno" value={selectedShift} onChange={(e) => setSelectedShift(e.target.value)} className="h-9 px-3 text-[10px] font-bold uppercase bg-white border border-neutral-200 rounded shadow-sm">{availableShifts.map(s => <option key={s} value={s}>{s}</option>)}</select>}
+                    {viewMode === 'machine_comparison' && <select title="Máquina" value={selectedMachine} onChange={(e) => setSelectedMachine(e.target.value)} className="h-9 px-3 text-[10px] font-bold uppercase bg-white border border-neutral-200 rounded shadow-sm">{availableMachines.map(m => <option key={m} value={m}>{formatName(m)}</option>)}</select>}
+                </div>
+            </div>
+            <div className="relative aspect-[21/9] bg-neutral-50/30 border border-neutral-100 rounded-lg group">
+                <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full overflow-visible">
+                    {targetY && <g className="animate-in fade-in slide-in-from-right"><line x1={60} y1={targetY} x2={width - 40} y2={targetY} stroke="#ef4444" strokeWidth="2" strokeDasharray="6 4" opacity="0.6" /><text x={width - 70} y={targetY + 4} textAnchor="middle" className="fill-red-600 font-bold text-[10px] uppercase tracking-widest">Meta</text></g>}
+                    {movingAveragePath && <path d={movingAveragePath} fill="none" stroke="#f97316" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="opacity-80" />}
+                    {gridLines.map((line, i) => <g key={i}><line x1={60} y1={line.y} x2={width - 40} y2={line.y} stroke="#e5e5e5" strokeWidth="1" strokeDasharray="4 4" /><text x={50} y={line.y + 4} textAnchor="end" className="fill-neutral-400 font-mono text-[10px] font-bold">{Math.round(line.val).toLocaleString('pt-BR')}</text></g>)}
+                    {finalSeries.map((s) => (<g key={s.name} className={cn("transition-opacity", hoveredPoint && hoveredPoint.seriesName !== s.name && "opacity-10")}>{s.path && <path d={s.path} fill="none" stroke={s.color} strokeWidth={s.isTotal ? "4" : "2"} strokeLinecap="round" strokeLinejoin="round" />}{s.points.map((p, pIdx) => (<g key={pIdx} onMouseEnter={() => setHoveredPoint({ ...p.original, color: s.color, seriesName: s.name })} onMouseLeave={() => setHoveredPoint(null)} className="cursor-pointer"><circle cx={p.x} cy={p.y} r="20" fill="transparent" /><circle cx={p.x} cy={p.y} r={s.isTotal ? "6" : "4"} fill={hoveredPoint?.id === p.original.id ? s.color : "white"} stroke={s.color} strokeWidth="3" /></g>))}</g>))}
+                    {uniqueDates.map((date, i) => { const skip = uniqueDates.length > 20 ? 3 : uniqueDates.length > 10 ? 2 : 1; if (i % skip !== 0) return null; return <text key={i} x={dateToX(date)} y={height - 20} textAnchor="middle" className="fill-neutral-500 font-mono text-[10px] font-bold">{date.split('-').reverse().slice(0, 2).join('/')}</text>; })}
+                </svg>
+            </div>
+        </div>
+    );
+}

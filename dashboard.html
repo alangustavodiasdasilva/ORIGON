@@ -1,0 +1,1482 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ORIGO System — Dashboard BI | Produção HVI</title>
+    <meta name="description" content="Dashboard de Business Intelligence do sistema Origo para análise de produção HVI de algodão.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        /* ========================================================================
+           DESIGN SYSTEM — ORIGO BI
+           ======================================================================== */
+        :root {
+            --sidebar-w: 260px;
+            --font: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+
+            /* Dark Theme Palette */
+            --bg-body: #0b0e14;
+            --bg-sidebar: #10141c;
+            --bg-card: #141922;
+            --bg-card-alt: #181e2a;
+            --bg-input: #1c2333;
+            --bg-hover: #1e2738;
+
+            --border: rgba(255,255,255,0.06);
+            --border-active: rgba(56,189,248,0.4);
+
+            --accent: #38bdf8;
+            --accent-dim: rgba(56,189,248,0.12);
+            --accent2: #818cf8;
+            --accent2-dim: rgba(129,140,248,0.12);
+
+            --green: #34d399;
+            --green-dim: rgba(52,211,153,0.12);
+            --yellow: #fbbf24;
+            --yellow-dim: rgba(251,191,36,0.12);
+            --red: #f87171;
+            --red-dim: rgba(248,113,113,0.12);
+            --orange: #fb923c;
+            --orange-dim: rgba(251,146,60,0.12);
+
+            --text-1: #f1f5f9;
+            --text-2: #94a3b8;
+            --text-3: #64748b;
+            --text-4: #475569;
+
+            --radius-sm: 6px;
+            --radius: 10px;
+            --radius-lg: 14px;
+            --shadow: 0 1px 3px rgba(0,0,0,0.3), 0 4px 12px rgba(0,0,0,0.2);
+            --shadow-lg: 0 4px 24px rgba(0,0,0,0.4);
+            --transition: all 0.2s ease;
+        }
+
+        * { margin:0; padding:0; box-sizing:border-box; }
+        html { font-size: 14px; }
+        body {
+            font-family: var(--font);
+            background: var(--bg-body);
+            color: var(--text-1);
+            display: flex;
+            min-height: 100vh;
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* ========================================================================
+           SIDEBAR
+           ======================================================================== */
+        .sidebar {
+            width: var(--sidebar-w);
+            background: var(--bg-sidebar);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            position: fixed;
+            top: 0; left: 0;
+            height: 100vh;
+            z-index: 100;
+        }
+
+        .sidebar-brand {
+            padding: 24px 20px 20px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .brand-icon {
+            width: 36px; height: 36px;
+            background: linear-gradient(135deg, #38bdf8, #818cf8);
+            border-radius: 8px;
+            display: flex; align-items: center; justify-content: center;
+            font-weight: 900; font-size: 16px; color: #fff;
+            flex-shrink: 0;
+        }
+        .brand-text { display: flex; flex-direction: column; }
+        .brand-name { font-size: 15px; font-weight: 800; color: var(--text-1); letter-spacing: -0.3px; }
+        .brand-sub { font-size: 10px; font-weight: 500; color: var(--text-3); text-transform: uppercase; letter-spacing: 1px; }
+
+        .sidebar-section { padding: 20px 12px 8px; }
+        .sidebar-section-title {
+            font-size: 10px; font-weight: 700; text-transform: uppercase;
+            letter-spacing: 1.5px; color: var(--text-4); padding: 0 8px; margin-bottom: 8px;
+        }
+
+        .nav-list { list-style: none; display: flex; flex-direction: column; gap: 2px; }
+        .nav-item a {
+            display: flex; align-items: center; gap: 10px;
+            padding: 10px 12px; border-radius: var(--radius-sm);
+            text-decoration: none; color: var(--text-3);
+            font-size: 13px; font-weight: 500; transition: var(--transition);
+            cursor: pointer;
+        }
+        .nav-item a .nav-icon { font-size: 16px; width: 20px; text-align: center; }
+        .nav-item a:hover { background: var(--bg-hover); color: var(--text-2); }
+        .nav-item.active a { background: var(--accent-dim); color: var(--accent); font-weight: 600; }
+
+        .sidebar-footer {
+            margin-top: auto; padding: 16px 20px;
+            border-top: 1px solid var(--border);
+            display: flex; align-items: center; gap: 10px;
+        }
+        .sidebar-footer .avatar {
+            width: 32px; height: 32px; border-radius: 50%;
+            background: linear-gradient(135deg, #38bdf8, #818cf8);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 11px; font-weight: 700; color: #fff;
+        }
+        .sidebar-footer .user-name { font-size: 12px; font-weight: 600; color: var(--text-1); }
+        .sidebar-footer .user-role { font-size: 10px; color: var(--text-3); }
+
+        /* ========================================================================
+           MAIN CONTENT
+           ======================================================================== */
+        .main {
+            margin-left: var(--sidebar-w);
+            flex: 1; display: flex; flex-direction: column; min-height: 100vh;
+        }
+
+        /* Top Bar */
+        .topbar {
+            padding: 16px 32px; border-bottom: 1px solid var(--border);
+            display: flex; justify-content: space-between; align-items: center;
+            background: var(--bg-sidebar); position: sticky; top: 0; z-index: 50;
+        }
+        .topbar-left h1 { font-size: 18px; font-weight: 700; color: var(--text-1); letter-spacing: -0.3px; }
+        .topbar-left p { font-size: 12px; color: var(--text-3); margin-top: 2px; }
+        .topbar-right { display: flex; align-items: center; gap: 16px; }
+        .topbar-badge {
+            padding: 5px 12px; border-radius: 20px;
+            font-size: 11px; font-weight: 600;
+            display: flex; align-items: center; gap: 6px;
+        }
+        .badge-live { background: var(--green-dim); color: var(--green); }
+        .badge-lab { background: var(--accent-dim); color: var(--accent); }
+
+        /* Filter Bar */
+        .filter-bar {
+            padding: 14px 32px; background: var(--bg-card);
+            border-bottom: 1px solid var(--border);
+            display: flex; align-items: center; gap: 20px; flex-wrap: wrap;
+        }
+        .filter-group { display: flex; align-items: center; gap: 8px; }
+        .filter-label {
+            font-size: 11px; font-weight: 600; color: var(--text-3);
+            text-transform: uppercase; letter-spacing: 0.5px; white-space: nowrap;
+        }
+        .filter-select {
+            background: var(--bg-input); border: 1px solid var(--border);
+            color: var(--text-1); padding: 7px 12px; border-radius: var(--radius-sm);
+            font-size: 12px; font-weight: 500; font-family: var(--font);
+            outline: none; cursor: pointer; transition: var(--transition); min-width: 180px;
+        }
+        .filter-select:focus { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-dim); }
+        .filter-select:disabled { opacity: 0.4; cursor: not-allowed; }
+        .filter-divider { width: 1px; height: 24px; background: var(--border); }
+
+        /* Content Area */
+        .content { padding: 24px 32px; display: flex; flex-direction: column; gap: 20px; flex: 1; }
+
+        /* Alert Banner */
+        .alert-banner {
+            padding: 14px 20px; border-radius: var(--radius);
+            display: flex; align-items: center; gap: 10px;
+            font-size: 13px; font-weight: 500; color: var(--yellow);
+            background: var(--yellow-dim); border: 1px solid rgba(251,191,36,0.15);
+        }
+        .alert-banner.hidden { display: none; }
+
+        /* Pages */
+        .page { display: none; flex-direction: column; gap: 20px; animation: pageIn 0.3s ease; }
+        .page.active { display: flex; }
+        @keyframes pageIn {
+            from { opacity: 0; transform: translateY(6px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Section Label */
+        .section-label { display: flex; align-items: center; gap: 8px; margin-bottom: -4px; }
+        .section-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+        .section-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--text-3); }
+
+        /* ========================================================================
+           KPI CARDS
+           ======================================================================== */
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 14px;
+        }
+        .kpi {
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: var(--radius); padding: 18px 20px;
+            display: flex; flex-direction: column; gap: 6px;
+            position: relative; overflow: hidden; transition: var(--transition);
+        }
+        .kpi:hover { border-color: var(--border-active); transform: translateY(-1px); box-shadow: var(--shadow); }
+        .kpi::after {
+            content: ''; position: absolute; top: 0; left: 0;
+            width: 3px; height: 100%; border-radius: 0 3px 3px 0;
+        }
+        .kpi.blue::after { background: var(--accent); }
+        .kpi.green::after { background: var(--green); }
+        .kpi.purple::after { background: var(--accent2); }
+        .kpi.yellow::after { background: var(--yellow); }
+        .kpi.red::after { background: var(--red); }
+        .kpi.orange::after { background: var(--orange); }
+
+        .kpi-label { font-size: 11px; font-weight: 600; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.3px; }
+        .kpi-value { font-size: 28px; font-weight: 800; letter-spacing: -1px; color: var(--text-1); line-height: 1; }
+        .kpi-sub { font-size: 11px; font-weight: 500; color: var(--text-3); }
+
+        /* ========================================================================
+           TURNO CARDS (Origon style)
+           ======================================================================== */
+        .turno-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr 1fr 1.2fr;
+            gap: 14px;
+        }
+        .turno-card {
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: var(--radius-lg); padding: 20px 22px;
+            display: flex; flex-direction: column; gap: 8px;
+            position: relative; transition: var(--transition);
+        }
+        .turno-card:hover { border-color: var(--border-active); transform: translateY(-1px); box-shadow: var(--shadow); }
+        .turno-card .turno-header {
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .turno-card .turno-label {
+            font-size: 11px; font-weight: 700; text-transform: uppercase;
+            letter-spacing: 0.8px; padding: 3px 10px; border-radius: 20px;
+        }
+        .turno-card .turno-icon {
+            width: 28px; height: 28px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 12px;
+        }
+        .turno-card .turno-value {
+            font-size: 32px; font-weight: 900; letter-spacing: -1.5px; color: var(--text-1); line-height: 1;
+        }
+        .turno-card .turno-sub {
+            font-size: 11px; font-weight: 600; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.5px;
+        }
+
+        /* Turno 1 - green accent */
+        .turno-card.t1 { border-left: 3px solid var(--green); }
+        .turno-card.t1 .turno-label { background: var(--green-dim); color: var(--green); }
+        .turno-card.t1 .turno-icon { background: var(--green-dim); color: var(--green); }
+
+        /* Turno 2 - orange accent */
+        .turno-card.t2 { border-left: 3px solid var(--orange); }
+        .turno-card.t2 .turno-label { background: var(--orange-dim); color: var(--orange); }
+        .turno-card.t2 .turno-icon { background: var(--orange-dim); color: var(--orange); }
+
+        /* Turno 3 - blue accent */
+        .turno-card.t3 { border-left: 3px solid var(--accent); }
+        .turno-card.t3 .turno-label { background: var(--accent-dim); color: var(--accent); }
+        .turno-card.t3 .turno-icon { background: var(--accent-dim); color: var(--accent); }
+
+        /* Comercial - purple accent */
+        .turno-card.com { border-left: 3px solid var(--accent2); }
+        .turno-card.com .turno-label { background: var(--accent2-dim); color: var(--accent2); }
+        .turno-card.com .turno-icon { background: var(--accent2-dim); color: var(--accent2); }
+
+        /* Total - dark card (Origon style) */
+        .turno-card.total {
+            background: linear-gradient(135deg, #1a1a2e, #16213e);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-left: 3px solid var(--text-1);
+        }
+        .turno-card.total .turno-label { background: rgba(255,255,255,0.1); color: var(--text-1); }
+        .turno-card.total .turno-icon { background: rgba(255,255,255,0.1); color: var(--text-1); }
+        .turno-card.total .turno-value { color: #fff; }
+
+        /* ========================================================================
+           ANALYSIS PANEL (Origon style "Análise de Produção")
+           ======================================================================== */
+        .analysis-panel {
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: var(--radius-lg); overflow: hidden;
+            box-shadow: var(--shadow);
+        }
+        .analysis-header {
+            padding: 20px 24px 16px;
+            display: flex; justify-content: space-between; align-items: flex-start;
+            border-bottom: 1px solid var(--border);
+        }
+        .analysis-title-group { display: flex; align-items: center; gap: 12px; }
+        .analysis-icon {
+            width: 36px; height: 36px; border-radius: 8px;
+            background: var(--accent-dim);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 16px;
+        }
+        .analysis-title { font-size: 15px; font-weight: 700; color: var(--text-1); }
+        .analysis-subtitle { font-size: 11px; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.5px; }
+
+        .analysis-stats {
+            display: flex; gap: 24px; align-items: flex-end;
+        }
+        .stat-block { text-align: right; }
+        .stat-label { font-size: 10px; font-weight: 700; color: var(--text-4); text-transform: uppercase; letter-spacing: 0.5px; }
+        .stat-value { font-size: 18px; font-weight: 800; color: var(--text-1); letter-spacing: -0.5px; }
+        .stat-value.accent { color: var(--accent); }
+        .stat-value.green { color: var(--green); }
+
+        .analysis-controls {
+            padding: 14px 24px;
+            display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+            border-bottom: 1px solid var(--border);
+            background: var(--bg-card-alt);
+        }
+
+        /* Date inputs */
+        .date-input-group { display: flex; align-items: center; gap: 6px; }
+        .date-label { font-size: 10px; font-weight: 700; color: var(--text-3); text-transform: uppercase; }
+        .date-input {
+            background: var(--bg-input); border: 1px solid var(--border);
+            color: var(--text-2); padding: 6px 10px; border-radius: var(--radius-sm);
+            font-size: 11px; font-family: var(--font); outline: none; width: 130px;
+        }
+        .date-input:focus { border-color: var(--accent); }
+
+        /* Toggle buttons group */
+        .toggle-group {
+            display: flex; border-radius: var(--radius-sm); overflow: hidden;
+            border: 1px solid var(--border);
+        }
+        .toggle-btn {
+            padding: 6px 14px; font-size: 11px; font-weight: 700;
+            font-family: var(--font); text-transform: uppercase; letter-spacing: 0.3px;
+            background: var(--bg-input); color: var(--text-3); border: none;
+            cursor: pointer; transition: var(--transition);
+        }
+        .toggle-btn:not(:last-child) { border-right: 1px solid var(--border); }
+        .toggle-btn.active { background: var(--accent); color: #0b0e14; }
+        .toggle-btn:hover:not(.active) { background: var(--bg-hover); color: var(--text-2); }
+
+        /* Dropdown inside controls */
+        .ctrl-select {
+            background: var(--bg-input); border: 1px solid var(--border);
+            color: var(--text-1); padding: 6px 12px; border-radius: var(--radius-sm);
+            font-size: 11px; font-weight: 600; font-family: var(--font);
+            outline: none; cursor: pointer; min-width: 160px;
+        }
+
+        .analysis-chart { padding: 20px 24px; }
+
+        /* Controls spacer */
+        .ctrl-spacer { flex: 1; }
+
+        /* ========================================================================
+           PANELS
+           ======================================================================== */
+        .panel-grid { display: grid; gap: 16px; }
+        .panel-grid.cols-2 { grid-template-columns: 1.6fr 1fr; }
+        .panel-grid.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
+        .panel-grid.cols-equal { grid-template-columns: 1fr 1fr; }
+
+        .panel {
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: var(--radius-lg); padding: 20px;
+            display: flex; flex-direction: column; gap: 16px;
+            box-shadow: var(--shadow);
+        }
+        .panel-head {
+            display: flex; justify-content: space-between; align-items: center;
+            padding-bottom: 12px; border-bottom: 1px solid var(--border);
+        }
+        .panel-title { font-size: 13px; font-weight: 700; color: var(--text-1); display: flex; align-items: center; gap: 8px; }
+        .panel-title .icon { font-size: 15px; }
+        .panel-subtitle { font-size: 11px; color: var(--text-3); font-weight: 500; }
+
+        .chart-box { position: relative; width: 100%; }
+        .chart-box.h-280 { height: 280px; }
+        .chart-box.h-240 { height: 240px; }
+        .chart-box.h-200 { height: 200px; }
+        .chart-box.h-320 { height: 320px; }
+        .chart-box.h-360 { height: 360px; }
+
+        /* ========================================================================
+           TABLES
+           ======================================================================== */
+        .table-wrap { overflow-x: auto; width: 100%; }
+        .data-table { width: 100%; border-collapse: collapse; text-align: left; }
+        .data-table th {
+            padding: 10px 14px; border-bottom: 1px solid var(--border);
+            font-size: 10px; font-weight: 700; text-transform: uppercase;
+            letter-spacing: 0.5px; color: var(--text-3); background: var(--bg-card-alt);
+            position: sticky; top: 0;
+        }
+        .data-table td {
+            padding: 10px 14px; border-bottom: 1px solid rgba(255,255,255,0.02);
+            font-size: 12px; font-weight: 500; color: var(--text-2);
+        }
+        .data-table tbody tr:hover td { background: var(--bg-hover); }
+        .data-table .mono { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 11px; }
+
+        /* Badges */
+        .badge {
+            display: inline-flex; align-items: center; gap: 4px;
+            padding: 3px 10px; border-radius: 20px;
+            font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px;
+        }
+        .badge-green { background: var(--green-dim); color: var(--green); }
+        .badge-blue { background: var(--accent-dim); color: var(--accent); }
+        .badge-yellow { background: var(--yellow-dim); color: var(--yellow); }
+        .badge-red { background: var(--red-dim); color: var(--red); }
+        .badge-purple { background: var(--accent2-dim); color: var(--accent2); }
+
+        /* Leaderboard */
+        .leaderboard { display: flex; flex-direction: column; gap: 6px; }
+        .lb-row {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 10px 14px; border-radius: var(--radius-sm);
+            background: var(--bg-card-alt); border: 1px solid var(--border);
+            transition: var(--transition);
+        }
+        .lb-row:hover { border-color: var(--border-active); }
+        .lb-rank {
+            width: 24px; height: 24px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 11px; font-weight: 800; flex-shrink: 0;
+        }
+        .lb-rank.gold { background: linear-gradient(135deg, #fbbf24, #f59e0b); color: #000; }
+        .lb-rank.silver { background: linear-gradient(135deg, #94a3b8, #64748b); color: #fff; }
+        .lb-rank.bronze { background: linear-gradient(135deg, #fb923c, #ea580c); color: #fff; }
+        .lb-rank.normal { background: var(--bg-input); color: var(--text-3); }
+        .lb-name { font-size: 12px; font-weight: 600; color: var(--text-1); flex: 1; margin-left: 10px; }
+        .lb-value { font-size: 13px; font-weight: 700; color: var(--accent); }
+        .lb-bar-wrapper { flex: 0.6; height: 6px; background: var(--bg-input); border-radius: 3px; margin: 0 12px; overflow: hidden; }
+        .lb-bar { height: 100%; border-radius: 3px; background: linear-gradient(90deg, var(--accent), var(--accent2)); transition: width 0.6s ease; }
+
+        /* Summary row */
+        .summary-row { display: flex; gap: 12px; flex-wrap: wrap; }
+        .summary-chip {
+            background: var(--bg-card-alt); border: 1px solid var(--border);
+            border-radius: var(--radius); padding: 12px 16px;
+            display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 140px;
+        }
+        .summary-chip .chip-label { font-size: 10px; font-weight: 600; color: var(--text-4); text-transform: uppercase; }
+        .summary-chip .chip-value { font-size: 20px; font-weight: 800; color: var(--text-1); }
+
+        /* Search */
+        .search-box {
+            display: flex; align-items: center; gap: 8px;
+            background: var(--bg-input); border: 1px solid var(--border);
+            border-radius: var(--radius-sm); padding: 6px 12px;
+        }
+        .search-box input {
+            background: none; border: none; color: var(--text-1);
+            font-size: 12px; font-family: var(--font); outline: none; width: 200px;
+        }
+
+        /* Locked overlay */
+        .locked { opacity: 0.15; pointer-events: none; filter: blur(2px); transition: all 0.4s ease; }
+        .locked.unlocked { opacity: 1; pointer-events: auto; filter: none; }
+
+        /* Footer */
+        .dashboard-footer {
+            padding: 16px 32px; border-top: 1px solid var(--border);
+            display: flex; justify-content: space-between; align-items: center;
+            font-size: 11px; color: var(--text-4);
+        }
+
+        /* Responsive */
+        @media (max-width: 1200px) {
+            .panel-grid.cols-2, .panel-grid.cols-3, .panel-grid.cols-equal { grid-template-columns: 1fr; }
+            .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+            .turno-grid { grid-template-columns: repeat(2, 1fr); }
+        }
+        @media (max-width: 768px) {
+            .sidebar { display: none; }
+            .main { margin-left: 0; }
+            .kpi-grid, .turno-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ====================================================================
+         SIDEBAR
+         ==================================================================== -->
+    <aside class="sidebar">
+        <div class="sidebar-brand">
+            <div class="brand-icon">O</div>
+            <div class="brand-text">
+                <span class="brand-name">ORIGO System</span>
+                <span class="brand-sub">Business Intelligence</span>
+            </div>
+        </div>
+
+        <div class="sidebar-section">
+            <div class="sidebar-section-title">Dashboards</div>
+            <ul class="nav-list">
+                <li class="nav-item active" data-page="page-executiva">
+                    <a onclick="goPage('page-executiva')">
+                        <span class="nav-icon">📊</span> Visão Executiva
+                    </a>
+                </li>
+                <li class="nav-item" data-page="page-operacional">
+                    <a onclick="goPage('page-operacional')">
+                        <span class="nav-icon">🚦</span> Status Operacional
+                    </a>
+                </li>
+                <li class="nav-item" data-page="page-produtividade">
+                    <a onclick="goPage('page-produtividade')">
+                        <span class="nav-icon">⚡</span> Produtividade HVI
+                    </a>
+                </li>
+                <li class="nav-item" data-page="page-analitica">
+                    <a onclick="goPage('page-analitica')">
+                        <span class="nav-icon">🔍</span> Tabela Analítica
+                    </a>
+                </li>
+            </ul>
+        </div>
+
+        <div class="sidebar-section">
+            <div class="sidebar-section-title">Configurações</div>
+            <ul class="nav-list">
+                <li class="nav-item">
+                    <a><span class="nav-icon">⚙️</span> Preferências</a>
+                </li>
+            </ul>
+        </div>
+
+        <div class="sidebar-footer">
+            <div class="avatar">KS</div>
+            <div>
+                <div class="user-name">Admin BI</div>
+                <div class="user-role">Kuhlmann Sorriso</div>
+            </div>
+        </div>
+    </aside>
+
+    <!-- ====================================================================
+         MAIN
+         ==================================================================== -->
+    <div class="main">
+        <header class="topbar">
+            <div class="topbar-left">
+                <h1 id="topbar-title">Visão Executiva</h1>
+                <p id="topbar-desc">Indicadores consolidados de produção e performance operacional HVI</p>
+            </div>
+            <div class="topbar-right">
+                <span class="topbar-badge badge-lab" id="topbar-lab">Nenhum lab selecionado</span>
+                <span class="topbar-badge badge-live">● Dados Reais</span>
+            </div>
+        </header>
+
+        <div class="filter-bar">
+            <div class="filter-group">
+                <span class="filter-label">🏢 Laboratório</span>
+                <select class="filter-select" id="f-lab" onchange="onLabChange()">
+                    <option value="">— Selecione o laboratório —</option>
+                    <option value="Kuhlmann Sorriso">Kuhlmann Sorriso</option>
+                    <option value="Lab Filial - Barreiras">Lab Filial — Barreiras</option>
+                    <option value="Lab Filial - Lucas do Rio Verde">Lab Filial — Lucas do Rio Verde</option>
+                </select>
+            </div>
+            <div class="filter-divider"></div>
+            <div class="filter-group">
+                <span class="filter-label">Turno</span>
+                <select class="filter-select" id="f-turno" onchange="refresh()" disabled>
+                    <option value="all">Todos os Turnos</option>
+                    <option value="TURNO 1">Turno 1 (Manhã)</option>
+                    <option value="TURNO 2">Turno 2 (Tarde/Noite)</option>
+                </select>
+            </div>
+            <div class="filter-divider"></div>
+            <div class="filter-group">
+                <span class="filter-label">Operador</span>
+                <select class="filter-select" id="f-operador" onchange="refresh()" disabled>
+                    <option value="all">Todos</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="content">
+            <div class="alert-banner" id="alert-banner">
+                ⚠️ &nbsp; Selecione um <strong>laboratório</strong> nos filtros acima para carregar os dados do dashboard.
+            </div>
+
+            <div class="locked" id="dashboard-body">
+
+                <!-- ============================================================
+                     PAGE 1: VISÃO EXECUTIVA
+                     ============================================================ -->
+                <div class="page active" id="page-executiva">
+                    <div class="section-label">
+                        <div class="section-dot"></div>
+                        <span class="section-title">Indicadores Consolidados — Outubro 2025</span>
+                    </div>
+
+                    <div class="kpi-grid">
+                        <div class="kpi blue">
+                            <span class="kpi-label">Total de Amostras Analisadas</span>
+                            <span class="kpi-value" id="k-total-amostras">—</span>
+                            <span class="kpi-sub" id="k-total-amostras-sub">período completo</span>
+                        </div>
+                        <div class="kpi green">
+                            <span class="kpi-label">Média Diária de Produção</span>
+                            <span class="kpi-value" id="k-media-dia">—</span>
+                            <span class="kpi-sub">amostras/dia</span>
+                        </div>
+                        <div class="kpi purple">
+                            <span class="kpi-label">Total de Operadores Ativos</span>
+                            <span class="kpi-value" id="k-total-ops">—</span>
+                            <span class="kpi-sub">no período</span>
+                        </div>
+                        <div class="kpi yellow">
+                            <span class="kpi-label">Dias Trabalhados</span>
+                            <span class="kpi-value" id="k-dias-trab">—</span>
+                            <span class="kpi-sub">de 31 dias</span>
+                        </div>
+                        <div class="kpi orange">
+                            <span class="kpi-label">Melhor Dia (Pico)</span>
+                            <span class="kpi-value" id="k-pico-dia">—</span>
+                            <span class="kpi-sub" id="k-pico-dia-sub">data do recorde</span>
+                        </div>
+                        <div class="kpi red">
+                            <span class="kpi-label">Menor Dia (Vale)</span>
+                            <span class="kpi-value" id="k-vale-dia">—</span>
+                            <span class="kpi-sub" id="k-vale-dia-sub">data do mínimo</span>
+                        </div>
+                    </div>
+
+                    <div class="panel-grid cols-2">
+                        <div class="panel">
+                            <div class="panel-head">
+                                <span class="panel-title"><span class="icon">📈</span> Evolução Diária de Produção</span>
+                                <span class="panel-subtitle">Amostras HVI por dia</span>
+                            </div>
+                            <div class="chart-box h-280"><canvas id="chart-evolucao"></canvas></div>
+                        </div>
+                        <div class="panel">
+                            <div class="panel-head">
+                                <span class="panel-title"><span class="icon">🏆</span> Top 10 Operadores</span>
+                                <span class="panel-subtitle">por volume de amostras</span>
+                            </div>
+                            <div class="leaderboard" id="lb-top-ops"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ============================================================
+                     PAGE 2: STATUS OPERACIONAL (Estilo Origon System)
+                     ============================================================ -->
+                <div class="page" id="page-operacional">
+                    <!-- Turno Cards Row (Origon style) -->
+                    <div class="turno-grid">
+                        <div class="turno-card t1">
+                            <div class="turno-header">
+                                <span class="turno-label">Turno 1</span>
+                                <span class="turno-icon">☀️</span>
+                            </div>
+                            <span class="turno-value" id="tc-t1">0</span>
+                            <span class="turno-sub">Amostras</span>
+                        </div>
+                        <div class="turno-card t2">
+                            <div class="turno-header">
+                                <span class="turno-label">Turno 2</span>
+                                <span class="turno-icon">🔥</span>
+                            </div>
+                            <span class="turno-value" id="tc-t2">0</span>
+                            <span class="turno-sub">Amostras</span>
+                        </div>
+                        <div class="turno-card t3">
+                            <div class="turno-header">
+                                <span class="turno-label">Turno 3</span>
+                                <span class="turno-icon">🌙</span>
+                            </div>
+                            <span class="turno-value" id="tc-t3">0</span>
+                            <span class="turno-sub">Amostras</span>
+                        </div>
+                        <div class="turno-card com">
+                            <div class="turno-header">
+                                <span class="turno-label">Comercial</span>
+                                <span class="turno-icon">🏢</span>
+                            </div>
+                            <span class="turno-value" id="tc-com">0</span>
+                            <span class="turno-sub">Amostras</span>
+                        </div>
+                        <div class="turno-card total">
+                            <div class="turno-header">
+                                <span class="turno-label">Total</span>
+                                <span class="turno-icon">📊</span>
+                            </div>
+                            <span class="turno-value" id="tc-total">0</span>
+                            <span class="turno-sub">Geral</span>
+                        </div>
+                    </div>
+
+                    <!-- Análise de Produção (Origon style) -->
+                    <div class="analysis-panel">
+                        <div class="analysis-header">
+                            <div>
+                                <div class="analysis-title-group">
+                                    <div class="analysis-icon">📈</div>
+                                    <div>
+                                        <div class="analysis-title">Análise de Produção</div>
+                                        <div class="analysis-subtitle">Visão Geral da Fábrica</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="analysis-stats">
+                                <div class="stat-block">
+                                    <div class="stat-label">Total</div>
+                                    <div class="stat-value" id="as-total">0</div>
+                                </div>
+                                <div class="stat-block">
+                                    <div class="stat-label">Média</div>
+                                    <div class="stat-value accent" id="as-media">0</div>
+                                </div>
+                                <div class="stat-block">
+                                    <div class="stat-label" id="as-pico-label">Pico</div>
+                                    <div class="stat-value green" id="as-pico">0</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="analysis-controls">
+                            <div class="date-input-group">
+                                <span class="date-label">De:</span>
+                                <input type="date" class="date-input" id="ctrl-date-from" value="2025-10-01">
+                            </div>
+                            <div class="date-input-group">
+                                <span class="date-label">Até:</span>
+                                <input type="date" class="date-input" id="ctrl-date-to" value="2025-10-31">
+                            </div>
+
+                            <div class="toggle-group">
+                                <button class="toggle-btn active" onclick="setToggle(this,'period')">DIA</button>
+                                <button class="toggle-btn" onclick="setToggle(this,'period')">SEM</button>
+                                <button class="toggle-btn" onclick="setToggle(this,'period')">MÊS</button>
+                            </div>
+
+                            <div class="ctrl-spacer"></div>
+
+                            <div class="toggle-group">
+                                <button class="toggle-btn active" onclick="setToggle(this,'view')">TENDÊNCIA</button>
+                                <button class="toggle-btn" onclick="setToggle(this,'view')">PNTS</button>
+                            </div>
+
+                            <select class="ctrl-select" id="ctrl-chart-mode" onchange="refresh()">
+                                <option value="geral">GERAL</option>
+                                <option value="por_turno">POR TURNO</option>
+                                <option value="operadores_top">TOP OPERADORES</option>
+                                <option value="detalhamento">DETALHAMENTO</option>
+                            </select>
+                        </div>
+
+                        <div class="analysis-chart">
+                            <div class="chart-box h-360"><canvas id="chart-producao-main"></canvas></div>
+                        </div>
+                    </div>
+
+                    <!-- Daily Table -->
+                    <div class="panel">
+                        <div class="panel-head">
+                            <span class="panel-title"><span class="icon">📋</span> Resumo Diário de Produção por Turno</span>
+                        </div>
+                        <div class="table-wrap" style="max-height: 300px; overflow-y: auto;">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Data</th>
+                                        <th>Turno 1</th>
+                                        <th>Turno 2</th>
+                                        <th>Total Dia</th>
+                                        <th>Ops T1</th>
+                                        <th>Ops T2</th>
+                                        <th>Performance</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tb-turno-resumo"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ============================================================
+                     PAGE 3: PRODUTIVIDADE HVI
+                     ============================================================ -->
+                <div class="page" id="page-produtividade">
+                    <div class="section-label">
+                        <div class="section-dot"></div>
+                        <span class="section-title">Ranking de Operadores & Análise Individual</span>
+                    </div>
+
+                    <div class="kpi-grid">
+                        <div class="kpi blue">
+                            <span class="kpi-label">Top Performer</span>
+                            <span class="kpi-value" id="k-top-name" style="font-size:18px;">—</span>
+                            <span class="kpi-sub" id="k-top-vol">volume total</span>
+                        </div>
+                        <div class="kpi green">
+                            <span class="kpi-label">Média Geral / Operador</span>
+                            <span class="kpi-value" id="k-media-geral-op">—</span>
+                            <span class="kpi-sub">amostras no período</span>
+                        </div>
+                        <div class="kpi purple">
+                            <span class="kpi-label">Desvio Padrão</span>
+                            <span class="kpi-value" id="k-desvio">—</span>
+                            <span class="kpi-sub">variação entre operadores</span>
+                        </div>
+                        <div class="kpi yellow">
+                            <span class="kpi-label">Eficiência Máx/Mín</span>
+                            <span class="kpi-value" id="k-eficiencia-ratio">—</span>
+                            <span class="kpi-sub">razão top/bottom performer</span>
+                        </div>
+                    </div>
+
+                    <div class="panel-grid cols-2">
+                        <div class="panel">
+                            <div class="panel-head">
+                                <span class="panel-title"><span class="icon">📊</span> Volume por Operador</span>
+                            </div>
+                            <div class="chart-box h-320"><canvas id="chart-ops-bar"></canvas></div>
+                        </div>
+                        <div class="panel">
+                            <div class="panel-head">
+                                <span class="panel-title"><span class="icon">🏆</span> Ranking Completo</span>
+                            </div>
+                            <div class="leaderboard" id="lb-full-ops" style="max-height: 360px; overflow-y: auto;"></div>
+                        </div>
+                    </div>
+
+                    <div class="panel">
+                        <div class="panel-head">
+                            <span class="panel-title"><span class="icon">📋</span> Detalhamento por Operador</span>
+                        </div>
+                        <div class="table-wrap" style="max-height: 280px; overflow-y: auto;">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>#</th>
+                                        <th>Operador</th>
+                                        <th>Matrícula</th>
+                                        <th>Total Amostras</th>
+                                        <th>Dias Ativos</th>
+                                        <th>Média/Dia</th>
+                                        <th>% do Total</th>
+                                        <th>Performance</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tb-ops-detail"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ============================================================
+                     PAGE 4: TABELA ANALÍTICA
+                     ============================================================ -->
+                <div class="page" id="page-analitica">
+                    <div class="section-label">
+                        <div class="section-dot"></div>
+                        <span class="section-title">Dados Analíticos Detalhados — Produção por Operador e Turno</span>
+                    </div>
+
+                    <div class="summary-row" id="summary-row"></div>
+
+                    <div class="panel">
+                        <div class="panel-head">
+                            <span class="panel-title"><span class="icon">🔍</span> Registro Completo de Produção</span>
+                            <div class="search-box">
+                                <span>🔎</span>
+                                <input type="text" id="search-analytic" placeholder="Pesquisar operador, matrícula..." oninput="refresh()">
+                            </div>
+                        </div>
+                        <div class="table-wrap" style="max-height: 480px; overflow-y: auto;">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Data</th>
+                                        <th>Turno</th>
+                                        <th>Matrícula</th>
+                                        <th>Operador</th>
+                                        <th>Amostras</th>
+                                        <th>% do Turno</th>
+                                        <th>Performance</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tb-analitica"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <footer class="dashboard-footer">
+            <span>ORIGO System BI — Dados reais de produção HVI</span>
+            <span>Período: Outubro 2025 | Atualizado em tempo real</span>
+        </footer>
+    </div>
+
+    <!-- ==================================================================
+         DATA ENGINE
+         ================================================================== -->
+    <script>
+    // ===== REAL DATA =====
+    const REAL_DATA = {
+        lab: "Kuhlmann Sorriso",
+        periodo: "01/10/2025 a 31/10/2025",
+        totalDias: 31,
+        totalGeral: 359354,
+        rankingOps: [
+            { nome: "MARIA VITORIA DOS SANTOS PEREIRA", matricula: "300013172", total: 23431, dias: 34 },
+            { nome: "TAMIRES MORAES SILVA", matricula: "300013101", total: 23102, dias: 35 },
+            { nome: "ANDREIA LAYANE FREITAS DOS SANTOS", matricula: "300013073", total: 21819, dias: 35 },
+            { nome: "JOSEANE DA SILVA SANTOS", matricula: "300013078", total: 21488, dias: 27 },
+            { nome: "EMILLI RODRIGUES LIMA", matricula: "300012947", total: 21218, dias: 26 },
+            { nome: "FLAVIA DA SILVA VELOSO", matricula: "300013044", total: 20324, dias: 28 },
+            { nome: "LUANA ALVES DA SILVA", matricula: "300012931", total: 19768, dias: 26 },
+            { nome: "LUCIDALVA DOS SANTOS SOUSA", matricula: "300013304", total: 19080, dias: 26 },
+            { nome: "GRAZIELE APARECIDA PEREIRA ARRUDA", matricula: "300012928", total: 19067, dias: 24 },
+            { nome: "ELIAS PEREIRA ANCA", matricula: "300013225", total: 17165, dias: 30 },
+            { nome: "ILKA PIMENTEL JARDIM", matricula: "300012929", total: 16963, dias: 27 },
+            { nome: "CLEGINA DOS SANTOS DA CONCEICAO", matricula: "300013171", total: 15611, dias: 30 },
+            { nome: "ANA CLAUDIA SANTANA NASCIMENTO", matricula: "300013201", total: 14794, dias: 22 },
+            { nome: "ALBA ELEN SOUZA SERRA", matricula: "300012342", total: 14474, dias: 21 },
+            { nome: "MOISES MOREIRA LIMA", matricula: "100039132", total: 14121, dias: 22 },
+            { nome: "ANA ALICE RODRIGUES", matricula: "300013025", total: 14065, dias: 26 },
+            { nome: "LAIDE CONCEICAO DOS SANTOS", matricula: "300013230", total: 13445, dias: 26 },
+            { nome: "JOSILENE DE OLIVEIRA CRUZ", matricula: "300012934", total: 10900, dias: 16 },
+            { nome: "MARIA DO ROSARIO ALVES", matricula: "300013070", total: 10285, dias: 13 },
+            { nome: "VALDELICE MENDES DA ROCHA", matricula: "300012938", total: 8453, dias: 12 }
+        ],
+        diasSample: [
+            { date: "2025-10-01", turnos: { "TURNO 1": { total: 6935, ops: 9 }, "TURNO 2": { total: 6285, ops: 8 } }, totalDia: 13220 },
+            { date: "2025-10-02", turnos: { "TURNO 1": { total: 6628, ops: 8 }, "TURNO 2": { total: 6849, ops: 9 } }, totalDia: 13477 },
+            { date: "2025-10-03", turnos: { "TURNO 1": { total: 7141, ops: 8 }, "TURNO 2": { total: 7181, ops: 10 } }, totalDia: 14322 },
+            { date: "2025-10-04", turnos: { "TURNO 1": { total: 7068, ops: 9 }, "TURNO 2": { total: 7183, ops: 11 } }, totalDia: 14251 },
+            { date: "2025-10-05", turnos: { "TURNO 1": { total: 6514, ops: 8 }, "TURNO 2": { total: 4837, ops: 8 } }, totalDia: 11351 }
+        ],
+        dailyDetail: [
+            {date:"2025-10-01",turno:"TURNO 1",mat:"300012342",nome:"ALBA ELEN SOUZA SERRA",amostras:865},
+            {date:"2025-10-01",turno:"TURNO 1",mat:"300012928",nome:"GRAZIELE APARECIDA PEREIRA ARRUDA",amostras:1019},
+            {date:"2025-10-01",turno:"TURNO 1",mat:"300012929",nome:"ILKA PIMENTEL JARDIM",amostras:752},
+            {date:"2025-10-01",turno:"TURNO 1",mat:"300012931",nome:"LUANA ALVES DA SILVA",amostras:917},
+            {date:"2025-10-01",turno:"TURNO 1",mat:"300012947",nome:"EMILLI RODRIGUES LIMA",amostras:960},
+            {date:"2025-10-01",turno:"TURNO 1",mat:"300013025",nome:"ANA ALICE RODRIGUES",amostras:780},
+            {date:"2025-10-01",turno:"TURNO 1",mat:"300013044",nome:"FLAVIA DA SILVA VELOSO",amostras:530},
+            {date:"2025-10-01",turno:"TURNO 1",mat:"300013304",nome:"LUCIDALVA DOS SANTOS SOUSA",amostras:937},
+            {date:"2025-10-01",turno:"TURNO 1",mat:"300013631",nome:"FRANCISCA PINHEIRO PEREIRA",amostras:175},
+            {date:"2025-10-01",turno:"TURNO 2",mat:"300013070",nome:"MARIA DO ROSARIO ALVES",amostras:874},
+            {date:"2025-10-01",turno:"TURNO 2",mat:"300013073",nome:"ANDREIA LAYANE FREITAS DOS SANTOS",amostras:929},
+            {date:"2025-10-01",turno:"TURNO 2",mat:"300013074",nome:"MARIA IVONEIDE SILVA DOS SANTOS",amostras:768},
+            {date:"2025-10-01",turno:"TURNO 2",mat:"300013078",nome:"JOSEANE DA SILVA SANTOS",amostras:879},
+            {date:"2025-10-01",turno:"TURNO 2",mat:"300013101",nome:"TAMIRES MORAES SILVA",amostras:327},
+            {date:"2025-10-01",turno:"TURNO 2",mat:"300013171",nome:"CLEGINA DOS SANTOS DA CONCEICAO",amostras:827},
+            {date:"2025-10-01",turno:"TURNO 2",mat:"300013201",nome:"ANA CLAUDIA SANTANA NASCIMENTO",amostras:785},
+            {date:"2025-10-01",turno:"TURNO 2",mat:"300013225",nome:"ELIAS PEREIRA ANCA",amostras:896},
+            {date:"2025-10-02",turno:"TURNO 1",mat:"300012342",nome:"ALBA ELEN SOUZA SERRA",amostras:829},
+            {date:"2025-10-02",turno:"TURNO 1",mat:"300012929",nome:"ILKA PIMENTEL JARDIM",amostras:934},
+            {date:"2025-10-02",turno:"TURNO 1",mat:"300012934",nome:"JOSILENE DE OLIVEIRA CRUZ",amostras:864},
+            {date:"2025-10-02",turno:"TURNO 1",mat:"300012938",nome:"VALDELICE MENDES DA ROCHA",amostras:879},
+            {date:"2025-10-02",turno:"TURNO 1",mat:"300012947",nome:"EMILLI RODRIGUES LIMA",amostras:866},
+            {date:"2025-10-02",turno:"TURNO 1",mat:"300013025",nome:"ANA ALICE RODRIGUES",amostras:513},
+            {date:"2025-10-02",turno:"TURNO 1",mat:"300013044",nome:"FLAVIA DA SILVA VELOSO",amostras:863},
+            {date:"2025-10-02",turno:"TURNO 1",mat:"300013304",nome:"LUCIDALVA DOS SANTOS SOUSA",amostras:880},
+            {date:"2025-10-02",turno:"TURNO 2",mat:"300013025",nome:"ANA ALICE RODRIGUES",amostras:12},
+            {date:"2025-10-02",turno:"TURNO 2",mat:"300013073",nome:"ANDREIA LAYANE FREITAS DOS SANTOS",amostras:840},
+            {date:"2025-10-02",turno:"TURNO 2",mat:"300013074",nome:"MARIA IVONEIDE SILVA DOS SANTOS",amostras:732},
+            {date:"2025-10-02",turno:"TURNO 2",mat:"300013078",nome:"JOSEANE DA SILVA SANTOS",amostras:918},
+            {date:"2025-10-02",turno:"TURNO 2",mat:"300013101",nome:"TAMIRES MORAES SILVA",amostras:918},
+            {date:"2025-10-02",turno:"TURNO 2",mat:"300013172",nome:"MARIA VITORIA DOS SANTOS PEREIRA",amostras:1025},
+            {date:"2025-10-02",turno:"TURNO 2",mat:"300013201",nome:"ANA CLAUDIA SANTANA NASCIMENTO",amostras:790},
+            {date:"2025-10-02",turno:"TURNO 2",mat:"300013225",nome:"ELIAS PEREIRA ANCA",amostras:933},
+            {date:"2025-10-02",turno:"TURNO 2",mat:"300013230",nome:"LAIDE CONCEICAO DOS SANTOS",amostras:681},
+            {date:"2025-10-03",turno:"TURNO 1",mat:"300012342",nome:"ALBA ELEN SOUZA SERRA",amostras:779},
+            {date:"2025-10-03",turno:"TURNO 1",mat:"300012929",nome:"ILKA PIMENTEL JARDIM",amostras:886},
+            {date:"2025-10-03",turno:"TURNO 1",mat:"300012931",nome:"LUANA ALVES DA SILVA",amostras:902},
+            {date:"2025-10-03",turno:"TURNO 1",mat:"300012934",nome:"JOSILENE DE OLIVEIRA CRUZ",amostras:901},
+            {date:"2025-10-03",turno:"TURNO 1",mat:"300012947",nome:"EMILLI RODRIGUES LIMA",amostras:943},
+            {date:"2025-10-03",turno:"TURNO 1",mat:"300013025",nome:"ANA ALICE RODRIGUES",amostras:772},
+            {date:"2025-10-03",turno:"TURNO 1",mat:"300013044",nome:"FLAVIA DA SILVA VELOSO",amostras:1033},
+            {date:"2025-10-03",turno:"TURNO 1",mat:"300013304",nome:"LUCIDALVA DOS SANTOS SOUSA",amostras:925},
+            {date:"2025-10-03",turno:"TURNO 2",mat:"Coringa",nome:"Operador Coringa",amostras:50},
+            {date:"2025-10-03",turno:"TURNO 2",mat:"100039132",nome:"MOISES MOREIRA LIMA",amostras:815},
+            {date:"2025-10-03",turno:"TURNO 2",mat:"300013044",nome:"FLAVIA DA SILVA VELOSO",amostras:44},
+            {date:"2025-10-03",turno:"TURNO 2",mat:"300013073",nome:"ANDREIA LAYANE FREITAS DOS SANTOS",amostras:924},
+            {date:"2025-10-03",turno:"TURNO 2",mat:"300013078",nome:"JOSEANE DA SILVA SANTOS",amostras:874},
+            {date:"2025-10-03",turno:"TURNO 2",mat:"300013101",nome:"TAMIRES MORAES SILVA",amostras:1001},
+            {date:"2025-10-03",turno:"TURNO 2",mat:"300013171",nome:"CLEGINA DOS SANTOS DA CONCEICAO",amostras:882},
+            {date:"2025-10-03",turno:"TURNO 2",mat:"300013172",nome:"MARIA VITORIA DOS SANTOS PEREIRA",amostras:967},
+            {date:"2025-10-03",turno:"TURNO 2",mat:"300013201",nome:"ANA CLAUDIA SANTANA NASCIMENTO",amostras:820},
+            {date:"2025-10-03",turno:"TURNO 2",mat:"300013230",nome:"LAIDE CONCEICAO DOS SANTOS",amostras:804},
+            {date:"2025-10-04",turno:"TURNO 1",mat:"300012342",nome:"ALBA ELEN SOUZA SERRA",amostras:680},
+            {date:"2025-10-04",turno:"TURNO 1",mat:"300012928",nome:"GRAZIELE APARECIDA PEREIRA ARRUDA",amostras:1008},
+            {date:"2025-10-04",turno:"TURNO 1",mat:"300012929",nome:"ILKA PIMENTEL JARDIM",amostras:876},
+            {date:"2025-10-04",turno:"TURNO 1",mat:"300012931",nome:"LUANA ALVES DA SILVA",amostras:930},
+            {date:"2025-10-04",turno:"TURNO 1",mat:"300012938",nome:"VALDELICE MENDES DA ROCHA",amostras:891},
+            {date:"2025-10-04",turno:"TURNO 1",mat:"300013025",nome:"ANA ALICE RODRIGUES",amostras:811},
+            {date:"2025-10-04",turno:"TURNO 1",mat:"300013044",nome:"FLAVIA DA SILVA VELOSO",amostras:1012},
+            {date:"2025-10-04",turno:"TURNO 1",mat:"300013304",nome:"LUCIDALVA DOS SANTOS SOUSA",amostras:835},
+            {date:"2025-10-04",turno:"TURNO 1",mat:"300013412",nome:"MAIRA CRISTINA PEREIRA DA SILVA",amostras:25},
+            {date:"2025-10-04",turno:"TURNO 2",mat:"100039132",nome:"MOISES MOREIRA LIMA",amostras:50},
+            {date:"2025-10-04",turno:"TURNO 2",mat:"300012928",nome:"GRAZIELE APARECIDA PEREIRA ARRUDA",amostras:1},
+            {date:"2025-10-04",turno:"TURNO 2",mat:"300012929",nome:"ILKA PIMENTEL JARDIM",amostras:2},
+            {date:"2025-10-04",turno:"TURNO 2",mat:"300013070",nome:"MARIA DO ROSARIO ALVES",amostras:864},
+            {date:"2025-10-04",turno:"TURNO 2",mat:"300013073",nome:"ANDREIA LAYANE FREITAS DOS SANTOS",amostras:1131},
+            {date:"2025-10-04",turno:"TURNO 2",mat:"300013074",nome:"MARIA IVONEIDE SILVA DOS SANTOS",amostras:793},
+            {date:"2025-10-04",turno:"TURNO 2",mat:"300013101",nome:"TAMIRES MORAES SILVA",amostras:1019},
+            {date:"2025-10-04",turno:"TURNO 2",mat:"300013171",nome:"CLEGINA DOS SANTOS DA CONCEICAO",amostras:739},
+            {date:"2025-10-04",turno:"TURNO 2",mat:"300013172",nome:"MARIA VITORIA DOS SANTOS PEREIRA",amostras:1003},
+            {date:"2025-10-04",turno:"TURNO 2",mat:"300013225",nome:"ELIAS PEREIRA ANCA",amostras:659},
+            {date:"2025-10-04",turno:"TURNO 2",mat:"300013230",nome:"LAIDE CONCEICAO DOS SANTOS",amostras:922},
+            {date:"2025-10-05",turno:"TURNO 1",mat:"300012342",nome:"ALBA ELEN SOUZA SERRA",amostras:778},
+            {date:"2025-10-05",turno:"TURNO 1",mat:"300012928",nome:"GRAZIELE APARECIDA PEREIRA ARRUDA",amostras:879},
+            {date:"2025-10-05",turno:"TURNO 1",mat:"300012931",nome:"LUANA ALVES DA SILVA",amostras:962},
+            {date:"2025-10-05",turno:"TURNO 1",mat:"300012934",nome:"JOSILENE DE OLIVEIRA CRUZ",amostras:832},
+            {date:"2025-10-05",turno:"TURNO 1",mat:"300012938",nome:"VALDELICE MENDES DA ROCHA",amostras:847},
+            {date:"2025-10-05",turno:"TURNO 1",mat:"300012947",nome:"EMILLI RODRIGUES LIMA",amostras:929},
+            {date:"2025-10-05",turno:"TURNO 1",mat:"300013025",nome:"ANA ALICE RODRIGUES",amostras:359},
+            {date:"2025-10-05",turno:"TURNO 1",mat:"300013044",nome:"FLAVIA DA SILVA VELOSO",amostras:928},
+            {date:"2025-10-05",turno:"TURNO 2",mat:"300013074",nome:"MARIA IVONEIDE SILVA DOS SANTOS",amostras:482},
+            {date:"2025-10-05",turno:"TURNO 2",mat:"300013078",nome:"JOSEANE DA SILVA SANTOS",amostras:715},
+            {date:"2025-10-05",turno:"TURNO 2",mat:"300013101",nome:"TAMIRES MORAES SILVA",amostras:725},
+            {date:"2025-10-05",turno:"TURNO 2",mat:"300013171",nome:"CLEGINA DOS SANTOS DA CONCEICAO",amostras:620},
+            {date:"2025-10-05",turno:"TURNO 2",mat:"300013172",nome:"MARIA VITORIA DOS SANTOS PEREIRA",amostras:670},
+            {date:"2025-10-05",turno:"TURNO 2",mat:"300013201",nome:"ANA CLAUDIA SANTANA NASCIMENTO",amostras:773},
+            {date:"2025-10-05",turno:"TURNO 2",mat:"300013225",nome:"ELIAS PEREIRA ANCA",amostras:265},
+            {date:"2025-10-05",turno:"TURNO 2",mat:"300013230",nome:"LAIDE CONCEICAO DOS SANTOS",amostras:587}
+        ]
+    };
+
+    let charts = {};
+
+    // ===== PAGE NAVIGATION =====
+    const pageTitles = {
+        'page-executiva': ['Visão Executiva', 'Indicadores consolidados de produção e performance operacional HVI'],
+        'page-operacional': ['Status Operacional', 'Análise de produção por turno — visão geral da fábrica'],
+        'page-produtividade': ['Produtividade HVI', 'Ranking completo de operadores, eficiência individual e comparativo'],
+        'page-analitica': ['Tabela Analítica', 'Dados brutos detalhados de produção — filtrável por operador e turno']
+    };
+
+    function goPage(id) {
+        document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+        document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+        document.getElementById(id).classList.add('active');
+        const navItem = document.querySelector(`.nav-item[data-page="${id}"]`);
+        if (navItem) navItem.classList.add('active');
+        document.getElementById('topbar-title').textContent = pageTitles[id][0];
+        document.getElementById('topbar-desc').textContent = pageTitles[id][1];
+        refresh();
+    }
+
+    function onLabChange() {
+        const lab = document.getElementById('f-lab').value;
+        const body = document.getElementById('dashboard-body');
+        const alert = document.getElementById('alert-banner');
+
+        if (!lab) {
+            body.classList.remove('unlocked');
+            alert.classList.remove('hidden');
+            document.getElementById('f-turno').disabled = true;
+            document.getElementById('f-operador').disabled = true;
+            return;
+        }
+
+        body.classList.add('unlocked');
+        alert.classList.add('hidden');
+        document.getElementById('f-turno').disabled = false;
+        document.getElementById('f-operador').disabled = false;
+
+        const opSel = document.getElementById('f-operador');
+        opSel.innerHTML = '<option value="all">Todos</option>';
+        REAL_DATA.rankingOps.forEach(op => {
+            const o = document.createElement('option');
+            o.value = op.nome;
+            o.textContent = op.nome.split(' ').slice(0,2).join(' ');
+            opSel.appendChild(o);
+        });
+
+        document.getElementById('topbar-lab').textContent = '🏢 ' + lab;
+        refresh();
+    }
+
+    // Toggle buttons
+    function setToggle(btn, group) {
+        btn.parentElement.querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        refresh();
+    }
+
+    // ===== MAIN REFRESH =====
+    function refresh() {
+        const lab = document.getElementById('f-lab').value;
+        if (!lab) return;
+
+        const turnoF = document.getElementById('f-turno').value;
+        const opF = document.getElementById('f-operador').value;
+        const searchF = (document.getElementById('search-analytic')?.value || '').toLowerCase();
+
+        const data = REAL_DATA;
+        const ops = data.rankingOps;
+        const dias = data.diasSample;
+
+        // ===== PAGE 1: EXECUTIVA =====
+        const totalGeral = data.totalGeral;
+        const mediaDia = Math.round(totalGeral / data.totalDias);
+        const totalOps = ops.length;
+        const diasTrab = data.totalDias;
+        const picoDia = dias.reduce((a, b) => a.totalDia > b.totalDia ? a : b);
+        const valeDia = dias.reduce((a, b) => a.totalDia < b.totalDia ? a : b);
+
+        setText('k-total-amostras', totalGeral.toLocaleString('pt-BR'));
+        setText('k-total-amostras-sub', `período: ${data.periodo}`);
+        setText('k-media-dia', mediaDia.toLocaleString('pt-BR'));
+        setText('k-total-ops', totalOps);
+        setText('k-dias-trab', diasTrab);
+        setText('k-pico-dia', picoDia.totalDia.toLocaleString('pt-BR'));
+        setText('k-pico-dia-sub', formatDate(picoDia.date));
+        setText('k-vale-dia', valeDia.totalDia.toLocaleString('pt-BR'));
+        setText('k-vale-dia-sub', formatDate(valeDia.date));
+
+        // Evolution chart
+        renderChart('chart-evolucao', 'line', {
+            labels: dias.map(d => formatDate(d.date)),
+            datasets: [{
+                label: 'Amostras/dia',
+                data: dias.map(d => d.totalDia),
+                borderColor: '#38bdf8',
+                backgroundColor: 'rgba(56,189,248,0.06)',
+                fill: true, tension: 0.35, borderWidth: 2.5, pointRadius: 4,
+                pointBackgroundColor: '#38bdf8', pointBorderColor: '#141922', pointBorderWidth: 2
+            }]
+        }, { y: { beginAtZero: false } });
+
+        // Top 10 leaderboard
+        const lb = document.getElementById('lb-top-ops');
+        lb.innerHTML = '';
+        const maxVol = ops[0].total;
+        ops.slice(0, 10).forEach((op, i) => {
+            const pct = Math.round((op.total / maxVol) * 100);
+            lb.innerHTML += `
+                <div class="lb-row">
+                    <div class="lb-rank ${i===0?'gold':i===1?'silver':i===2?'bronze':'normal'}">${i+1}</div>
+                    <span class="lb-name">${capitalize(op.nome)}</span>
+                    <div class="lb-bar-wrapper"><div class="lb-bar" style="width:${pct}%"></div></div>
+                    <span class="lb-value">${op.total.toLocaleString('pt-BR')}</span>
+                </div>`;
+        });
+
+        // ===== PAGE 2: STATUS OPERACIONAL =====
+        let t1Total = 0, t2Total = 0;
+        dias.forEach(d => {
+            t1Total += d.turnos["TURNO 1"]?.total || 0;
+            t2Total += d.turnos["TURNO 2"]?.total || 0;
+        });
+
+        // Turno cards
+        setText('tc-t1', t1Total.toLocaleString('pt-BR'));
+        setText('tc-t2', t2Total.toLocaleString('pt-BR'));
+        setText('tc-t3', '0');
+        setText('tc-com', '0');
+        setText('tc-total', totalGeral.toLocaleString('pt-BR'));
+
+        // Analysis stats
+        setText('as-total', totalGeral.toLocaleString('pt-BR'));
+        setText('as-media', mediaDia.toLocaleString('pt-BR'));
+        setText('as-pico', picoDia.totalDia.toLocaleString('pt-BR'));
+        setText('as-pico-label', `Pico (${formatDate(picoDia.date)})`);
+
+        // Main production chart (Origon style — multi-line)
+        const chartMode = document.getElementById('ctrl-chart-mode')?.value || 'geral';
+        let datasets = [];
+
+        if (chartMode === 'geral') {
+            datasets = [
+                {
+                    label: 'Total Geral',
+                    data: dias.map(d => d.totalDia),
+                    borderColor: '#f1f5f9', backgroundColor: 'transparent',
+                    borderWidth: 3, tension: 0.3, pointRadius: 5,
+                    pointBackgroundColor: '#f1f5f9', pointBorderColor: '#141922', pointBorderWidth: 2
+                },
+                {
+                    label: 'Turno 1',
+                    data: dias.map(d => d.turnos["TURNO 1"]?.total || 0),
+                    borderColor: '#34d399', backgroundColor: 'transparent',
+                    borderWidth: 2, tension: 0.3, pointRadius: 4,
+                    pointBackgroundColor: '#34d399', pointBorderColor: '#141922', pointBorderWidth: 2
+                },
+                {
+                    label: 'Turno 2',
+                    data: dias.map(d => d.turnos["TURNO 2"]?.total || 0),
+                    borderColor: '#38bdf8', backgroundColor: 'transparent',
+                    borderWidth: 2, tension: 0.3, pointRadius: 4,
+                    pointBackgroundColor: '#38bdf8', pointBorderColor: '#141922', pointBorderWidth: 2
+                },
+                {
+                    label: 'Média',
+                    data: dias.map(() => mediaDia),
+                    borderColor: 'rgba(251,191,36,0.4)', backgroundColor: 'transparent',
+                    borderWidth: 1.5, borderDash: [6, 4], tension: 0, pointRadius: 0
+                }
+            ];
+        } else if (chartMode === 'por_turno') {
+            datasets = [
+                {
+                    label: 'Turno 1',
+                    data: dias.map(d => d.turnos["TURNO 1"]?.total || 0),
+                    backgroundColor: 'rgba(52,211,153,0.6)', borderRadius: 4
+                },
+                {
+                    label: 'Turno 2',
+                    data: dias.map(d => d.turnos["TURNO 2"]?.total || 0),
+                    backgroundColor: 'rgba(56,189,248,0.6)', borderRadius: 4
+                }
+            ];
+            renderChart('chart-producao-main', 'bar', {
+                labels: dias.map(d => formatDate(d.date)), datasets
+            }, { y: { beginAtZero: true }, x: { stacked: false } });
+            renderOperTable();
+            renderProdutividadePage();
+            renderAnaliticaPage();
+            return;
+        } else if (chartMode === 'operadores_top') {
+            const top5 = ops.slice(0, 5);
+            const colors = ['#f1f5f9','#34d399','#38bdf8','#818cf8','#fb923c'];
+            datasets = top5.map((op, idx) => {
+                const opDaily = dias.map(d => {
+                    const records = REAL_DATA.dailyDetail.filter(r => r.date === d.date && r.nome === op.nome);
+                    return records.reduce((s, r) => s + r.amostras, 0);
+                });
+                return {
+                    label: op.nome.split(' ').slice(0,2).join(' '),
+                    data: opDaily,
+                    borderColor: colors[idx], backgroundColor: 'transparent',
+                    borderWidth: 2, tension: 0.3, pointRadius: 3,
+                    pointBackgroundColor: colors[idx]
+                };
+            });
+        } else { // detalhamento
+            datasets = [
+                {
+                    label: 'Total Geral',
+                    data: dias.map(d => d.totalDia),
+                    borderColor: '#f1f5f9', backgroundColor: 'rgba(241,245,249,0.03)',
+                    fill: true, borderWidth: 2.5, tension: 0.3, pointRadius: 5,
+                    pointBackgroundColor: '#f1f5f9'
+                },
+                {
+                    label: 'Turno 1',
+                    data: dias.map(d => d.turnos["TURNO 1"]?.total || 0),
+                    borderColor: '#34d399', backgroundColor: 'rgba(52,211,153,0.05)',
+                    fill: true, borderWidth: 2, tension: 0.3, pointRadius: 4
+                },
+                {
+                    label: 'Turno 2',
+                    data: dias.map(d => d.turnos["TURNO 2"]?.total || 0),
+                    borderColor: '#38bdf8', backgroundColor: 'rgba(56,189,248,0.05)',
+                    fill: true, borderWidth: 2, tension: 0.3, pointRadius: 4
+                }
+            ];
+        }
+
+        renderChart('chart-producao-main', 'line', {
+            labels: dias.map(d => formatDate(d.date)), datasets
+        }, { y: { beginAtZero: false } });
+
+        renderOperTable();
+        renderProdutividadePage();
+        renderAnaliticaPage();
+    }
+
+    function renderOperTable() {
+        const dias = REAL_DATA.diasSample;
+        const mediaDia = Math.round(REAL_DATA.totalGeral / REAL_DATA.totalDias);
+        const tbTurno = document.getElementById('tb-turno-resumo');
+        tbTurno.innerHTML = '';
+        dias.forEach(d => {
+            const t1 = d.turnos["TURNO 1"] || {total:0,ops:0};
+            const t2 = d.turnos["TURNO 2"] || {total:0,ops:0};
+            const perf = d.totalDia >= mediaDia ? 'badge-green' : d.totalDia >= mediaDia * 0.85 ? 'badge-yellow' : 'badge-red';
+            const perfText = d.totalDia >= mediaDia ? 'ACIMA' : d.totalDia >= mediaDia * 0.85 ? 'NORMAL' : 'ABAIXO';
+            tbTurno.innerHTML += `<tr>
+                <td style="font-weight:600;color:var(--text-1)">${formatDate(d.date)}</td>
+                <td>${t1.total.toLocaleString('pt-BR')}</td>
+                <td>${t2.total.toLocaleString('pt-BR')}</td>
+                <td style="font-weight:700;color:var(--accent)">${d.totalDia.toLocaleString('pt-BR')}</td>
+                <td>${t1.ops}</td><td>${t2.ops}</td>
+                <td><span class="badge ${perf}">${perfText}</span></td>
+            </tr>`;
+        });
+    }
+
+    function renderProdutividadePage() {
+        const ops = REAL_DATA.rankingOps;
+        const totalGeral = REAL_DATA.totalGeral;
+        const maxVol = ops[0].total;
+        const topOp = ops[0];
+        const botOp = ops[ops.length - 1];
+        const mediaGeralOp = Math.round(ops.reduce((s, o) => s + o.total, 0) / ops.length);
+        const stdDev = Math.round(Math.sqrt(ops.reduce((s, o) => s + Math.pow(o.total - mediaGeralOp, 2), 0) / ops.length));
+        const effRatio = (topOp.total / botOp.total).toFixed(1);
+
+        setText('k-top-name', capitalize(topOp.nome));
+        setText('k-top-vol', `${topOp.total.toLocaleString('pt-BR')} amostras em ${topOp.dias} dias`);
+        setText('k-media-geral-op', mediaGeralOp.toLocaleString('pt-BR'));
+        setText('k-desvio', '±' + stdDev.toLocaleString('pt-BR'));
+        setText('k-eficiencia-ratio', effRatio + 'x');
+
+        renderChart('chart-ops-bar', 'bar', {
+            labels: ops.map(o => o.nome.split(' ').slice(0,2).join(' ')),
+            datasets: [{
+                label: 'Total Amostras',
+                data: ops.map(o => o.total),
+                backgroundColor: ops.map((o, i) => {
+                    if (i === 0) return '#fbbf24';
+                    if (i === 1) return '#94a3b8';
+                    if (i === 2) return '#fb923c';
+                    return `rgba(56,189,248,${0.3 + (ops.length - i) / ops.length * 0.5})`;
+                }),
+                borderRadius: 4
+            }]
+        }, { x: { ticks: { maxRotation: 45, font: { size: 9 } } }, y: { beginAtZero: true } }, { indexAxis: 'y' });
+
+        const lbFull = document.getElementById('lb-full-ops');
+        lbFull.innerHTML = '';
+        ops.forEach((op, i) => {
+            const pct = Math.round((op.total / maxVol) * 100);
+            lbFull.innerHTML += `
+                <div class="lb-row">
+                    <div class="lb-rank ${i===0?'gold':i===1?'silver':i===2?'bronze':'normal'}">${i+1}</div>
+                    <span class="lb-name">${capitalize(op.nome)}</span>
+                    <div class="lb-bar-wrapper"><div class="lb-bar" style="width:${pct}%"></div></div>
+                    <span class="lb-value">${op.total.toLocaleString('pt-BR')}</span>
+                </div>`;
+        });
+
+        const tbOps = document.getElementById('tb-ops-detail');
+        tbOps.innerHTML = '';
+        ops.forEach((op, i) => {
+            const mediaDiaOp = op.dias > 0 ? Math.round(op.total / op.dias) : 0;
+            const pctTotal = ((op.total / totalGeral) * 100).toFixed(1);
+            const perf = mediaDiaOp >= 800 ? 'badge-green' : mediaDiaOp >= 600 ? 'badge-yellow' : 'badge-red';
+            const perfText = mediaDiaOp >= 800 ? 'EXCELENTE' : mediaDiaOp >= 600 ? 'BOM' : 'REGULAR';
+            tbOps.innerHTML += `<tr>
+                <td style="font-weight:700;color:var(--text-3)">${i+1}</td>
+                <td style="font-weight:600;color:var(--text-1)">${capitalize(op.nome)}</td>
+                <td class="mono">${op.matricula}</td>
+                <td style="font-weight:700;color:var(--accent)">${op.total.toLocaleString('pt-BR')}</td>
+                <td>${op.dias}</td>
+                <td>${mediaDiaOp.toLocaleString('pt-BR')}</td>
+                <td>${pctTotal}%</td>
+                <td><span class="badge ${perf}">${perfText}</span></td>
+            </tr>`;
+        });
+    }
+
+    function renderAnaliticaPage() {
+        const turnoF = document.getElementById('f-turno').value;
+        const opF = document.getElementById('f-operador').value;
+        const searchF = (document.getElementById('search-analytic')?.value || '').toLowerCase();
+
+        let filtered = REAL_DATA.dailyDetail;
+        if (turnoF !== 'all') filtered = filtered.filter(r => r.turno === turnoF);
+        if (opF !== 'all') filtered = filtered.filter(r => r.nome === opF);
+        if (searchF) filtered = filtered.filter(r => r.nome.toLowerCase().includes(searchF) || r.mat.toLowerCase().includes(searchF));
+
+        const sumRow = document.getElementById('summary-row');
+        const sumTotal = filtered.reduce((s, r) => s + r.amostras, 0);
+        const sumDays = [...new Set(filtered.map(r => r.date))].length;
+        const sumOps = [...new Set(filtered.map(r => r.nome))].length;
+        sumRow.innerHTML = `
+            <div class="summary-chip"><span class="chip-label">Registros</span><span class="chip-value">${filtered.length}</span></div>
+            <div class="summary-chip"><span class="chip-label">Total Amostras</span><span class="chip-value">${sumTotal.toLocaleString('pt-BR')}</span></div>
+            <div class="summary-chip"><span class="chip-label">Dias</span><span class="chip-value">${sumDays}</span></div>
+            <div class="summary-chip"><span class="chip-label">Operadores</span><span class="chip-value">${sumOps}</span></div>
+        `;
+
+        const turnoTotals = {};
+        filtered.forEach(r => {
+            const key = r.date + '|' + r.turno;
+            turnoTotals[key] = (turnoTotals[key] || 0) + r.amostras;
+        });
+
+        const tbAna = document.getElementById('tb-analitica');
+        tbAna.innerHTML = '';
+        filtered.forEach(r => {
+            const key = r.date + '|' + r.turno;
+            const turnoTotal = turnoTotals[key] || 1;
+            const pctTurno = ((r.amostras / turnoTotal) * 100).toFixed(1);
+            const perf = r.amostras >= 900 ? 'badge-green' : r.amostras >= 600 ? 'badge-blue' : r.amostras >= 300 ? 'badge-yellow' : 'badge-red';
+            const perfText = r.amostras >= 900 ? 'ALTO' : r.amostras >= 600 ? 'BOM' : r.amostras >= 300 ? 'MÉDIO' : 'BAIXO';
+            tbAna.innerHTML += `<tr>
+                <td style="font-weight:600;color:var(--text-1)">${formatDate(r.date)}</td>
+                <td><span class="badge ${r.turno === 'TURNO 1' ? 'badge-blue' : 'badge-purple'}">${r.turno}</span></td>
+                <td class="mono">${r.mat}</td>
+                <td style="font-weight:500;color:var(--text-1)">${capitalize(r.nome)}</td>
+                <td style="font-weight:700;color:var(--accent)">${r.amostras.toLocaleString('pt-BR')}</td>
+                <td>${pctTurno}%</td>
+                <td><span class="badge ${perf}">${perfText}</span></td>
+            </tr>`;
+        });
+    }
+
+    // ===== CHART HELPER =====
+    function renderChart(canvasId, type, data, scalesOverride, extraOpts) {
+        if (charts[canvasId]) charts[canvasId].destroy();
+        const el = document.getElementById(canvasId);
+        if (!el) return;
+        const ctx = el.getContext('2d');
+
+        const defaultScales = {
+            x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#64748b', font: { size: 10, family: 'Inter' } } },
+            y: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#64748b', font: { size: 10, family: 'Inter' } } }
+        };
+        const isDoughnut = type === 'doughnut' || type === 'pie';
+
+        charts[canvasId] = new Chart(ctx, {
+            type,
+            data,
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                ...(isDoughnut ? {} : { scales: { ...defaultScales, ...(scalesOverride || {}) } }),
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'top',
+                        align: 'end',
+                        labels: { color: '#94a3b8', boxWidth: 10, font: { size: 11, family: 'Inter' }, padding: 16 }
+                    },
+                    tooltip: {
+                        backgroundColor: '#1e293b', titleColor: '#f1f5f9', bodyColor: '#94a3b8',
+                        borderColor: 'rgba(255,255,255,0.1)', borderWidth: 1,
+                        padding: 10, cornerRadius: 6,
+                        titleFont: { family: 'Inter', weight: '600' },
+                        bodyFont: { family: 'Inter' }
+                    }
+                },
+                ...(extraOpts || {})
+            }
+        });
+    }
+
+    // ===== UTILS =====
+    function setText(id, val) { const el = document.getElementById(id); if (el) el.textContent = val; }
+    function formatDate(d) {
+        const dt = new Date(d + 'T12:00:00');
+        return dt.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+    }
+    function capitalize(str) {
+        return str.toLowerCase().split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+    }
+    </script>
+</body>
+</html>

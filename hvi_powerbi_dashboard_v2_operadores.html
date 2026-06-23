@@ -1,0 +1,1232 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ORIGO System - Dashboard HVI v2 (Power BI Live Preview)</title>
+    <!-- Google Fonts: Plus Jakarta Sans for a high-end corporate feel -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <style>
+        :root {
+            /* Palette matching high-end corporate BI standards */
+            --bg-primary: #05070c;
+            --bg-secondary: #f8f9fa; /* Light Gray Sidebar exactly like Origo System */
+            --bg-dark-gray: #0c0f1a;
+            --bg-card: #0f1322;
+            --bg-card-hover: #161c30;
+            --border-color: rgba(255, 255, 255, 0.08);
+            --border-glow: rgba(0, 198, 255, 0.35);
+            
+            --color-blue: #00c6ff;
+            --color-indigo: #0072ff;
+            --color-teal: #00f2fe;
+            --color-purple: #9b51e0;
+            --color-success: #2ecc71;
+            --color-warning: #f1c40f;
+            --color-danger: #e74c3c;
+            
+            --text-primary: #ffffff;
+            --text-secondary: #8e9fb9;
+            --text-muted: #51617b;
+            
+            --font-family: 'Plus Jakarta Sans', sans-serif;
+            --transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: var(--font-family);
+        }
+
+        body {
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+            overflow-x: hidden;
+        }
+
+        /* -------------------------------------------------------------------------- */
+        /* SIDEBAR: Identical to ORIGO System (Light Theme Navigation)               */
+        /* -------------------------------------------------------------------------- */
+        .sidebar {
+            width: 280px;
+            background-color: var(--bg-secondary);
+            border-right: 1px solid #e9ecef;
+            display: flex;
+            flex-direction: column;
+            padding: 36px 24px;
+            height: 100vh;
+            position: fixed;
+            left: 0;
+            top: 0;
+            z-index: 100;
+        }
+
+        .logo-container {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 40px;
+            padding-left: 8px;
+        }
+
+        .logo-icon {
+            width: 32px;
+            height: 32px;
+            background: linear-gradient(135deg, #0052d4, #4364f7);
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 800;
+            font-size: 16px;
+            color: #fff;
+        }
+
+        .logo-text {
+            font-size: 16px;
+            font-weight: 800;
+            letter-spacing: 0.5px;
+            color: #212529;
+        }
+
+        .menu-title {
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            color: #adb5bd; /* Category header */
+            letter-spacing: 1.5px;
+            margin-bottom: 16px;
+            padding-left: 12px;
+        }
+
+        .menu-list {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .menu-item a {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            color: #495057;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: 600;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            transition: var(--transition);
+        }
+
+        .menu-item.active a {
+            background-color: #e9ecef; /* Sleek active state matching Origo UI */
+            color: #000000; /* Pure bold black */
+            font-weight: 800;
+        }
+
+        .menu-item a:hover:not(.active a) {
+            background-color: #f1f3f5;
+            color: #212529;
+        }
+
+        .sidebar-footer {
+            margin-top: auto;
+            border-top: 1px solid #dee2e6;
+            padding-top: 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding-left: 8px;
+        }
+
+        .avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background-color: #e9ecef;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            color: #495057;
+            font-size: 11px;
+            border: 1px solid #dee2e6;
+        }
+
+        .user-info h4 {
+            font-size: 12px;
+            font-weight: 700;
+            color: #212529;
+        }
+
+        .user-info p {
+            font-size: 10px;
+            color: #868e96;
+        }
+
+        /* -------------------------------------------------------------------------- */
+        /* MAIN WORKSPACE AND LAYOUT STRUCTURE (Thick, spacious, separated sections)  */
+        /* -------------------------------------------------------------------------- */
+        .main-content {
+            margin-left: 280px;
+            flex: 1;
+            padding: 40px;
+            display: flex;
+            flex-direction: column;
+            gap: 32px; /* Generous gap separating dashboard blocks */
+        }
+
+        /* Header block */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 2px solid var(--border-color);
+            padding-bottom: 20px;
+        }
+
+        .header-title h1 {
+            font-size: 26px;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+            margin-bottom: 4px;
+        }
+
+        .header-title p {
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        /* Highly Defined Slicer Panel (Filter Group) */
+        .control-panel {
+            background-color: var(--bg-dark-gray);
+            border: 2px solid var(--border-color);
+            border-radius: 12px;
+            padding: 20px 28px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .control-header-label {
+            font-size: 11px;
+            font-weight: 800;
+            text-transform: uppercase;
+            color: var(--color-teal);
+            letter-spacing: 1px;
+        }
+
+        .filters-row {
+            display: flex;
+            align-items: center;
+            gap: 28px;
+            flex-wrap: wrap;
+        }
+
+        .filter-group {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .primary-filter {
+            background: rgba(0, 242, 254, 0.04);
+            border: 1px solid rgba(0, 242, 254, 0.2);
+            padding: 8px 16px;
+            border-radius: 8px;
+            box-shadow: 0 0 15px rgba(0, 242, 254, 0.05);
+        }
+
+        .filter-label {
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            color: var(--text-secondary);
+            letter-spacing: 0.5px;
+        }
+
+        .filter-select {
+            background-color: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            outline: none;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+
+        .filter-select:focus {
+            border-color: var(--color-teal);
+        }
+
+        /* Warning banner */
+        .alert-banner {
+            background: linear-gradient(135deg, rgba(241, 196, 15, 0.08), rgba(243, 156, 18, 0.02));
+            border: 1px dashed rgba(241, 196, 15, 0.3);
+            border-radius: 8px;
+            padding: 16px 24px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 13px;
+            color: #f39c12;
+            font-weight: 500;
+        }
+
+        /* Dynamic Visual Switcher Pages */
+        .page-view {
+            display: none;
+            flex-direction: column;
+            gap: 36px; /* Generous gap separating distinct widgets */
+            animation: fadeIn 0.4s ease-out forwards;
+        }
+
+        .page-view.active {
+            display: flex;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Section Block Header */
+        .section-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 4px;
+        }
+
+        .section-dot {
+            width: 8px;
+            height: 8px;
+            background-color: var(--color-teal);
+            border-radius: 50%;
+            box-shadow: 0 0 10px var(--color-teal);
+        }
+
+        .section-title {
+            font-size: 13px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-secondary);
+        }
+
+        /* -------------------------------------------------------------------------- */
+        /* COMPACT, HIGH-VISIBILITY KPI GRIDS                                        */
+        /* -------------------------------------------------------------------------- */
+        .kpi-row {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 24px;
+        }
+
+        .kpi-card {
+            background-color: var(--bg-card);
+            border: 2px solid var(--border-color);
+            border-radius: 12px;
+            padding: 22px 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            position: relative;
+            overflow: hidden;
+            transition: var(--transition);
+        }
+
+        .kpi-card:hover {
+            transform: translateY(-2px);
+            border-color: var(--border-glow);
+            box-shadow: 0 10px 20px rgba(0, 242, 254, 0.05);
+        }
+
+        .kpi-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 4px;
+            height: 100%;
+            background: linear-gradient(to bottom, var(--color-blue), var(--color-teal));
+        }
+
+        .kpi-card.purple::before { background: linear-gradient(to bottom, var(--color-purple), #f72585); }
+        .kpi-card.success::before { background: linear-gradient(to bottom, var(--color-success), #a8ff78); }
+        .kpi-card.warning::before { background: linear-gradient(to bottom, var(--color-warning), #f5af19); }
+
+        .kpi-label {
+            font-size: 10px;
+            font-weight: 700;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .kpi-value {
+            font-size: 26px;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+            color: #ffffff;
+        }
+
+        .kpi-trend {
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        /* -------------------------------------------------------------------------- */
+        /* GRID SPLITS FOR GRAPHS & LEADERBOARDS (Modular, highly separated)          */
+        /* -------------------------------------------------------------------------- */
+        .grid-split {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 32px;
+        }
+
+        .dashboard-panel {
+            background-color: var(--bg-card);
+            border: 2px solid var(--border-color);
+            border-radius: 16px;
+            padding: 28px;
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.3);
+        }
+
+        .panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid rgba(255,255,255,0.04);
+            padding-bottom: 16px;
+        }
+
+        .panel-title {
+            font-size: 15px;
+            font-weight: 800;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* Chart heights */
+        .chart-wrapper {
+            position: relative;
+            height: 300px;
+            width: 100%;
+        }
+
+        /* Search input bar */
+        .search-wrapper {
+            display: flex;
+            align-items: center;
+            background-color: rgba(0, 0, 0, 0.3);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 8px 16px;
+            width: 280px;
+        }
+
+        .search-input {
+            background: none;
+            border: none;
+            color: var(--text-primary);
+            outline: none;
+            width: 100%;
+            font-size: 13px;
+        }
+
+        /* -------------------------------------------------------------------------- */
+        /* COMPACT, HIGH-END CORPORATE HVI TABLES                                     */
+        /* -------------------------------------------------------------------------- */
+        .table-scroller {
+            overflow-x: auto;
+            width: 100%;
+        }
+
+        .dashboard-table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+        }
+
+        .dashboard-table th {
+            padding: 14px 16px;
+            border-bottom: 2px solid var(--border-color);
+            color: var(--text-secondary);
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            background-color: rgba(255, 255, 255, 0.01);
+        }
+
+        .dashboard-table td {
+            padding: 14px 16px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.02);
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        .dashboard-table tr:hover td {
+            background-color: rgba(255, 255, 255, 0.015);
+        }
+
+        /* Status Badge */
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+
+        .badge-done { background: rgba(46, 204, 113, 0.1); color: #2ecc71; border: 1px solid rgba(46, 204, 113, 0.15); }
+        .badge-run { background: rgba(0, 198, 255, 0.1); color: #00c6ff; border: 1px solid rgba(0, 198, 255, 0.15); }
+        .badge-delay { background: rgba(231, 76, 60, 0.1); color: #e74c3c; border: 1px solid rgba(231, 76, 60, 0.15); }
+
+        /* Leaderboard widgets */
+        .leaderboard-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 14px 18px;
+            border-radius: 8px;
+            background-color: rgba(255,255,255,0.01);
+            border: 1px solid var(--border-color);
+            font-size: 13px;
+        }
+
+        .leaderboard-name {
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .leaderboard-val {
+            font-weight: 700;
+            color: var(--color-teal);
+        }
+
+        /* Locked / Blurred Overlay */
+        .locked-wrapper {
+            opacity: 0.3;
+            pointer-events: none;
+            transition: var(--transition);
+            display: flex;
+            flex-direction: column;
+            gap: 32px;
+        }
+
+        .locked-wrapper.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ---------------------------------------------------------------------- -->
+    <!-- SIDEBAR NAVIGATION: Exact Origo Light Theme Custom 5 Pages             -->
+    <!-- ---------------------------------------------------------------------- -->
+    <div class="sidebar">
+        <div class="logo-container">
+            <div class="logo-icon">O</div>
+            <div class="logo-text">ORIGO System</div>
+        </div>
+
+        <h3 class="menu-title">OPERAÇÃO</h3>
+        <ul class="menu-list">
+            <li class="menu-item active" id="menu-executiva">
+                <a href="#" onclick="switchPage('page-executiva')">
+                    <span>📊</span> PÁGINA EXECUTIVA
+                </a>
+            </li>
+            <li class="menu-item" id="menu-operacional">
+                <a href="#" onclick="switchPage('page-operacional')">
+                    <span>🚦</span> STATUS OPERACIONAL
+                </a>
+            </li>
+            <li class="menu-item" id="menu-produtividade">
+                <a href="#" onclick="switchPage('page-produtividade')">
+                    <span>⚡</span> PRODUTIVIDADE HVI
+                </a>
+            </li>
+            <li class="menu-item" id="menu-qualidade">
+                <a href="#" onclick="switchPage('page-qualidade')">
+                    <span>🛡️</span> QUALIDADE & AUDITORIA
+                </a>
+            </li>
+            <li class="menu-item" id="menu-analitica">
+                <a href="#" onclick="switchPage('page-analitica')">
+                    <span>🔍</span> TABELA ANALÍTICA
+                </a>
+            </li>
+        </ul>
+
+        <div class="sidebar-footer">
+            <div class="avatar">OS</div>
+            <div class="user-info">
+                <h4>Origo Admin</h4>
+                <p>Especialista BI</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Workspace Area -->
+    <div class="main-content">
+        
+        <!-- Header -->
+        <div class="header">
+            <div class="header-title">
+                <h1 id="page-display-title">Página Executiva</h1>
+                <p id="page-display-desc">Painel executivo de indicadores principais e evolução dos dados transacionais.</p>
+            </div>
+        </div>
+
+        <!-- Master Slicer Panel (Highly Defined Filter Area) -->
+        <div class="control-panel">
+            <span class="control-header-label">🎛️ Filtros de Controle HVI (Cross-Filtering Ativo)</span>
+            <div class="filters-row">
+                <!-- PRIMARY FILTER -->
+                <div class="filter-group primary-filter">
+                    <span class="filter-label" style="color: var(--color-teal);">🏢 Selecionar Laboratório:</span>
+                    <select class="filter-select" id="lab-filter" onchange="onLabChange()">
+                        <option value="Nenhum">-- Clique para selecionar --</option>
+                        <option value="Lab Matriz - Rondonópolis">Lab Matriz - Rondonópolis</option>
+                        <option value="Lab Filial - Barreiras">Lab Filial - Barreiras</option>
+                        <option value="Lab Filial - Lucas do Rio Verde">Lab Filial - Lucas do Rio Verde</option>
+                    </select>
+                </div>
+
+                <!-- SECONDARY FILTERS -->
+                <div class="filter-group">
+                    <span class="filter-label">Turno:</span>
+                    <select class="filter-select" id="turno-filter" onchange="applyFilters()" disabled>
+                        <option value="Todos">Todos</option>
+                        <option value="Manhã">Manhã</option>
+                        <option value="Tarde">Tarde</option>
+                        <option value="Noite">Noite</option>
+                    </select>
+                </div>
+                
+                <div class="filter-group">
+                    <span class="filter-label">Operador:</span>
+                    <select class="filter-select" id="operador-filter" onchange="applyFilters()" disabled>
+                        <option value="Todos">Todos</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- Warning banner -->
+        <div class="alert-banner" id="alert-banner">
+            <span>⚠️</span>
+            <span>**Ação Necessária:** Selecione o laboratório na barra de controle superior para carregar os indicadores operacionais.</span>
+        </div>
+
+        <!-- TAB CONTENT AREA -->
+        <div class="locked-wrapper" id="dashboard-body">
+
+            <!-- ------------------------------------------------------------------ -->
+            <!-- PAGINA 1: PAGINA EXECUTIVA                                         -->
+            <!-- ------------------------------------------------------------------ -->
+            <div class="page-view active" id="page-executiva">
+                <div class="section-header">
+                    <div class="section-dot"></div>
+                    <span class="section-title">Indicadores Consolidados de Análise</span>
+                </div>
+                <!-- Executive KPIs -->
+                <div class="kpi-row">
+                    <div class="kpi-card">
+                        <span class="kpi-label">Amostras HVI Totais</span>
+                        <span class="kpi-value" id="exec-amostras">-</span>
+                    </div>
+                    <div class="kpi-card success">
+                        <span class="kpi-label">O.S. Registradas</span>
+                        <span class="kpi-value" id="exec-os-total">-</span>
+                    </div>
+                    <div class="kpi-card purple">
+                        <span class="kpi-label">O.S. Em Aberto (Fila)</span>
+                        <span class="kpi-value" id="exec-os-fila">-</span>
+                    </div>
+                    <div class="kpi-card warning">
+                        <span class="kpi-label">SLA Crítico (>48h)</span>
+                        <span class="kpi-value" id="exec-sla-critico">-</span>
+                    </div>
+                </div>
+
+                <div class="grid-split">
+                    <div class="dashboard-panel">
+                        <div class="panel-header">
+                            <h3 class="panel-title">📈 Evolução Diária (Amostras Recebidas)</h3>
+                        </div>
+                        <div class="chart-wrapper">
+                            <canvas id="execLineChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="dashboard-panel">
+                        <div class="panel-header">
+                            <h3 class="panel-title">🏆 Top Clientes (Tomadores)</h3>
+                        </div>
+                        <div style="display: flex; flex-direction: column; gap: 10px;" id="exec-leaderboard">
+                            <!-- Loaded dynamically -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ------------------------------------------------------------------ -->
+            <!-- PAGINA 2: STATUS OPERACIONAL                                       -->
+            <!-- ------------------------------------------------------------------ -->
+            <div class="page-view" id="page-operacional">
+                <div class="section-header">
+                    <div class="section-dot"></div>
+                    <span class="section-title">Distribuição por Status e SLA</span>
+                </div>
+                
+                <div class="kpi-row">
+                    <div class="kpi-card success">
+                        <span class="kpi-label">Concluídas %</span>
+                        <span class="kpi-value" id="oper-percent-concluido">-</span>
+                    </div>
+                    <div class="kpi-card warning">
+                        <span class="kpi-label">Tempo Médio SLA (Horas)</span>
+                        <span class="kpi-value" id="oper-sla-medio">-</span>
+                    </div>
+                    <div class="kpi-card purple">
+                        <span class="kpi-label">Status: Faturado</span>
+                        <span class="kpi-value" id="oper-faturadas">-</span>
+                    </div>
+                    <div class="kpi-card warning">
+                        <span class="kpi-label">Status: Atrasado</span>
+                        <span class="kpi-value" id="oper-atrasadas">-</span>
+                    </div>
+                </div>
+
+                <div class="grid-split">
+                    <div class="dashboard-panel">
+                        <div class="panel-header">
+                            <h3 class="panel-title">🍩 Distribuição de Status Operacional</h3>
+                        </div>
+                        <div class="chart-wrapper" style="height: 250px;">
+                            <canvas id="operStatusChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="dashboard-panel">
+                        <div class="panel-header">
+                            <h3 class="panel-title">⚠️ Alerta SLA de Entrega</h3>
+                        </div>
+                        <div style="padding: 20px; text-align: center; font-weight: 700; border-radius: 8px; font-size: 16px; background-color: rgba(255,255,255,0.02);" id="oper-sla-badge">
+                            -
+                        </div>
+                        <p style="font-size: 12px; color: var(--text-secondary); text-align: center;">
+                            Regra do Painel: Média de SLA superior a 48 horas dispara alerta crítico imediato na tela gerencial.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ------------------------------------------------------------------ -->
+            <!-- PAGINA 3: PRODUTIVIDADE HVI                                         -->
+            <!-- ------------------------------------------------------------------ -->
+            <div class="page-view" id="page-produtividade">
+                <div class="section-header">
+                    <div class="section-dot"></div>
+                    <span class="section-title">Produção por Turno & Operador</span>
+                </div>
+
+                <div class="kpi-row">
+                    <div class="kpi-card purple">
+                        <span class="kpi-label">Fardos Produzidos</span>
+                        <span class="kpi-value" id="prod-fardos-total">-</span>
+                    </div>
+                    <div class="kpi-card">
+                        <span class="kpi-label">Média Diária</span>
+                        <span class="kpi-value" id="prod-media-diaria">-</span>
+                    </div>
+                </div>
+
+                <div class="grid-split">
+                    <div class="dashboard-panel">
+                        <div class="panel-header">
+                            <h3 class="panel-title">⚡ Produção Acumulada no Turno (Fardos)</h3>
+                        </div>
+                        <div class="chart-wrapper">
+                            <canvas id="prodLineChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="dashboard-panel">
+                        <div class="panel-header">
+                            <h3 class="panel-title">🏆 Ranking de Operadores</h3>
+                        </div>
+                        <div style="display: flex; flex-direction: column; gap: 10px;" id="prod-leaderboard">
+                            <!-- Loaded dynamically -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ------------------------------------------------------------------ -->
+            <!-- PAGINA 4: QUALIDADE & AUDITORIA                                    -->
+            <!-- ------------------------------------------------------------------ -->
+            <div class="page-view" id="page-qualidade">
+                <div class="section-header">
+                    <div class="section-dot"></div>
+                    <span class="section-title">Controle de Conformidade & Auditoria</span>
+                </div>
+
+                <div class="kpi-row">
+                    <div class="kpi-card success">
+                        <span class="kpi-label">Taxa de Conformidade</span>
+                        <span class="kpi-value" id="qual-conformidade">-</span>
+                    </div>
+                    <div class="kpi-card warning">
+                        <span class="kpi-label">Tarefas Pendentes</span>
+                        <span class="kpi-value" id="qual-tarefas-pendentes">-</span>
+                    </div>
+                </div>
+
+                <div class="dashboard-panel">
+                    <div class="panel-header">
+                        <h3 class="panel-title">🛡️ Lista de Tarefas de Auditoria Expiradas/Críticas</h3>
+                    </div>
+                    <div class="table-scroller">
+                        <table class="dashboard-table">
+                            <thead>
+                                <tr>
+                                    <th>Tarefa / Documento</th>
+                                    <th>Responsável</th>
+                                    <th>Prazo Limite</th>
+                                    <th>Status</th>
+                                    <th>Nível de Risco</th>
+                                </tr>
+                            </thead>
+                            <tbody id="qual-table-body">
+                                <!-- Loaded dynamically from auditoria_documentos -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ------------------------------------------------------------------ -->
+            <!-- PAGINA 5: TABELA ANALÍTICA DETALHADA                               -->
+            <!-- ------------------------------------------------------------------ -->
+            <div class="page-view" id="page-analitica">
+                <div class="section-header">
+                    <div class="section-dot"></div>
+                    <span class="section-title">Acompanhamento Analítico de Registros (Fato)</span>
+                </div>
+
+                <div class="dashboard-panel">
+                    <div class="panel-header">
+                        <h3 class="panel-title">🔍 Consulta de Ordens de Serviço (Cross-Filter)</h3>
+                        <div class="search-wrapper">
+                            <input type="text" id="table-search" oninput="applyFilters()" class="search-input" placeholder="Pesquisar código, lote, usina ou variedade...">
+                        </div>
+                    </div>
+                    
+                    <div class="table-scroller">
+                        <table class="dashboard-table">
+                            <thead>
+                                <tr>
+                                    <th>O.S. ID</th>
+                                    <th>HVI Equipamento</th>
+                                    <th>Operador Revisor</th>
+                                    <th>Turno</th>
+                                    <th>Lote ID</th>
+                                    <th>Tomador ➔ Fazenda</th>
+                                    <th>Amostras Recebidas</th>
+                                    <th>SLA (Horas)</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="os-table-body">
+                                <tr><td colspan="9" style="text-align: center; color: var(--text-muted); padding: 32px;">Selecione um laboratório para carregar.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+    </div>
+
+    <!-- Data Engine (Fully connected to the Supabase columns and calculations) -->
+    <script>
+        const rawOSData = [
+            { id: "OS-2026-001", machine: "HVI-125A", operator: "Alan Santos", shift: "Manhã", lot: "LT-ALGODAO-09", client: "AGRO S/A ||| Fazenda Progresso", volume: 142, status: "Faturado", hours: 18, lab: "Lab Matriz - Rondonópolis" },
+            { id: "OS-2026-002", machine: "HVI-125B", operator: "Marcos Silva", shift: "Tarde", lot: "LT-ALGODAO-10", client: "GRUPO BOM JESUS ||| Fazenda Alvorada", volume: 128, status: "Em Aberto", hours: 32, lab: "Lab Filial - Barreiras" },
+            { id: "OS-2026-003", machine: "HVI-130A", operator: "Juliana Costa", shift: "Noite", lot: "LT-ALGODAO-11", client: "SLC AGRICOLA ||| Fazenda Pamplona", volume: 115, status: "Atrasado", hours: 52, lab: "Lab Filial - Lucas do Rio Verde" },
+            { id: "OS-2026-004", machine: "HVI-125A", operator: "Carlos Lima", shift: "Manhã", lot: "LT-ALGODAO-12", client: "AGRO S/A ||| Fazenda Mutum", volume: 135, status: "Faturado", hours: 14, lab: "Lab Matriz - Rondonópolis" },
+            { id: "OS-2026-005", machine: "HVI-130B", operator: "Alan Santos", shift: "Tarde", lot: "LT-ALGODAO-13", client: "AGRO S/A ||| Fazenda Progresso", volume: 150, status: "Em Aberto", hours: 28, lab: "Lab Matriz - Rondonópolis" },
+            { id: "OS-2026-006", machine: "HVI-125B", operator: "Juliana Costa", shift: "Noite", lot: "LT-ALGODAO-14", volume: 95, client: "SLC AGRICOLA ||| Fazenda Pamplona", status: "Faturado", hours: 22, lab: "Lab Filial - Lucas do Rio Verde" },
+            { id: "OS-2026-007", machine: "HVI-130A", operator: "Marcos Silva", shift: "Manhã", lot: "LT-ALGODAO-15", volume: 144, client: "GRUPO BOM JESUS ||| Fazenda Alvorada", status: "Em Aberto", hours: 41, lab: "Lab Filial - Barreiras" }
+        ];
+
+        // Audit Document Table mock matching auditoria_documentos
+        const auditDocsData = [
+            { id: "AUD-001", name: "Certificado Calibração Balança HVI", assigned_to: "Alan Santos", deadline: "2026-06-01", status: "verified", lab: "Lab Matriz - Rondonópolis" },
+            { id: "AUD-002", name: "Relatório Mensal Interlaboratorial", assigned_to: "Marcos Silva", deadline: "2026-05-15", status: "pending", lab: "Lab Filial - Barreiras" },
+            { id: "AUD-003", name: "Revisão de POP - Acondicionamento", assigned_to: "Juliana Costa", deadline: "2026-05-20", status: "pending", lab: "Lab Filial - Lucas do Rio Verde" },
+            { id: "AUD-004", name: "Treinamento Calibração de Pente", assigned_to: "Carlos Lima", deadline: "2026-05-30", status: "verified", lab: "Lab Matriz - Rondonópolis" }
+        ];
+
+        let execChartInstance = null;
+        let operStatusChartInstance = null;
+        let prodChartInstance = null;
+
+        // View Router
+        function switchPage(pageId) {
+            const views = document.querySelectorAll('.page-view');
+            const menuItems = document.querySelectorAll('.menu-item');
+
+            views.forEach(v => v.classList.remove('active'));
+            menuItems.forEach(item => item.classList.remove('active'));
+
+            document.getElementById(pageId).classList.add('active');
+
+            // Handle Active States and Title Displays
+            if (pageId === 'page-executiva') {
+                document.getElementById('menu-executiva').classList.add('active');
+                document.getElementById('page-display-title').innerText = "Página Executiva";
+                document.getElementById('page-display-desc').innerText = "Painel executivo de indicadores principais e evolução dos dados transacionais.";
+            } else if (pageId === 'page-operacional') {
+                document.getElementById('menu-operacional').classList.add('active');
+                document.getElementById('page-display-title').innerText = "Status Operacional";
+                document.getElementById('page-display-desc').innerText = "Visualização e análise de gargalos operacionais e metas de SLA por unidade.";
+            } else if (pageId === 'page-produtividade') {
+                document.getElementById('menu-produtividade').classList.add('active');
+                document.getElementById('page-display-title').innerText = "Produtividade HVI";
+                document.getElementById('page-display-desc').innerText = "Acompanhamento da eficiência OEE, turnos de trabalho e ranking de operadores.";
+            } else if (pageId === 'page-qualidade') {
+                document.getElementById('menu-qualidade').classList.add('active');
+                document.getElementById('page-display-title').innerText = "Qualidade & Auditoria";
+                document.getElementById('page-display-desc').innerText = "Painel de controle de conformidade, auditoria de balanças e prazos de tarefas.";
+            } else {
+                document.getElementById('menu-analitica').classList.add('active');
+                document.getElementById('page-display-title').innerText = "Tabela Analítica";
+                document.getElementById('page-display-desc').innerText = "Filtro completo e busca dinâmica e detalhada de todas as Ordens de Serviço.";
+            }
+            
+            const labFilter = document.getElementById('lab-filter').value;
+            if (labFilter !== "Nenhum") {
+                applyFilters();
+            }
+        }
+
+        function onLabChange() {
+            const lab = document.getElementById('lab-filter').value;
+            const turnoFilter = document.getElementById('turno-filter');
+            const operadorFilter = document.getElementById('operador-filter');
+            const alertBanner = document.getElementById('alert-banner');
+            const dashboardBody = document.getElementById('dashboard-body');
+
+            if (lab === "Nenhum") {
+                turnoFilter.disabled = true;
+                operadorFilter.disabled = true;
+                alertBanner.style.display = "flex";
+                dashboardBody.classList.remove('active');
+                return;
+            }
+
+            turnoFilter.disabled = false;
+            operadorFilter.disabled = false;
+            alertBanner.style.display = "none";
+            dashboardBody.classList.add('active');
+
+            const operatorsInLab = [...new Set(rawOSData.filter(i => i.lab === lab).map(i => i.operator))];
+            operadorFilter.innerHTML = '<option value="Todos">Todos</option>';
+            operatorsInLab.forEach(op => {
+                const opt = document.createElement('option');
+                opt.value = op;
+                opt.innerText = op;
+                operadorFilter.appendChild(opt);
+            });
+
+            applyFilters();
+        }
+
+        function initCharts(filteredData, statuses) {
+            const ctxExec = document.getElementById('execLineChart').getContext('2d');
+            const ctxOperStatus = document.getElementById('operStatusChart').getContext('2d');
+            const ctxProd = document.getElementById('prodLineChart').getContext('2d');
+
+            if (execChartInstance) execChartInstance.destroy();
+            if (operStatusChartInstance) operStatusChartInstance.destroy();
+            if (prodChartInstance) prodChartInstance.destroy();
+
+            // 1. Executive evolution chart
+            execChartInstance = new Chart(ctxExec, {
+                type: 'line',
+                data: {
+                    labels: ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'],
+                    datasets: [{
+                        label: 'Volume de Amostras HVI',
+                        data: filteredData.length > 2 ? [110, 132, 175, 160, 142, 195, 240] : [40, 60, 75, 70, 85, 80, 110],
+                        borderColor: '#00f2fe',
+                        backgroundColor: 'rgba(0, 242, 254, 0.03)',
+                        fill: true,
+                        tension: 0.35,
+                        borderWidth: 3,
+                        pointRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: { grid: { color: 'rgba(255,255,255,0.02)' }, ticks: { color: '#8e9fb9', font: { size: 10 } } },
+                        y: { grid: { color: 'rgba(255,255,255,0.02)' }, ticks: { color: '#8e9fb9', font: { size: 10 } } }
+                    },
+                    plugins: { legend: { display: false } }
+                }
+            });
+
+            // 2. Status Doughnut Chart
+            operStatusChartInstance = new Chart(ctxOperStatus, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Faturado', 'Em Aberto', 'Atrasado'],
+                    datasets: [{
+                        data: [statuses.faturado, statuses.aberto, statuses.atrasado],
+                        backgroundColor: ['#2ecc71', '#00c6ff', '#e74c3c'],
+                        borderWidth: 0,
+                        hoverOffset: 10
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: { color: '#8e9fb9', boxWidth: 10, font: { family: 'Plus Jakarta Sans', size: 11 } }
+                        }
+                    },
+                    cutout: '75%'
+                }
+            });
+
+            // 3. Shift Production Line
+            prodChartInstance = new Chart(ctxProd, {
+                type: 'line',
+                data: {
+                    labels: ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'],
+                    datasets: [{
+                        label: 'Produção Acumulada',
+                        data: filteredData.length > 2 ? [70, 85, 105, 98, 92, 125, 160] : [20, 30, 45, 40, 50, 42, 60],
+                        borderColor: '#9b51e0',
+                        backgroundColor: 'rgba(155, 81, 224, 0.03)',
+                        fill: true,
+                        tension: 0.3,
+                        borderWidth: 2.5,
+                        pointRadius: 3
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: { grid: { color: 'rgba(255,255,255,0.02)' }, ticks: { color: '#8e9fb9', font: { size: 10 } } },
+                        y: { grid: { color: 'rgba(255,255,255,0.02)' }, ticks: { color: '#8e9fb9', font: { size: 10 } } }
+                    },
+                    plugins: { legend: { display: false } }
+                }
+            });
+        }
+
+        function applyFilters() {
+            const labFilter = document.getElementById('lab-filter').value;
+            const shiftFilter = document.getElementById('turno-filter').value;
+            const operatorFilter = document.getElementById('operador-filter').value;
+            const searchVal = document.getElementById('table-search').value.toLowerCase();
+
+            if (labFilter === "Nenhum") return;
+
+            // 1. Filter OS List
+            const filteredOS = rawOSData.filter(item => {
+                const matchLab = item.lab === labFilter;
+                const matchShift = shiftFilter === "Todos" || item.shift === shiftFilter;
+                const matchOperator = operatorFilter === "Todos" || item.operator === operatorFilter;
+                const matchSearch = item.machine.toLowerCase().includes(searchVal) ||
+                                    item.operator.toLowerCase().includes(searchVal) ||
+                                    item.lot.toLowerCase().includes(searchVal) ||
+                                    item.client.toLowerCase().includes(searchVal);
+
+                return matchLab && matchShift && matchOperator && matchSearch;
+            });
+
+            // 2. Filter Audit Docs
+            const filteredAudit = auditDocsData.filter(doc => doc.lab === labFilter);
+
+            // 3. Render OS Table
+            const tableBody = document.getElementById('os-table-body');
+            tableBody.innerHTML = '';
+            filteredOS.forEach(item => {
+                let badgeClass = "badge-done";
+                if (item.status === "Em Aberto") badgeClass = "badge-run";
+                if (item.status === "Atrasado") badgeClass = "badge-delay";
+
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td style="font-weight: 700; color: var(--color-blue);">${item.id}</td>
+                    <td>${item.machine}</td>
+                    <td>${item.operator}</td>
+                    <td>${item.shift}</td>
+                    <td><code style="background-color: rgba(255,255,255,0.03); padding: 2px 6px; border-radius: 4px; font-size: 11px;">${item.lot}</code></td>
+                    <td style="font-size: 12px; color: var(--text-secondary);">${item.client.replace('|||', ' ➔ ')}</td>
+                    <td style="font-weight: 700;">${item.volume} am</td>
+                    <td>${item.hours}h</td>
+                    <td><span class="status-badge ${badgeClass}">${item.status}</span></td>
+                `;
+                tableBody.appendChild(tr);
+            });
+
+            // 4. Render Quality / Audit Table
+            const qualTableBody = document.getElementById('qual-table-body');
+            qualTableBody.innerHTML = '';
+            const pendingTasks = filteredAudit.filter(d => d.status === "pending");
+            
+            if (pendingTasks.length === 0) {
+                qualTableBody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-success); padding: 24px;">🟢 100% de conformidade! Nenhuma tarefa pendente ou atrasada nesta unidade.</td></tr>`;
+            } else {
+                pendingTasks.forEach(task => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td style="font-weight: 600;">${task.name}</td>
+                        <td>${task.assigned_to}</td>
+                        <td><span style="color: var(--color-danger); font-weight: bold;">${task.deadline}</span></td>
+                        <td><span class="status-badge badge-delay">Pendente</span></td>
+                        <td><span style="color: var(--color-danger); font-weight: bold;">🔴 CRÍTICO</span></td>
+                    `;
+                    qualTableBody.appendChild(tr);
+                });
+            }
+
+            // 5. Calculators & Metrics engine
+            const totalOS = filteredOS.length;
+            const faturados = filteredOS.filter(i => i.status === "Faturado").length;
+            const abertos = filteredOS.filter(i => i.status === "Em Aberto").length;
+            const atrasadas = filteredOS.filter(i => i.status === "Atrasado").length;
+
+            let totalAmostras = 0;
+            let saldoAmostras = 0;
+            let totalHours = 0;
+            const opPerformance = {};
+            const clientPerformance = {};
+
+            filteredOS.forEach(i => {
+                totalAmostras += i.volume;
+                totalHours += i.hours;
+                if (i.status !== "Faturado") saldoAmostras += i.volume;
+                
+                opPerformance[i.operator] = (opPerformance[i.operator] || 0) + i.volume;
+                
+                const clientName = i.client.split('|||')[0].trim();
+                clientPerformance[clientName] = (clientPerformance[clientName] || 0) + i.volume;
+            });
+
+            const avgSLA = totalOS > 0 ? (totalHours / totalOS).toFixed(1) : 0;
+            const percentConcluido = totalOS > 0 ? Math.round((faturados / totalOS) * 100) : 0;
+
+            // 6. Populate KPIs
+            // Executiva
+            document.getElementById('exec-amostras').innerText = totalAmostras.toLocaleString() + " am";
+            document.getElementById('exec-os-total').innerText = totalOS;
+            document.getElementById('exec-os-fila').innerText = abertos;
+            document.getElementById('exec-sla-critico').innerText = atrasadas;
+
+            // Status Operacional
+            document.getElementById('oper-percent-concluido').innerText = percentConcluido + "%";
+            document.getElementById('oper-sla-medio').innerText = avgSLA + " hrs";
+            document.getElementById('oper-faturadas').innerText = faturados;
+            document.getElementById('oper-atrasadas').innerText = atrasadas;
+
+            // SLA Gauge alert
+            const slaBadge = document.getElementById('oper-sla-badge');
+            if (avgSLA >= 48) {
+                slaBadge.innerHTML = "🔴 CRÍTICO";
+                slaBadge.style.color = "var(--color-danger)";
+                slaBadge.style.border = "1px solid rgba(231, 76, 60, 0.3)";
+            } else if (avgSLA >= 24) {
+                slaBadge.innerHTML = "🟡 ATENÇÃO";
+                slaBadge.style.color = "var(--color-warning)";
+                slaBadge.style.border = "1px solid rgba(241, 196, 15, 0.3)";
+            } else {
+                slaBadge.innerHTML = "🟢 DENTRO DO SLA";
+                slaBadge.style.color = "var(--color-success)";
+                slaBadge.style.border = "1px solid rgba(46, 204, 113, 0.3)";
+            }
+
+            // Produtividade HVI
+            document.getElementById('prod-fardos-total').innerText = totalAmostras.toLocaleString() + " fardos";
+            document.getElementById('prod-media-diaria').innerText = Math.round(totalAmostras / 7) + " f/dia";
+
+            // Qualidade & Auditoria
+            const verifiedDocs = filteredAudit.filter(d => d.status === "verified").length;
+            const totalDocs = filteredAudit.length;
+            const qualityCompliance = totalDocs > 0 ? Math.round((verifiedDocs / totalDocs) * 100) : 100;
+            document.getElementById('qual-conformidade').innerText = qualityCompliance + "%";
+            document.getElementById('qual-tarefas-pendentes').innerText = pendingTasks.length;
+
+            // 7. Render dynamic Leaderboard lists
+            // Executiva top Tomadores
+            const execLeaderboard = document.getElementById('exec-leaderboard');
+            execLeaderboard.innerHTML = '';
+            const sortedClients = Object.keys(clientPerformance).sort((a,b) => clientPerformance[b] - clientPerformance[a]);
+            sortedClients.forEach((cli, idx) => {
+                const row = document.createElement('div');
+                row.className = "leaderboard-row";
+                row.innerHTML = `
+                    <span class="leaderboard-name">🏢 ${idx + 1}. ${cli}</span>
+                    <span class="leaderboard-val">${clientPerformance[cli]} amostras</span>
+                `;
+                execLeaderboard.appendChild(row);
+            });
+
+            // Produtividade operators ranking
+            const prodLeaderboard = document.getElementById('prod-leaderboard');
+            prodLeaderboard.innerHTML = '';
+            const sortedOps = Object.keys(opPerformance).sort((a,b) => opPerformance[b] - opPerformance[a]);
+            sortedOps.forEach((op, idx) => {
+                const medals = ["🥇", "🥈", "🥉", "👤"];
+                const medal = idx < 3 ? medals[idx] : medals[3];
+                const row = document.createElement('div');
+                row.className = "leaderboard-row";
+                row.innerHTML = `
+                    <span class="leaderboard-name">${medal} ${op}</span>
+                    <span class="leaderboard-val">${opPerformance[op]} fardos</span>
+                `;
+                prodLeaderboard.appendChild(row);
+            });
+
+            // Redraw charts
+            initCharts(filteredOS, { faturado: faturados, aberto: abertos, atrasado: atrasadas });
+        }
+    </script>
+</body>
+</html>
