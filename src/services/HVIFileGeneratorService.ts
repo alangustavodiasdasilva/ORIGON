@@ -199,80 +199,6 @@ export class HVIFileGeneratorService {
         }
     }
 
-    /**
-     * Generate a set of readings that average exactly to the target
-     */
-    private static generateBalancedReadings(target: number, count: number, tolerance: number, decimals: number): number[] {
-        if (count <= 0) return [];
-        if (tolerance <= 0) return Array(count).fill(target);
-
-        const factor = Math.pow(10, decimals);
-
-        // ── Tentativas para encontrar um conjunto balanceado dentro do range exato ──
-        let bestReadings: number[] = [];
-        let bestRepeat = count;
-
-        for (let attempt = 0; attempt < 120; attempt++) {
-            // Gerar aleatoriamente dentro de ±tolerance
-            const readings = Array(count).fill(0).map(() => {
-                // Usa 100% do tolerance conforme solicitado pelo usuário
-                const r = (Math.random() * 2 - 1) * tolerance;
-                return Math.round((target + r) * factor) / factor;
-            });
-
-
-            // Balancear: ajustar diferença da média para o alvo
-            const currentAvg = readings.reduce((a, b) => a + b, 0) / count;
-            const drift = parseFloat((target - currentAvg).toFixed(decimals));
-
-            // Distribuir o drift em incrementos mínimos pelos itens de forma aleatória
-            if (drift !== 0) {
-                const step = Math.sign(drift) * Math.pow(10, -decimals);
-                let remaining = Math.abs(Math.round(drift * factor));
-                const idxs = [...Array(count).keys()].sort(() => Math.random() - 0.5);
-                let i = 0;
-                while (remaining > 0) {
-                    const idx = idxs[i % count];
-                    const candidate = Math.round((readings[idx] + step) * factor) / factor;
-                    // Só aplica se não sair do range
-                    if (Math.abs(candidate - target) <= tolerance + 1e-9) {
-                        readings[idx] = candidate;
-                        remaining--;
-                    }
-                    i++;
-                    if (i > count * 10) break; // evita loop infinito se range muito apertado
-                }
-            }
-
-            // Hard-clamp: garante que nenhum valor violou o range
-            for (let i = 0; i < readings.length; i++) {
-                const min = Math.round((target - tolerance) * factor) / factor;
-                const max = Math.round((target + tolerance) * factor) / factor;
-                readings[i] = Math.max(min, Math.min(max, readings[i]));
-            }
-
-            // Verificar repetição (máx 2 vezes o mesmo valor, e max 1 par repetido)
-            const occ: Record<number, number> = {};
-            let maxRep = 0;
-            let pairsCount = 0;
-            readings.forEach(v => { 
-                occ[v] = (occ[v] || 0) + 1; 
-                if (occ[v] > maxRep) maxRep = occ[v]; 
-                if (occ[v] === 2) pairsCount++;
-            });
-
-            if (maxRep <= 1 || (maxRep === 2 && pairsCount <= 1)) {
-                return readings;
-            }
-
-            if (maxRep < bestRepeat) {
-                bestRepeat = maxRep;
-                bestReadings = [...readings];
-            }
-        }
-
-        return bestReadings.length > 0 ? bestReadings : Array(count).fill(target);
-    }
 
 
     /**
@@ -954,8 +880,6 @@ export class HVIFileGeneratorService {
             const areaVarLimit = Math.max(0.01, 0.05 - Math.abs(sampleArea - area));
             const areaReadings = this.getBalancedReadings(sampleArea, areaVarLimit, 2, seedMod, count);
 
-            // cnt usado no fallback Premier
-            const cnt          = averages.count ?? 30;
 
             // Date & time formatting
             const date = this.formatH1Date(sample.data_analise);
