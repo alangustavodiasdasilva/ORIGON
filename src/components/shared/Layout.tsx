@@ -29,11 +29,10 @@ import { useAudioAlerts } from "@/hooks/useAudioAlerts";
 
 export default function Layout() {
     const location = useLocation();
+    useAudioAlerts(true);
     const { user, logout } = useAuth();
     const { toasts } = useToast();
     const { t, language, setLanguage } = useLanguage();
-    const { broadcastAlert } = useAudioAlerts(true);
-
     // Enable global keyboard shortcuts
     useKeyboardShortcuts();
 
@@ -288,22 +287,9 @@ export default function Layout() {
                             {/* <GlobalSearch /> */}
                         </div>
 
-                        {/* Network Monitor & Audio Alerts */}
+                        {/* Network Monitor */}
                         <div className="flex items-center gap-2">
                             <NetworkMonitor />
-                            
-                            <div className="flex items-center gap-2 ml-2">
-                                <button
-                                    onClick={() => broadcastAlert('green')}
-                                    className="w-5 h-5 rounded-full bg-emerald-500 hover:bg-emerald-400 active:scale-95 shadow-[0_0_10px_rgba(16,185,129,0.3)] transition-all border border-emerald-400 focus:outline-none"
-                                    title="Play Green Alert"
-                                />
-                                <button
-                                    onClick={() => broadcastAlert('red')}
-                                    className="w-5 h-5 rounded-full bg-red-600 hover:bg-red-500 active:scale-95 shadow-[0_0_10px_rgba(220,38,38,0.3)] transition-all border border-red-500 focus:outline-none"
-                                    title="Play Red Alert"
-                                />
-                            </div>
                         </div>
 
                         {/* Admin Tools */}
