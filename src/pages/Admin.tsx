@@ -474,31 +474,66 @@ function SystemConfigTab() {
         const file = e.target.files?.[0];
         if (!file) return;
 
+        // Limite de 500KB para base64 para evitar sobrecarregar o Supabase Realtime
+        if (file.size > 500 * 1024) {
+            addToast({ title: "Arquivo muito grande", description: "Para usar sem o Storage na nuvem, o áudio deve ter no máximo 500KB.", type: "warning" });
+            return;
+        }
+
         setIsUploadingSound(true);
         try {
-            const ext = file.name.split('.').pop();
-            const fileName = `audio_${color}_${Date.now()}.${ext}`;
-            
-            const { error: uploadError } = await supabase.storage
-                .from('audit-docs')
-                .upload(fileName, file, { cacheControl: '3600', upsert: false });
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                const base64String = reader.result as string;
+                
+                const currentUrls = color === 'green' ? audioConfig.greenUrl : audioConfig.redUrl;
+                const newUrls = currentUrls ? `${currentUrls}\n${base64String}` : base64String;
 
-            if (uploadError) throw uploadError;
+                updateAudioConfig({
+                    ...audioConfig,
+                    [color === 'green' ? 'greenUrl' : 'redUrl']: newUrls
+                });
 
-            const { data } = supabase.storage.from('audit-docs').getPublicUrl(fileName);
-            
+                addToast({ title: "Sucesso", description: "Áudio local adicionado à roleta!", type: "success" });
+                setIsUploadingSound(false);
+            };
+            reader.onerror = () => { throw new Error("Falha ao ler o arquivo"); };
+            reader.readAsDataURL(file);
+        } catch (err: any) {
+            console.error("Erro ao processar áudio:", err);
+            addToast({ title: "Erro", description: "Falha ao ler o arquivo de áudio.", type: "error" });
+            setIsUploadingSound(false);
+        }
+    };
+
+    const handleUrlBlur = async (color: 'green' | 'red') => {
+        const rawUrls = color === 'green' ? audioConfig.greenUrl : audioConfig.redUrl;
+        const urls = rawUrls.split(/[\n,]+/).map(u => u.trim()).filter(Boolean);
+        
+        let changed = false;
+        const processedUrls = await Promise.all(urls.map(async (url) => {
+            if (url.includes('myinstants.com/en/instant/')) {
+                try {
+                    const res = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`);
+                    const data = await res.json();
+                    const match = data.contents.match(/https:\/\/www\.myinstants\.com\/media\/sounds\/[^"']+\.mp3/i);
+                    if (match) {
+                        changed = true;
+                        return match[0];
+                    }
+                } catch (e) {
+                    console.error("Erro ao converter link do myinstants", e);
+                }
+            }
+            return url;
+        }));
+
+        if (changed) {
             updateAudioConfig({
                 ...audioConfig,
-                [color === 'green' ? 'greenUrl' : 'redUrl']: data.publicUrl
+                [color === 'green' ? 'greenUrl' : 'redUrl']: processedUrls.join('\n')
             });
-
-            addToast({ title: "Sucesso", description: "Áudio enviado e configurado!", type: "success" });
-        } catch (err: any) {
-            console.error("Erro ao enviar áudio:", err);
-            addToast({ title: "Erro", description: "Falha ao enviar o arquivo de áudio.", type: "error" });
-        } finally {
-            setIsUploadingSound(false);
-            e.target.value = ''; // Reset input
+            addToast({ title: "Link Convertido", description: "Detectamos um link do MyInstants e convertemos para MP3 automaticamente!", type: "success" });
         }
     };
 
@@ -522,6 +557,7 @@ function SystemConfigTab() {
                                 <textarea 
                                     value={audioConfig.greenUrl}
                                     onChange={(e) => updateAudioConfig({ ...audioConfig, greenUrl: e.target.value })}
+                                    onBlur={() => handleUrlBlur('green')}
                                     className="flex-1 h-24 border border-neutral-300 p-3 text-xs focus:border-black focus:ring-0 rounded-none bg-neutral-50 resize-y"
                                     placeholder="Cole os links aqui (um por linha)..."
                                 />
@@ -547,6 +583,7 @@ function SystemConfigTab() {
                                 <textarea 
                                     value={audioConfig.redUrl}
                                     onChange={(e) => updateAudioConfig({ ...audioConfig, redUrl: e.target.value })}
+                                    onBlur={() => handleUrlBlur('red')}
                                     className="flex-1 h-24 border border-neutral-300 p-3 text-xs focus:border-black focus:ring-0 rounded-none bg-neutral-50 resize-y"
                                     placeholder="Cole os links aqui (um por linha)..."
                                 />
