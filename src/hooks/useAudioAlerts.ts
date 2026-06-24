@@ -26,16 +26,11 @@ export function useAudioAlerts() {
 
   // Tocar um alerta localmente
   const playAlert = useCallback((color: 'green' | 'red') => {
-    const rawUrl = color === 'green' ? config.greenUrl : config.redUrl;
-    if (rawUrl) {
-      // Divide por quebras de linha ou vírgulas e pega um aleatório
-      const urlList = rawUrl.split(/[\n,]+/).map(u => u.trim()).filter(u => u.length > 0);
-      if (urlList.length > 0) {
-        const randomUrl = urlList[Math.floor(Math.random() * urlList.length)];
-        const audio = new Audio(randomUrl);
-        audio.volume = 1.0;
-        audio.play().catch(e => console.error("Falha ao tocar som:", e));
-      }
+    const url = color === 'green' ? config.greenUrl : config.redUrl;
+    if (url && url.trim().length > 0) {
+      const audio = new Audio(url.trim());
+      audio.volume = 1.0;
+      audio.play().catch(e => console.error("Falha ao tocar som:", e));
     }
   }, [config]);
 
