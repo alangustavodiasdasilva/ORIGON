@@ -15,7 +15,6 @@ import { Loader2 } from "lucide-react";
 import { usePresence } from "@/hooks/usePresence";
 import { useAudioAlerts } from "@/hooks/useAudioAlerts";
 import AuditLogsTab from "@/components/admin/AuditLogsTab";
-import { supabase } from "@/lib/supabase";
 
 const isSupabaseEnabled = () => {
     const url = import.meta.env.VITE_SUPABASE_URL;
@@ -511,22 +510,24 @@ function SystemConfigTab() {
         const urls = rawUrls.split(/[\n,]+/).map(u => u.trim()).filter(Boolean);
         
         let changed = false;
-        const processedUrls = await Promise.all(urls.map(async (url) => {
+        const processedUrls = urls.map((url) => {
             if (url.includes('myinstants.com/en/instant/')) {
                 try {
-                    const res = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`);
-                    const data = await res.json();
-                    const match = data.contents.match(/https:\/\/www\.myinstants\.com\/media\/sounds\/[^"']+\.mp3/i);
+                    // Extrai o nome do som da URL (ex: auraa-81623 -> auraa)
+                    const match = url.match(/\/instant\/([^/]+)/);
                     if (match) {
+                        let slug = match[1];
+                        // Remove números no final que o site adiciona
+                        slug = slug.replace(/-\d+$/, '');
                         changed = true;
-                        return match[0];
+                        return `https://www.myinstants.com/media/sounds/${slug}.mp3`;
                     }
                 } catch (e) {
                     console.error("Erro ao converter link do myinstants", e);
                 }
             }
             return url;
-        }));
+        });
 
         if (changed) {
             updateAudioConfig({
