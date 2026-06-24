@@ -66,7 +66,57 @@ export default function AnalysisTable({ samples, onUpdateSample, onColorChange, 
         return 0;
     });
 
-    // Highlight visual only - no scroll
+    const handleBlur = (e: React.FocusEvent<HTMLInputElement>, sample: Sample, field: string, value: any, decimals: number) => {
+        if (sample.locked) {
+            e.target.value = formatDecimalBR(value ?? 0, decimals);
+            return;
+        }
+
+        let numStr = e.target.value.replace(',', '.');
+        
+        if (numStr && !numStr.includes('.')) {
+            if (field === 'mic') {
+                if (numStr.length > 1) numStr = numStr.slice(0, 1) + '.' + numStr.slice(1);
+            } else if (field === 'len') {
+                if (numStr.length > 2) numStr = numStr.slice(0, 2) + '.' + numStr.slice(2);
+            } else if (['unf', 'str', 'rd'].includes(field)) {
+                if (numStr.length > 2) numStr = numStr.slice(0, 2) + '.' + numStr.slice(2);
+            } else if (['elg', 'b', 'sfi'].includes(field)) {
+                if (numStr.length >= 2) numStr = numStr.slice(0, -1) + '.' + numStr.slice(-1);
+            } else if (['area', 'mat'].includes(field)) {
+                if (numStr.length >= 2) numStr = '0.' + numStr;
+                else if (numStr.length === 1 && numStr !== '0') numStr = '0.0' + numStr;
+            }
+        }
+
+        const val = parseFloat(numStr);
+        if (!isNaN(val) && val !== value) {
+            onUpdateSample(sample.id, field, val);
+        }
+        e.target.value = formatDecimalBR(isNaN(val) ? (value ?? 0) : val, decimals);
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, rowIdx: number, colIdx: number, rowsCount: number, colsCount: number) => {
+        const key = e.key;
+        if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(key)) {
+            e.preventDefault();
+            let nextRow = rowIdx;
+            let nextCol = colIdx;
+            
+            if (key === 'ArrowUp') nextRow = Math.max(0, rowIdx - 1);
+            if (key === 'ArrowDown') nextRow = Math.min(rowsCount - 1, rowIdx + 1);
+            if (key === 'ArrowLeft') nextCol = Math.max(0, colIdx - 1);
+            if (key === 'ArrowRight') nextCol = Math.min(colsCount - 1, colIdx + 1);
+
+            if (nextRow !== rowIdx || nextCol !== colIdx) {
+                const nextInput = document.querySelector(`input[data-tablerow="${nextRow}"][data-tablecol="${nextCol}"]`) as HTMLInputElement;
+                if (nextInput) {
+                    nextInput.focus();
+                    nextInput.select();
+                }
+            }
+        }
+    };
 
     return (
         <div className="relative w-full bg-white">
@@ -147,7 +197,7 @@ export default function AnalysisTable({ samples, onUpdateSample, onColorChange, 
                 </thead>
 
                 <tbody className="divide-y divide-slate-100">
-                    {sortedSamples.map((sample) => {
+                    {sortedSamples.map((sample, rowIdx) => {
                         // Define cor de fundo baseada na classificação
                         let rowBgClass = "hover:bg-slate-50";
                         if (sample.cor === "#ef4444") rowBgClass = "bg-red-50/5 hover:bg-red-100/10";
@@ -262,7 +312,7 @@ export default function AnalysisTable({ samples, onUpdateSample, onColorChange, 
                                         </button>
                                     </div>
                                 </td>
-                                {fields.map((field) => {
+                                {fields.map((field, colIdx) => {
                                     const value = (sample as any)[field];
                                     const stats = statsByField[field];
                                     const isOutlier = stats.outliers.includes(sample.id);
@@ -284,18 +334,10 @@ export default function AnalysisTable({ samples, onUpdateSample, onColorChange, 
                                                         (isProcessing || sample.locked) && "opacity-50 cursor-not-allowed"
                                                     )}
                                                     defaultValue={formatDecimalBR(value ?? 0, decimals)}
-                                                    onBlur={(e) => {
-                                                        if (sample.locked) {
-                                                            e.target.value = formatDecimalBR(value ?? 0, decimals);
-                                                            return;
-                                                        }
-                                                        const inputValue = e.target.value.replace(',', '.');
-                                                        const val = parseFloat(inputValue);
-                                                        if (!isNaN(val) && val !== value) {
-                                                            onUpdateSample(sample.id, field, val);
-                                                        }
-                                                        e.target.value = formatDecimalBR(isNaN(val) ? (value ?? 0) : val, decimals);
-                                                    }}
+                                                    onBlur={(e) => handleBlur(e, sample, field, value, decimals)}
+                                                    onKeyDown={(e) => handleKeyDown(e, rowIdx, colIdx, sortedSamples.length, fields.length)}
+                                                    data-tablerow={rowIdx}
+                                                    data-tablecol={colIdx}
                                                     disabled={isProcessing || sample.locked}
                                                 />
                                             </div>

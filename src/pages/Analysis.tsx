@@ -228,7 +228,29 @@ export default function Analysis() {
         }
 
         if (numStr !== value) {
-            setManualOverrides(prev => ({ ...prev, [`${color}-${fieldLabel}`]: numStr }));
+            setManualOverrides(prev => ({ ...prev, [`${color}-${fieldLabel}`]: numStr.replace('.', ',') }));
+        }
+    };
+
+    const handleMediaKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, colorIndex: number, fieldIndex: number, colorsCount: number, fieldsCount: number) => {
+        const key = e.key;
+        if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(key)) {
+            e.preventDefault();
+            let nextColor = colorIndex;
+            let nextField = fieldIndex;
+
+            if (key === 'ArrowUp') nextField = Math.max(0, fieldIndex - 1);
+            if (key === 'ArrowDown') nextField = Math.min(fieldsCount - 1, fieldIndex + 1);
+            if (key === 'ArrowLeft') nextColor = Math.max(0, colorIndex - 1);
+            if (key === 'ArrowRight') nextColor = Math.min(colorsCount - 1, colorIndex + 1);
+
+            if (nextColor !== colorIndex || nextField !== fieldIndex) {
+                const nextInput = document.querySelector(`input[data-mediacolor="${nextColor}"][data-mediafield="${nextField}"]`) as HTMLInputElement;
+                if (nextInput) {
+                    nextInput.focus();
+                    nextInput.select();
+                }
+            }
         }
     };
 
@@ -447,7 +469,7 @@ export default function Analysis() {
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                         {(Object.entries(metricsByColor) as [string, any][])
                             .filter(([color, data]) => data.samples > 0 && (!filterColor || color === filterColor))
-                            .map(([color, data]) => (
+                            .map(([color, data], colorIdx, arr) => (
                             <div key={color} className={`bg-white border-2 ${data.border} p-6 shadow-sm flex flex-col gap-6 hover:shadow-md transition-shadow relative group`}>
                                 <div className="flex items-center justify-between">
                                     <span className="text-[11px] font-black uppercase tracking-[0.2em] text-neutral-500">{data.label}</span>
@@ -462,7 +484,7 @@ export default function Analysis() {
                                         { label: 'STR', val: data.str, d: 1 },
                                         { label: 'RD', val: data.rd, d: 1 },
                                         { label: '+B', val: data.b, d: 1 },
-                                    ].map(metric => (
+                                    ].map((metric, fieldIdx, metricsArr) => (
                                         <div key={metric.label} className="flex items-center justify-between border-b border-neutral-50 pb-2 last:border-none">
                                             <span className="text-[9px] font-black text-neutral-400 font-mono tracking-widest">{metric.label}</span>
                                             <input 
@@ -476,10 +498,13 @@ export default function Analysis() {
                                                 }
                                                 onChange={(e) => setManualOverrides(prev => ({ ...prev, [`${color}-${metric.label}`]: e.target.value }))}
                                                 onBlur={(e) => handleMediaBlur(color, metric.label, e.target.value)}
+                                                onKeyDown={(e) => handleMediaKeyDown(e, colorIdx, fieldIdx, arr.length, metricsArr.length)}
+                                                data-mediacolor={colorIdx}
+                                                data-mediafield={fieldIdx}
                                                 className="w-24 bg-transparent text-right text-xl font-serif font-bold text-neutral-800 tracking-tight outline-none hover:bg-neutral-50 focus:bg-white focus:ring-1 ring-neutral-200 rounded px-1 -mr-1 transition-all"
                                             />
                                         </div>
-                                    ))}
+                                    ))}                ))}
                                 </div>
 
                                 <div className="mt-2 pt-4 border-t border-neutral-100 flex flex-col gap-3">
