@@ -96,18 +96,17 @@ export default function AnalysisTable({ samples, onUpdateSample, onColorChange, 
         e.target.value = formatDecimalBR(isNaN(val) ? (value ?? 0) : val, decimals);
     };
 
-    const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, rowIdx: number, colIdx: number, rowsCount: number, colsCount: number) => {
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, rowIdx: number, colIdx: number, rowsCount: number) => {
         const key = e.key;
         if (['ArrowUp', 'ArrowDown'].includes(key)) {
             e.preventDefault();
             let nextRow = rowIdx;
-            let nextCol = colIdx;
             
             if (key === 'ArrowUp') nextRow = Math.max(0, rowIdx - 1);
             if (key === 'ArrowDown') nextRow = Math.min(rowsCount - 1, rowIdx + 1);
 
-            if (nextRow !== rowIdx || nextCol !== colIdx) {
-                const nextInput = document.querySelector(`input[data-tablerow="${nextRow}"][data-tablecol="${nextCol}"]`) as HTMLInputElement;
+            if (nextRow !== rowIdx) {
+                const nextInput = document.querySelector(`input[data-tablerow="${nextRow}"][data-tablecol="${colIdx}"]`) as HTMLInputElement;
                 if (nextInput) {
                     nextInput.focus();
                     nextInput.select();
@@ -333,7 +332,7 @@ export default function AnalysisTable({ samples, onUpdateSample, onColorChange, 
                                                     )}
                                                     defaultValue={formatDecimalBR(value ?? 0, decimals)}
                                                     onBlur={(e) => handleBlur(e, sample, field, value, decimals)}
-                                                    onKeyDown={(e) => handleKeyDown(e, rowIdx, colIdx, sortedSamples.length, fields.length)}
+                                                    onKeyDown={(e) => handleKeyDown(e, rowIdx, colIdx, sortedSamples.length)}
                                                     data-tablerow={rowIdx}
                                                     data-tablecol={colIdx}
                                                     disabled={sample.locked}

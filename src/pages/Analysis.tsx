@@ -232,18 +232,17 @@ export default function Analysis() {
         }
     };
 
-    const handleMediaKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, colorIndex: number, fieldIndex: number, colorsCount: number, fieldsCount: number) => {
+    const handleMediaKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, colorIndex: number, fieldIndex: number, fieldsCount: number) => {
         const key = e.key;
         if (['ArrowUp', 'ArrowDown'].includes(key)) {
             e.preventDefault();
-            let nextColor = colorIndex;
             let nextField = fieldIndex;
 
             if (key === 'ArrowUp') nextField = Math.max(0, fieldIndex - 1);
             if (key === 'ArrowDown') nextField = Math.min(fieldsCount - 1, fieldIndex + 1);
 
-            if (nextColor !== colorIndex || nextField !== fieldIndex) {
-                const nextInput = document.querySelector(`input[data-mediacolor="${nextColor}"][data-mediafield="${nextField}"]`) as HTMLInputElement;
+            if (nextField !== fieldIndex) {
+                const nextInput = document.querySelector(`input[data-mediacolor="${colorIndex}"][data-mediafield="${nextField}"]`) as HTMLInputElement;
                 if (nextInput) {
                     nextInput.focus();
                     nextInput.select();
@@ -496,7 +495,7 @@ export default function Analysis() {
                                                 }
                                                 onChange={(e) => setManualOverrides(prev => ({ ...prev, [`${color}-${metric.label}`]: e.target.value }))}
                                                 onBlur={(e) => handleMediaBlur(color, metric.label, e.target.value)}
-                                                onKeyDown={(e) => handleMediaKeyDown(e, colorIdx, fieldIdx, arr.length, metricsArr.length)}
+                                                onKeyDown={(e) => handleMediaKeyDown(e, colorIdx, fieldIdx, metricsArr.length)}
                                                 data-mediacolor={colorIdx}
                                                 data-mediafield={fieldIdx}
                                                 className="w-24 bg-transparent text-right text-xl font-serif font-bold text-neutral-800 tracking-tight outline-none hover:bg-neutral-50 focus:bg-white focus:ring-1 ring-neutral-200 rounded px-1 -mr-1 transition-all"
