@@ -479,7 +479,7 @@ export default function Analysis() {
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                         {(Object.entries(metricsByColor) as [string, any][])
                             .filter(([color, data]) => data.samples > 0 && (!filterColor || color === filterColor))
-                            .map(([color, data], colorIdx, arr) => (
+                            .map(([color, data], colorIdx) => (
                             <div key={color} className={`bg-white border-2 ${data.border} p-6 shadow-sm flex flex-col gap-6 hover:shadow-md transition-shadow relative group`}>
                                 <div className="flex items-center justify-between">
                                     <span className="text-[11px] font-black uppercase tracking-[0.2em] text-neutral-500">{data.label}</span>
