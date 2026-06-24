@@ -208,6 +208,30 @@ export default function Analysis() {
         }
     };
 
+    const handleMediaBlur = (color: string, fieldLabel: string, value: string) => {
+        let numStr = value.replace(',', '.');
+        if (!numStr || numStr.includes('.')) return;
+
+        const field = fieldLabel.toLowerCase();
+
+        if (field === 'mic') {
+            if (numStr.length > 1) numStr = numStr.slice(0, 1) + '.' + numStr.slice(1);
+        } else if (field === 'len') {
+            if (numStr.length > 2) numStr = numStr.slice(0, 2) + '.' + numStr.slice(2);
+        } else if (['unf', 'str', 'rd'].includes(field)) {
+            if (numStr.length > 2) numStr = numStr.slice(0, 2) + '.' + numStr.slice(2);
+        } else if (['elg', '+b', 'b', 'sfi'].includes(field)) {
+            if (numStr.length >= 2) numStr = numStr.slice(0, -1) + '.' + numStr.slice(-1);
+        } else if (['area', 'mat'].includes(field)) {
+            if (numStr.length >= 2) numStr = '0.' + numStr;
+            else if (numStr.length === 1 && numStr !== '0') numStr = '0.0' + numStr;
+        }
+
+        if (numStr !== value) {
+            setManualOverrides(prev => ({ ...prev, [`${color}-${fieldLabel}`]: numStr }));
+        }
+    };
+
     const [isPatternModalOpen, setIsPatternModalOpen] = useState(false);
     const [isStatsModalOpen, setIsStatsModalOpen] = useState(false);
     
@@ -451,6 +475,7 @@ export default function Analysis() {
                                                         : metric.val.toLocaleString('pt-BR', { minimumFractionDigits: metric.d, maximumFractionDigits: metric.d })
                                                 }
                                                 onChange={(e) => setManualOverrides(prev => ({ ...prev, [`${color}-${metric.label}`]: e.target.value }))}
+                                                onBlur={(e) => handleMediaBlur(color, metric.label, e.target.value)}
                                                 className="w-24 bg-transparent text-right text-xl font-serif font-bold text-neutral-800 tracking-tight outline-none hover:bg-neutral-50 focus:bg-white focus:ring-1 ring-neutral-200 rounded px-1 -mr-1 transition-all"
                                             />
                                         </div>
