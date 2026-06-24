@@ -97,6 +97,7 @@ export default function MalaTrendChart({ samples, onSampleHover }: MalaTrendChar
         const yMin = Math.max(0, globalMin - margin);
         const yMax = globalMax + margin;
         const yRange = yMax - yMin;
+        const yDecimals = yRange < 2 ? 2 : 1;
 
         const width = 1200;
         const height = 400;
@@ -139,7 +140,7 @@ export default function MalaTrendChart({ samples, onSampleHover }: MalaTrendChar
             ? `M ${points[0].x},${points[0].yAvg} ` + points.slice(1).map(p => `L ${p.x},${p.yAvg}`).join(" ")
             : "";
 
-        return { points, gridLines, pathData, globalAvg, globalAvgY, width, height, padding, yMin, yMax };
+        return { points, gridLines, pathData, globalAvg, globalAvgY, width, height, padding, yMin, yMax, yDecimals };
     }, [samples, selectedField]);
 
     if (!chartData || chartData.points.length === 0) return null;
@@ -218,7 +219,7 @@ export default function MalaTrendChart({ samples, onSampleHover }: MalaTrendChar
                         {chartData.gridLines.map((line, i) => (
                             <g key={i}>
                                 <line x1={chartData.padding.left} y1={line.y} x2={chartData.width - chartData.padding.right} y2={line.y} stroke="#e5e5e5" strokeWidth="1" strokeDasharray="4 4" />
-                                <text x={chartData.padding.left - 12} y={line.y + 6} textAnchor="end" className="fill-neutral-900 font-mono font-black text-[11px]">{formatDecimalBR(line.val, 1)}</text>
+                                <text x={chartData.padding.left - 12} y={line.y + 6} textAnchor="end" className="fill-neutral-900 font-mono font-black text-[11px]">{formatDecimalBR(line.val, chartData.yDecimals)}</text>
                             </g>
                         ))}
 

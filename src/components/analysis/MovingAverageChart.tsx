@@ -127,6 +127,7 @@ export default function MovingAverageChart({ samples, windowSize = 3, onSampleHo
         const yMin = Math.max(0, minVal - margin);
         const yMax = maxVal + margin;
         const yRange = yMax - yMin;
+        const yDecimals = yRange < 2 ? 2 : 1;
 
         // Dimensões
         const width = 1200;
@@ -229,9 +230,9 @@ export default function MovingAverageChart({ samples, windowSize = 3, onSampleHo
             yMin,
             yMax,
             padding,
-            stdDev,
             stdDevUpperY,
-            stdDevLowerY
+            stdDevLowerY,
+            yDecimals
         };
 
     }, [sortedSamples, selectedField, windowSize]);
@@ -374,7 +375,7 @@ export default function MovingAverageChart({ samples, windowSize = 3, onSampleHo
                                     textAnchor="end"
                                     className="fill-neutral-900 font-mono font-black text-16px"
                                 >
-                                    {formatDecimalBR(line.val, 1)}
+                                    {formatDecimalBR(line.val, chartData.yDecimals)}
                                 </text>
                             </g>
                         ))}
