@@ -209,6 +209,15 @@ export default function Analysis() {
     };
 
     const handleMediaBlur = (color: string, fieldLabel: string, value: string) => {
+        if (!value.trim()) {
+            setManualOverrides(prev => {
+                const next = { ...prev };
+                delete next[`${color}-${fieldLabel}`];
+                return next;
+            });
+            return;
+        }
+
         let numStr = value.replace(',', '.');
         if (!numStr || numStr.includes('.')) return;
 
@@ -234,7 +243,7 @@ export default function Analysis() {
 
     const handleMediaKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, colorIndex: number, fieldIndex: number, fieldsCount: number) => {
         const key = e.key;
-        if (['ArrowUp', 'ArrowDown'].includes(key)) {
+        if (['ArrowUp', 'ArrowDown', 'Enter'].includes(key)) {
             e.preventDefault();
             let nextField = fieldIndex;
 
