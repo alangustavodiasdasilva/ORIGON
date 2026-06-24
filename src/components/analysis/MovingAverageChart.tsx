@@ -230,6 +230,7 @@ export default function MovingAverageChart({ samples, windowSize = 3, onSampleHo
             yMin,
             yMax,
             padding,
+            stdDev,
             stdDevUpperY,
             stdDevLowerY,
             yDecimals
