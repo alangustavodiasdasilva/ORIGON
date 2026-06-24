@@ -58,7 +58,7 @@ export default function Admin() {
         if (allAnalysts.length === 0) return;
         
         const onlineIds = onlineUsers.map(u => u.user_id);
-        const actualOnline = allAnalysts.filter(a => {
+        const filtered = allAnalysts.filter(a => {
             if (!onlineIds.includes(a.id)) return false;
             
             // Sempre exibe o próprio usuário logado, independente de filtros de lab
@@ -73,8 +73,10 @@ export default function Admin() {
             // Admin de laboratório
             return String(a.lab_id) === String(user?.lab_id);
         });
-        
-        setOnlineAnalysts(actualOnline);
+        setOnlineAnalysts(prev => {
+            const isSame = prev.length === filtered.length && prev.every((v, i) => v.id === filtered[i].id);
+            return isSame ? prev : filtered;
+        });
     }, [onlineUsers, allAnalysts, user, currentLab]);
 
     const handleSync = async () => {
