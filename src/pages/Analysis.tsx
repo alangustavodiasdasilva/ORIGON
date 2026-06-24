@@ -219,25 +219,29 @@ export default function Analysis() {
         }
 
         let numStr = value.replace(',', '.');
-        if (!numStr || numStr.includes('.')) return;
+        if (!numStr) return;
 
         const field = fieldLabel.toLowerCase();
 
-        if (field === 'mic') {
-            if (numStr.length > 1) numStr = numStr.slice(0, 1) + '.' + numStr.slice(1);
-        } else if (field === 'len') {
-            if (numStr.length > 2) numStr = numStr.slice(0, 2) + '.' + numStr.slice(2);
-        } else if (['unf', 'str', 'rd'].includes(field)) {
-            if (numStr.length > 2) numStr = numStr.slice(0, 2) + '.' + numStr.slice(2);
-        } else if (['elg', '+b', 'b', 'sfi'].includes(field)) {
-            if (numStr.length >= 2) numStr = numStr.slice(0, -1) + '.' + numStr.slice(-1);
-        } else if (['area', 'mat'].includes(field)) {
-            if (numStr.length >= 2) numStr = '0.' + numStr;
-            else if (numStr.length === 1 && numStr !== '0') numStr = '0.0' + numStr;
+        // Only auto-insert dot if there isn't one already
+        if (!numStr.includes('.')) {
+            if (field === 'mic') {
+                if (numStr.length > 1) numStr = numStr.slice(0, 1) + '.' + numStr.slice(1);
+            } else if (field === 'len') {
+                if (numStr.length > 2) numStr = numStr.slice(0, 2) + '.' + numStr.slice(2);
+            } else if (['unf', 'str', 'rd'].includes(field)) {
+                if (numStr.length > 2) numStr = numStr.slice(0, 2) + '.' + numStr.slice(2);
+            } else if (['elg', '+b', 'b', 'sfi'].includes(field)) {
+                if (numStr.length >= 2) numStr = numStr.slice(0, -1) + '.' + numStr.slice(-1);
+            } else if (['area', 'mat'].includes(field)) {
+                if (numStr.length >= 2) numStr = '0.' + numStr;
+                else if (numStr.length === 1 && numStr !== '0') numStr = '0.0' + numStr;
+            }
         }
 
-        if (numStr !== value) {
-            setManualOverrides(prev => ({ ...prev, [`${color}-${fieldLabel}`]: numStr.replace('.', ',') }));
+        const finalStr = numStr.replace('.', ',');
+        if (finalStr !== value) {
+            setManualOverrides(prev => ({ ...prev, [`${color}-${fieldLabel}`]: finalStr }));
         }
     };
 
