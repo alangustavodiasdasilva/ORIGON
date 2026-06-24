@@ -188,7 +188,11 @@ export default function MovingAverageChart({ samples, windowSize = 3, onSampleHo
                     const x = padding.left + (s.globalIndex * stepX);
                     const y = padding.top + chartHeight - ((s.parsedVal - yMin) / yRange) * chartHeight;
                     return { x, y, val: s.parsedVal, original: s, color: '#d1d5db', isOutlier: false };
-                })
+                }),
+                groupAvg: undefined,
+                groupAvgY: undefined,
+                groupStdDevUpperY: undefined,
+                groupStdDevLowerY: undefined
             });
         }
 
