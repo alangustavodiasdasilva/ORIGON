@@ -190,7 +190,7 @@ export default function HVIPreviewModal({
     return createPortal(
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in">
             {/* ... Modal Content ... */}
-            <div className="w-full max-w-6xl max-h-[90vh] bg-white flex flex-col shadow-2xl border border-black">
+            <div className="w-full max-w-7xl max-h-[90vh] bg-white flex flex-col shadow-2xl border border-black">
                 {/* Header */}
                 <div className="h-16 bg-white border-b border-black flex items-center justify-between px-8 shrink-0">
                     <div className="flex items-center gap-4">
@@ -214,8 +214,10 @@ export default function HVIPreviewModal({
                 </div>
 
                 {/* Content */}
-                <div className="flex-1 overflow-auto p-8 bg-neutral-50">
-                    {/* TOP COMPARATIVE TABLE */}
+                <div className="flex-1 overflow-hidden bg-neutral-50 flex flex-col lg:flex-row">
+                    {/* LEFT COLUMN: Tables */}
+                    <div className="w-full lg:w-7/12 p-8 overflow-y-auto border-b lg:border-b-0 lg:border-r border-neutral-200">
+                        {/* TOP COMPARATIVE TABLE */}
                     <div className="bg-white border border-neutral-200 shadow-sm mb-8">
                         <div className="p-4 bg-neutral-50/50 border-b border-neutral-200 flex justify-between items-center">
                             <h3 className="text-xs font-bold uppercase tracking-widest text-neutral-500">Comparativo: Original vs Arquivo HVI</h3>
@@ -459,12 +461,14 @@ export default function HVIPreviewModal({
                         </div>
                     )}
 
-                    {/* Full File Preview */}
-                    <div className="bg-white border border-neutral-200 p-6">
-                        <h4 className="text-xs font-bold uppercase tracking-widest text-neutral-500 mb-3">
+                    </div>
+
+                    {/* RIGHT COLUMN: Full File Preview */}
+                    <div className="w-full lg:w-5/12 p-8 overflow-y-auto bg-neutral-100 flex flex-col shadow-inner">
+                        <h4 className="text-xs font-bold uppercase tracking-widest text-neutral-500 mb-3 shrink-0">
                             Prévia Completa do Arquivo
                         </h4>
-                        <div className="bg-neutral-50 p-4 border border-neutral-200 font-mono text-xs overflow-auto max-h-64">
+                        <div className="bg-white p-4 border border-neutral-200 font-mono text-[10px] overflow-auto flex-1 shadow-sm">
                             <pre className="whitespace-pre-wrap break-words">{content}</pre>
                         </div>
                     </div>
