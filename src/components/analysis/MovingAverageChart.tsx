@@ -168,7 +168,11 @@ export default function MovingAverageChart({ samples, windowSize = 3, onSampleHo
                 ? `M ${points[0].x},${points[0].y} ` + points.slice(1).map(p => `L ${p.x},${p.y}`).join(" ")
                 : null;
 
-            return { color, points, path };
+            const groupAvgY = padding.top + chartHeight - ((groupAvg - yMin) / yRange) * chartHeight;
+            const groupStdDevUpperY = padding.top + chartHeight - ((groupAvg + groupStdDev - yMin) / yRange) * chartHeight;
+            const groupStdDevLowerY = padding.top + chartHeight - ((groupAvg - groupStdDev - yMin) / yRange) * chartHeight;
+
+            return { color, points, path, groupAvg, groupAvgY, groupStdDevUpperY, groupStdDevLowerY };
         }).filter(s => s !== null);
 
         // Série especial para amostras ANULADAS (pontos cinzas isolados)
@@ -397,6 +401,30 @@ export default function MovingAverageChart({ samples, windowSize = 3, onSampleHo
                         {/* Paths e Pontos das Séries - RENDERIZAÇÃO CONDICIONAL */}
                         {chartData.series.map((s, i) => (
                             <g key={s.color}>
+
+                                {/* BANDA E MÉDIA DO GRUPO */}
+                                {s.groupStdDevUpperY !== undefined && s.groupStdDevLowerY !== undefined && s.groupAvgY !== undefined && (
+                                    <>
+                                        <rect
+                                            x={chartData.padding.left}
+                                            y={s.groupStdDevUpperY}
+                                            width={chartData.width - chartData.padding.left - chartData.padding.right}
+                                            height={s.groupStdDevLowerY - s.groupStdDevUpperY}
+                                            fill={s.color}
+                                            opacity="0.05"
+                                        />
+                                        <line
+                                            x1={chartData.padding.left}
+                                            y1={s.groupAvgY}
+                                            x2={chartData.width - chartData.padding.right}
+                                            y2={s.groupAvgY}
+                                            stroke={s.color}
+                                            strokeWidth="1"
+                                            strokeDasharray="4 4"
+                                            opacity="0.5"
+                                        />
+                                    </>
+                                )}
 
                                 {/* GRÁFICO DE ÁREA */}
                                 {chartType === 'area' && s.path && (

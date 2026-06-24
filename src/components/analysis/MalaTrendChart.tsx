@@ -2,7 +2,7 @@ import { useMemo, useState, useRef, useEffect } from "react";
 import type { Sample } from "@/entities/Sample";
 import { cn } from "@/lib/utils";
 import { formatDecimalBR } from "@/services/ocrExtraction";
-import { TrendingUp, Activity, BarChart3, LineChart, BoxSelect, CircleDot } from "lucide-react";
+import { Activity, LineChart, BoxSelect, CircleDot } from "lucide-react";
 
 interface MalaTrendChartProps {
     samples: Sample[];

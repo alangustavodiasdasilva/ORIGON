@@ -314,7 +314,7 @@ import type { Machine } from "@/entities/Machine";
 function SystemConfigTab() {
     const { user, currentLab } = useAuth();
     const { addToast } = useToast();
-    const { config: audioConfig, updateConfig: updateAudioConfig, playAlert } = useAudioAlerts();
+    const { config: audioConfig, updateConfig: updateAudioConfig } = useAudioAlerts();
     const [machines, setMachines] = useState<Machine[]>([]);
     const [labs, setLabs] = useState<Lab[]>([]);
     const [isUploadingSound, setIsUploadingSound] = useState(false);
