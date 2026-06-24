@@ -54,15 +54,21 @@ export function useAudioAlerts() {
       playAlert(payload.color);
     });
 
-    // 3. (Opcional) Pedir configuração atual para a rede ao conectar (P2P Discovery)
-    // Para simplificar, o admin quando abre o painel pode emitir a configuração dele.
-    realtimeService.broadcast('request_config_sync', {});
-
     return () => {
       unsubsConfig();
       unsubsAlert();
     };
   }, [playAlert]);
+
+  // Pedir configuração atual para a rede apenas UMA vez ao montar o componente
+  useEffect(() => {
+    // Dá um pequeno delay para garantir que o canal de websocket está pronto
+    const timer = setTimeout(() => {
+      realtimeService.broadcast('request_config_sync', {});
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, []);
+
 
   // Ouvinte para quem tem a configuração "Master"
   useEffect(() => {
