@@ -218,7 +218,7 @@ export const MachineService = {
 
         const ghosts = (data || []).filter(m => {
             const num = parseInt(m.identificacao.replace(/\D/g, ''), 10);
-            return isNaN(num) || num < 1 || num > 7;
+            return isNaN(num) || num < 1;
         });
 
         if (ghosts.length === 0) return 0;

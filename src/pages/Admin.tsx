@@ -416,9 +416,9 @@ function SystemConfigTab() {
             loadData();
             resetForm();
 
-        } catch (error) {
+        } catch (error: any) {
             console.error("Error saving machine", error);
-            addToast({ title: "Erro ao salvar máquina", type: "error" });
+            addToast({ title: "Erro ao salvar máquina", description: error.message || String(error), type: "error" });
         }
     };
 
