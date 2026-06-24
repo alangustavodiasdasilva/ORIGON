@@ -6,7 +6,8 @@ import {
     Filter,
     Wand2,
     Activity,
-    ImagePlus
+    ImagePlus,
+    Lock
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { Sample } from "@/entities/Sample";
@@ -504,15 +505,22 @@ export default function Analysis() {
                                         { label: 'STR', val: data.str, d: 1 },
                                         { label: 'RD', val: data.rd, d: 1 },
                                         { label: '+B', val: data.b, d: 1 },
-                                    ].map((metric, fieldIdx, metricsArr) => (
-                                        <div key={metric.label} className="flex items-center justify-between border-b border-neutral-50 pb-2 last:border-none">
-                                            <span className="text-[9px] font-black text-neutral-400 font-mono tracking-widest">{metric.label}</span>
+                                    ].map((metric, fieldIdx, metricsArr) => {
+                                        const isOverridden = manualOverrides[`${color}-${metric.label}`] !== undefined;
+                                        return (
+                                        <div key={metric.label} className="flex items-center justify-between border-b border-neutral-50 pb-2 last:border-none relative group/input">
+                                            <div className="flex items-center gap-1.5">
+                                                <span className="text-[9px] font-black text-neutral-400 font-mono tracking-widest">{metric.label}</span>
+                                                {isOverridden && (
+                                                    <Lock className="w-2.5 h-2.5 text-amber-500" title="Valor travado manualmente (apague para destravar)" />
+                                                )}
+                                            </div>
                                             <input 
                                                 type="text"
                                                 aria-label={`Editar valor de ${metric.label}`}
                                                 title={`Editar valor de ${metric.label}`}
                                                 value={
-                                                    manualOverrides[`${color}-${metric.label}`] !== undefined
+                                                    isOverridden
                                                         ? manualOverrides[`${color}-${metric.label}`]
                                                         : metric.val.toLocaleString('pt-BR', { minimumFractionDigits: metric.d, maximumFractionDigits: metric.d })
                                                 }
@@ -521,10 +529,10 @@ export default function Analysis() {
                                                 onKeyDown={(e) => handleMediaKeyDown(e, colorIdx, fieldIdx, metricsArr.length)}
                                                 data-mediacolor={colorIdx}
                                                 data-mediafield={fieldIdx}
-                                                className="w-24 bg-transparent text-right text-xl font-serif font-bold text-neutral-800 tracking-tight outline-none hover:bg-neutral-50 focus:bg-white focus:ring-1 ring-neutral-200 rounded px-1 -mr-1 transition-all"
+                                                className={`w-24 bg-transparent text-right text-xl font-serif font-bold tracking-tight outline-none hover:bg-neutral-50 focus:bg-white focus:ring-1 ring-neutral-200 rounded px-1 -mr-1 transition-all ${isOverridden ? 'text-amber-600' : 'text-neutral-800'}`}
                                             />
                                         </div>
-                                    ))}
+                                    )})}
                                 </div>
 
                                 <div className="mt-2 pt-4 border-t border-neutral-100 flex flex-col gap-3">
