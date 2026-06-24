@@ -577,6 +577,30 @@ export default function ColorTemplatesModal({ isOpen, onClose, specificColor, co
         });
     };
 
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, rowIdx: number, colIdx: number, colorHex: string) => {
+        const key = e.key;
+        if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(key)) {
+            e.preventDefault();
+            let nextRow = rowIdx;
+            let nextCol = colIdx;
+            
+            if (key === 'ArrowUp') nextRow = Math.max(0, rowIdx - 1);
+            if (key === 'ArrowDown') nextRow = Math.min(scannedRows.length - 1, rowIdx + 1);
+            if (key === 'ArrowLeft') nextCol = Math.max(0, colIdx - 1);
+            if (key === 'ArrowRight') nextCol = Math.min(FIELDS.length - 1, colIdx + 1);
+
+            if (nextRow !== rowIdx || nextCol !== colIdx) {
+                // Remove '#' if it's there from the hex to use it as an ID/selector safely
+                const safeColor = colorHex.replace('#', '');
+                const nextInput = document.querySelector(`input[data-color="${safeColor}"][data-row="${nextRow}"][data-col="${nextCol}"]`) as HTMLInputElement;
+                if (nextInput) {
+                    nextInput.focus();
+                    nextInput.select();
+                }
+            }
+        }
+    };
+
     if (!isOpen) return null;
 
     const visibleColors = specificColor
@@ -795,7 +819,7 @@ export default function ColorTemplatesModal({ isOpen, onClose, specificColor, co
                                                                     {idx + 1}
                                                                 </button>
                                                             </td>
-                                                            {FIELDS.map(f => (
+                                                            {FIELDS.map((f, colIdx) => (
                                                                 <td key={f.id} className="p-0.5">
                                                                     <input
                                                                         type={f.type || 'number'}
@@ -804,6 +828,10 @@ export default function ColorTemplatesModal({ isOpen, onClose, specificColor, co
                                                                         step={f.step !== '0' ? f.step : undefined}
                                                                         value={row[f.id] ?? ''}
                                                                         onChange={e => updateScannedRow(idx, f.id, e.target.value)}
+                                                                        onKeyDown={e => handleKeyDown(e, idx, colIdx, colorObj.hex)}
+                                                                        data-color={colorObj.hex.replace('#', '')}
+                                                                        data-row={idx}
+                                                                        data-col={colIdx}
                                                                         className={`w-full bg-transparent border-none text-center font-mono focus:bg-white/[0.06] focus:outline-none focus:ring-1 focus:ring-emerald-500/30 py-1 rounded transition-all text-[9px] ${
                                                                             selectedLines[colorObj.hex] === idx
                                                                                 ? 'text-white font-bold'

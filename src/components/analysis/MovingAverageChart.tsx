@@ -169,8 +169,6 @@ export default function MovingAverageChart({
             // Estatísticas do GRUPO
             const groupValues = groupSamples.map(s => s.parsedVal);
             const groupAvg = groupValues.reduce((a, b) => a + b, 0) / groupValues.length;
-            const groupVariance = groupValues.reduce((acc, val) => acc + Math.pow(val - groupAvg, 2), 0) / groupValues.length;
-            const groupStdDev = Math.sqrt(groupVariance);
 
             // Coordenadas baseadas no índice GLOBAL
             const points = groupSamples.map((s) => {
