@@ -601,6 +601,30 @@ export default function ColorTemplatesModal({ isOpen, onClose, specificColor, co
         }
     };
 
+    const handleBlur = (rowIndex: number, field: string, value: number | string) => {
+        if (field === 'cg' || field === 'leaf' || field === 'count' || field === 'csp' || field === 'sci') return;
+        
+        let numStr = String(value).replace(',', '.');
+        if (!numStr || numStr.includes('.')) return;
+
+        if (field === 'mic') {
+            if (numStr.length > 1) numStr = numStr.slice(0, 1) + '.' + numStr.slice(1);
+        } else if (field === 'len') {
+            if (numStr.length > 2) numStr = numStr.slice(0, 2) + '.' + numStr.slice(2);
+        } else if (field === 'unf' || field === 'str' || field === 'rd') {
+            if (numStr.length > 2) numStr = numStr.slice(0, 2) + '.' + numStr.slice(2);
+        } else if (field === 'elg' || field === 'b' || field === 'sfi') {
+            if (numStr.length >= 2) numStr = numStr.slice(0, -1) + '.' + numStr.slice(-1);
+        } else if (field === 'area' || field === 'mat') {
+            if (numStr.length >= 2) numStr = '0.' + numStr;
+            else if (numStr.length === 1 && numStr !== '0') numStr = '0.0' + numStr;
+        }
+
+        if (numStr !== String(value)) {
+            updateScannedRow(rowIndex, field as keyof ColorTemplate, numStr);
+        }
+    };
+
     if (!isOpen) return null;
 
     const visibleColors = specificColor
@@ -829,6 +853,7 @@ export default function ColorTemplatesModal({ isOpen, onClose, specificColor, co
                                                                         value={row[f.id] ?? ''}
                                                                         onChange={e => updateScannedRow(idx, f.id, e.target.value)}
                                                                         onKeyDown={e => handleKeyDown(e, idx, colIdx, colorObj.hex)}
+                                                                        onBlur={() => handleBlur(idx, f.id, row[f.id] ?? '')}
                                                                         data-color={colorObj.hex.replace('#', '')}
                                                                         data-row={idx}
                                                                         data-col={colIdx}
