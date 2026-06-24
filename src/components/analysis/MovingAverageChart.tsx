@@ -140,6 +140,12 @@ export default function MovingAverageChart({ samples, windowSize = 3, onSampleHo
         const totalPoints = validSamples.length;
         const stepX = chartWidth / (Math.max(totalPoints - 1, 1));
 
+        const TOLERANCES: Record<string, number> = {
+            mic: 0.05, len: 0.25, unf: 0.5, str: 0.75, rd: 0.5, b: 0.2
+        };
+        const definedDeviation = TOLERANCES[selectedField] || 0.5;
+
+
         // Agrupar dados por cor (Séries)
         const series = Object.keys(COLORS_MAP).map(color => {
             const groupSamples = validSamples
@@ -158,8 +164,8 @@ export default function MovingAverageChart({ samples, windowSize = 3, onSampleHo
             const points = groupSamples.map((s) => {
                 const x = padding.left + (s.globalIndex * stepX);
                 const y = padding.top + chartHeight - ((s.parsedVal - yMin) / yRange) * chartHeight;
-                // Detectar outliers (>1.5σ DO GRUPO)
-                const isOutlier = Math.abs(s.parsedVal - groupAvg) > 1.5 * groupStdDev;
+                // Detectar outliers (> limite tolerância do GRUPO)
+                const isOutlier = Math.abs(s.parsedVal - groupAvg) > definedDeviation;
                 return { x, y, val: s.parsedVal, original: s, color, isOutlier };
             });
 
@@ -169,8 +175,8 @@ export default function MovingAverageChart({ samples, windowSize = 3, onSampleHo
                 : null;
 
             const groupAvgY = padding.top + chartHeight - ((groupAvg - yMin) / yRange) * chartHeight;
-            const groupStdDevUpperY = padding.top + chartHeight - ((groupAvg + groupStdDev - yMin) / yRange) * chartHeight;
-            const groupStdDevLowerY = padding.top + chartHeight - ((groupAvg - groupStdDev - yMin) / yRange) * chartHeight;
+            const groupStdDevUpperY = padding.top + chartHeight - ((groupAvg + definedDeviation - yMin) / yRange) * chartHeight;
+            const groupStdDevLowerY = padding.top + chartHeight - ((groupAvg - definedDeviation - yMin) / yRange) * chartHeight;
 
             return { color, points, path, groupAvg, groupAvgY, groupStdDevUpperY, groupStdDevLowerY };
         }).filter(s => s !== null);
@@ -587,11 +593,11 @@ export default function MovingAverageChart({ samples, windowSize = 3, onSampleHo
                     <div className="absolute bottom-2 left-16 flex items-center gap-4 text-[9px]">
                         <div className="flex items-center gap-1">
                             <div className="w-3 h-3 bg-neutral-200 opacity-50"></div>
-                            <span className="text-neutral-500">Banda ±1σ</span>
+                            <span className="text-neutral-500">Banda (Tolerância)</span>
                         </div>
                         <div className="flex items-center gap-1">
                             <div className="w-3 h-3 rounded-full border-2 border-red-500 border-dashed"></div>
-                            <span className="text-red-500">Outlier (&gt;2σ)</span>
+                            <span className="text-red-500">Outlier (&gt;Tolerância)</span>
                         </div>
                     </div>
                 </div>
