@@ -519,12 +519,11 @@ function SystemConfigTab() {
                         <div className="space-y-2">
                             <label className="text-xs font-bold uppercase tracking-widest text-neutral-500">Alerta Verde (Sucesso)</label>
                             <div className="flex gap-2">
-                                <input 
-                                    type="text" 
+                                <textarea 
                                     value={audioConfig.greenUrl}
                                     onChange={(e) => updateAudioConfig({ ...audioConfig, greenUrl: e.target.value })}
-                                    className="flex-1 h-12 border border-neutral-300 px-4 text-sm focus:border-black focus:ring-0 rounded-none bg-neutral-50"
-                                    placeholder="https://... ou faça upload"
+                                    className="flex-1 h-24 border border-neutral-300 p-3 text-xs focus:border-black focus:ring-0 rounded-none bg-neutral-50 resize-y"
+                                    placeholder="Cole os links aqui (um por linha)..."
                                 />
                                 <div className="relative">
                                     <input 
@@ -545,12 +544,11 @@ function SystemConfigTab() {
                         <div className="space-y-2">
                             <label className="text-xs font-bold uppercase tracking-widest text-neutral-500">Alerta Vermelho (Erro)</label>
                             <div className="flex gap-2">
-                                <input 
-                                    type="text" 
+                                <textarea 
                                     value={audioConfig.redUrl}
                                     onChange={(e) => updateAudioConfig({ ...audioConfig, redUrl: e.target.value })}
-                                    className="flex-1 h-12 border border-neutral-300 px-4 text-sm focus:border-black focus:ring-0 rounded-none bg-neutral-50"
-                                    placeholder="https://... ou faça upload"
+                                    className="flex-1 h-24 border border-neutral-300 p-3 text-xs focus:border-black focus:ring-0 rounded-none bg-neutral-50 resize-y"
+                                    placeholder="Cole os links aqui (um por linha)..."
                                 />
                                 <div className="relative">
                                     <input 
