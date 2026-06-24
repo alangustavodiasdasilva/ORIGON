@@ -44,6 +44,19 @@ export default function Analysis() {
         rd: 0.5,
         b: 0.25
     });
+    
+    const [manualOverrides, setManualOverrides] = useState<Record<string, string>>(() => {
+        try {
+            const stored = localStorage.getItem(`lote_${loteId}_manual_overrides`);
+            return stored ? JSON.parse(stored) : {};
+        } catch { return {}; }
+    });
+
+    useEffect(() => {
+        if (loteId) {
+            localStorage.setItem(`lote_${loteId}_manual_overrides`, JSON.stringify(manualOverrides));
+        }
+    }, [manualOverrides, loteId]);
 
 
     const metricsByColor = useMemo(() => {
@@ -428,9 +441,18 @@ export default function Analysis() {
                                     ].map(metric => (
                                         <div key={metric.label} className="flex items-center justify-between border-b border-neutral-50 pb-2 last:border-none">
                                             <span className="text-[9px] font-black text-neutral-400 font-mono tracking-widest">{metric.label}</span>
-                                            <span className="text-xl font-serif font-bold text-neutral-800 tracking-tight">
-                                                {metric.val.toLocaleString('pt-BR', { minimumFractionDigits: metric.d, maximumFractionDigits: metric.d })}
-                                            </span>
+                                            <input 
+                                                type="text"
+                                                aria-label={`Editar valor de ${metric.label}`}
+                                                title={`Editar valor de ${metric.label}`}
+                                                value={
+                                                    manualOverrides[`${color}-${metric.label}`] !== undefined
+                                                        ? manualOverrides[`${color}-${metric.label}`]
+                                                        : metric.val.toLocaleString('pt-BR', { minimumFractionDigits: metric.d, maximumFractionDigits: metric.d })
+                                                }
+                                                onChange={(e) => setManualOverrides(prev => ({ ...prev, [`${color}-${metric.label}`]: e.target.value }))}
+                                                className="w-24 bg-transparent text-right text-xl font-serif font-bold text-neutral-800 tracking-tight outline-none hover:bg-neutral-50 focus:bg-white focus:ring-1 ring-neutral-200 rounded px-1 -mr-1 transition-all"
+                                            />
                                         </div>
                                     ))}
                                 </div>

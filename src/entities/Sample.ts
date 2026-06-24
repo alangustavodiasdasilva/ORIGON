@@ -213,6 +213,26 @@ export const SampleService = {
         notify();
     },
 
+    async deleteByLote(loteId: string): Promise<number> {
+        if (isSupabaseEnabled()) {
+            const { data, error } = await supabase.from('amostras').delete().eq('lote_id', loteId).select();
+            if (error) throw error;
+            const count = data ? data.length : 0;
+            // Apenas notifica uma vez após apagar tudo
+            if (count > 0) notify();
+            return count;
+        }
+
+        const samples = getStoredSamples();
+        const filtered = samples.filter(s => s.lote_id !== loteId);
+        const deletedCount = samples.length - filtered.length;
+        if (deletedCount > 0) {
+            saveStoredSamples(filtered);
+            notify();
+        }
+        return deletedCount;
+    },
+
     subscribe(callback: () => void): () => void {
         listeners.add(callback);
 

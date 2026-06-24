@@ -62,8 +62,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 }
             }
 
-
             setIsLoading(false);
+            
+            // Auto-refresh user from DB in background to sync roles/permissions
+            if (storedSession) {
+                setTimeout(() => {
+                    refreshUser().catch(console.error);
+                }, 1000);
+            }
         };
         init();
     }, []);

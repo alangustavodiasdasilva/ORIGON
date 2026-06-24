@@ -157,7 +157,7 @@ export default function Home() {
         return name.split(" ").map(n => n[0]).join("").substring(0, 2).toUpperCase();
     };
 
-    const getLabName = (labId?: string) => {
+    const getLabName = (labId?: string | null) => {
         if (!labId) return "N/A";
         const lab = labs.find(l => l.id === labId);
         return lab ? `${lab.nome} - ${lab.cidade}` : "Unknown Lab";
@@ -178,7 +178,7 @@ export default function Home() {
                 nome: newLoteName,
                 cidade: newLoteCidade,
                 analista_responsavel: user.nome,
-                lab_id: targetLabId, // Bind Lote to current context
+                lab_id: targetLabId || undefined, // Bind Lote to current context
                 status: 'aberto'
             });
             addToast({
@@ -232,15 +232,32 @@ export default function Home() {
     const handleDeleteLote = async () => {
         if (!loteToDelete) return;
         try {
+            // 1. Limpa referência de analistas ativos neste lote (Foreign Key Constraint)
+            const allAnalysts = await AnalistaService.list();
+            const activeInLote = allAnalysts.filter(a => a.current_lote_id === loteToDelete.id);
+            for (const analyst of activeInLote) {
+                await AnalistaService.update(analyst.id, { current_lote_id: null });
+            }
+
+            // 2. Apaga todas as amostras vinculadas ao lote (Foreign Key Constraint) em uma única operação
+            const deletedCount = await SampleService.deleteByLote(loteToDelete.id);
+            
+            // 3. Depois apaga o lote
             await LoteService.delete(loteToDelete.id);
             addToast({
-                title: "Items Removed",
+                title: "Lote Removido",
+                description: `${loteToDelete.nome} e ${deletedCount} amostra(s) excluída(s).`,
                 type: "info"
             });
             setLoteToDelete(null);
             loadLotes();
-        } catch (error) {
-            addToast({ title: "Delete Error", type: "error" });
+        } catch (error: any) {
+            console.error("Erro ao deletar lote:", error);
+            addToast({ 
+                title: "Erro ao Remover Lote", 
+                description: error?.message || "Permissão negada ou erro de conexão.",
+                type: "error" 
+            });
         }
     };
 

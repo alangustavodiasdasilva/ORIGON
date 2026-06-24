@@ -247,7 +247,7 @@ export default function Interlaboratorial() {
                 filename,
                 content: fullContent,
                 results: { ...results },
-                labId: currentLab?.id || user?.lab_id,
+                labId: currentLab?.id || user?.lab_id || undefined,
                 labName: currentLab?.nome || "N/A"
             });
         } else {
@@ -419,7 +419,7 @@ export default function Interlaboratorial() {
                 filename,
                 content,
                 results: { ...results },
-                labId: currentLab?.id || user?.lab_id,
+                labId: currentLab?.id || user?.lab_id || undefined,
                 labName: currentLab?.nome || "N/A"
             });
         }

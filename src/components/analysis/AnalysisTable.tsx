@@ -201,6 +201,7 @@ export default function AnalysisTable({ samples, onUpdateSample, onColorChange, 
                                          value={sample.hvi || "1"}
                                          disabled={isProcessing || sample.locked}
                                          onChange={(e) => onUpdateSample(sample.id, 'hvi', e.target.value)}
+                                         title="Selecionar HVI"
                                          className="font-black text-blue-600 bg-transparent hover:bg-neutral-50 p-1 border-0 focus:ring-0 focus:outline-none cursor-pointer rounded text-[11px] text-center w-full focus:bg-white appearance-none"
                                      >
                                          {[1, 2, 3, 4, 5, 6, 7].map(n => (
@@ -382,6 +383,18 @@ export default function AnalysisTable({ samples, onUpdateSample, onColorChange, 
                     machineModel={previewModal.data.machineModel}
                     originalSample={previewModal.sample}
                     generatedValues={previewModal.data.generatedValues}
+                    balancedReadings={previewModal.data.balancedReadings}
+                    onRegenerate={async (newReadings) => {
+                        if (previewModal.sample) {
+                            const result = await HVIFileGeneratorService.generatePreviewForSample(previewModal.sample, samples, tolerancias, newReadings);
+                            if (result.success && result.data) {
+                                setPreviewModal(prev => ({
+                                    ...prev,
+                                    data: result.data || null
+                                }));
+                            }
+                        }
+                    }}
                 />
             )}
         </div>

@@ -2,7 +2,6 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { useAuth } from './AuthContext';
 import { useToast } from './ToastContext';
 import { MigrationService } from '@/services/MigrationService';
-import { producaoService } from '@/services/producao.service';
 import { Cloud, CloudOff, RefreshCw, AlertCircle } from 'lucide-react';
 
 interface SyncStatus {
@@ -30,8 +29,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
     const checkPendingData = useCallback(() => {
         const keys = [
             'fibertech_labs',
-            'fibertech_analistas',
-            'fibertech_producao_data'
+            'fibertech_analistas'
         ];
 
         let count = 0;
@@ -64,18 +62,6 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
         try {
             // 1. Sync Base Entities (Labs, Analysts, Machines)
             await MigrationService.pushLocalToCloud();
-
-            // 2. Sync Production Data if Lab is selected
-            const localProducaoStr = localStorage.getItem('fibertech_producao_data');
-            if (localProducaoStr && currentLab) {
-                const data = JSON.parse(localProducaoStr);
-                if (data.length > 0) {
-                    const success = await producaoService.uploadData(data);
-                    if (success) {
-                        localStorage.removeItem('fibertech_producao_data');
-                    }
-                }
-            }
 
             setStatus(prev => ({
                 ...prev,

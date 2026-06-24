@@ -12,11 +12,8 @@ import {
     Package,
     Download,
     Upload,
-    Zap,
     Menu,
     X,
-    FileSpreadsheet,
-    ClipboardList,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
@@ -28,12 +25,14 @@ import { BackupService } from "@/services/BackupService";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { PresenceIndicators } from "@/components/realtime/PresenceIndicators";
 import { NetworkMonitor } from "./NetworkMonitor";
+import { useAudioAlerts } from "@/hooks/useAudioAlerts";
 
 export default function Layout() {
     const location = useLocation();
     const { user, logout } = useAuth();
     const { toasts } = useToast();
     const { t, language, setLanguage } = useLanguage();
+    const { broadcastAlert } = useAudioAlerts();
 
     // Enable global keyboard shortcuts
     useKeyboardShortcuts();
@@ -68,10 +67,7 @@ export default function Layout() {
         { href: "/lotes", label: t('nav.batches'), icon: Package, public: true, prefetch: () => import("@/pages/Home") },
         { href: "/icac", label: t('nav.icac'), icon: Microscope, public: true, prefetch: () => import("@/pages/Icac") },
         { href: "/interlaboratorial", label: t('nav.interlab'), icon: Network, public: true, prefetch: () => import("@/pages/Interlaboratorial") },
-        { href: "/verificacao", label: "Verificação", icon: CheckCircle2, allowedRoles: ['admin_global', 'admin_lab', 'quality_admin'], prefetch: () => import("@/pages/Verificacao") },
-        { href: "/operacao", label: "Operação", icon: Zap, allowedRoles: ['admin_global', 'admin_lab', 'quality_admin'], prefetch: () => import("@/pages/Operacao") },
-        { href: "/monitoramento-os", label: "Monitoramento O.S.", icon: FileSpreadsheet, allowedRoles: ['admin_global', 'admin_lab', 'quality_admin'], prefetch: () => import("@/pages/MonitoramentoOS") },
-        { href: "/producao-operadores", label: "Produção Turno", icon: ClipboardList, allowedRoles: ['admin_global', 'admin_lab', 'quality_admin'], prefetch: () => import("@/pages/ProducaoOperadores") },
+
         { href: "/admin", label: t('nav.config'), icon: ShieldCheck, allowedRoles: ['admin_global', 'admin_lab'], prefetch: () => import("@/pages/Admin") },
     ];
 
@@ -292,9 +288,22 @@ export default function Layout() {
                             {/* <GlobalSearch /> */}
                         </div>
 
-                        {/* Network Monitor */}
-                        <div className="block">
+                        {/* Network Monitor & Audio Alerts */}
+                        <div className="flex items-center gap-2">
                             <NetworkMonitor />
+                            
+                            <div className="flex items-center gap-2 ml-2">
+                                <button
+                                    onClick={() => broadcastAlert('green')}
+                                    className="w-5 h-5 rounded-full bg-emerald-500 hover:bg-emerald-400 active:scale-95 shadow-[0_0_10px_rgba(16,185,129,0.3)] transition-all border border-emerald-400 focus:outline-none"
+                                    title="Play Green Alert"
+                                />
+                                <button
+                                    onClick={() => broadcastAlert('red')}
+                                    className="w-5 h-5 rounded-full bg-red-600 hover:bg-red-500 active:scale-95 shadow-[0_0_10px_rgba(220,38,38,0.3)] transition-all border border-red-500 focus:outline-none"
+                                    title="Play Red Alert"
+                                />
+                            </div>
                         </div>
 
                         {/* Admin Tools */}

@@ -22,6 +22,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { AnalistaService } from "@/entities/Analista";
 import { Modal } from "@/components/shared/Modal";
 import { HVIFileGeneratorService } from "@/services/HVIFileGeneratorService";
+import { ExcelImportModal } from "@/components/registro/ExcelImportModal";
 import { cn } from "@/lib/utils";
 
 const classifySample = (row: HVIDataRow): string => {
@@ -69,8 +70,10 @@ export default function Registro() {
     const [uploadQueue, setUploadQueue] = useState<File[]>([]); // Arquivos aguardando
     const [processedQueue, setProcessedQueue] = useState<PendingConfirmation[]>([]); // Arquivos prontos para revisão
 
-    // Item sendo revisado atualmente
     const [pendingReview, setPendingReview] = useState<PendingConfirmation | null>(null);
+
+    // Estado do Modal de Excel
+    const [isExcelModalOpen, setIsExcelModalOpen] = useState(false);
 
     // Efeito para processar filas em background enquanto o usuário trabalha
     useEffect(() => {
@@ -85,9 +88,6 @@ export default function Registro() {
             const nextFile = uploadQueue[0];
 
             try {
-                // Remove da fila de upload imediatamente para evitar duplicidade
-                setUploadQueue(prev => prev.slice(1));
-
                 const data = await OCRExtractionService.extractFromImage(nextFile, () => { }); // Progresso ignorado no background
                 const previewUrl = URL.createObjectURL(nextFile);
 
@@ -96,6 +96,8 @@ export default function Registro() {
                 console.error("Erro no processamento background", error);
                 // Se der erro, descartamos silenciosamente
             } finally {
+                // Remove o arquivo processado da fila de upload
+                setUploadQueue(prev => prev.slice(1));
                 setIsBackgroundProcessing(false);
             }
         };
@@ -105,7 +107,7 @@ export default function Registro() {
     }, [uploadQueue, isBackgroundProcessing, isProcessing, processedQueue.length]);
 
 
-    // Função que assume um item para revisão (seja da fila processada ou processando na hora)
+    // Função que assume um item para revisão (da fila processada ou passado diretamente)
     const loadNextForReview = async (item?: PendingConfirmation) => {
         let reviewItem = item;
 
@@ -115,38 +117,14 @@ export default function Registro() {
             setProcessedQueue(prev => prev.slice(1));
         }
 
-        // Se ainda não tem item, mas tem na fila de upload (caso background não tenha terminado)
-        // Processamos com prioridade (foreground)
-        if (!reviewItem && uploadQueue.length > 0) {
-            const nextFile = uploadQueue[0];
-            setUploadQueue(prev => prev.slice(1));
-
-            setIsProcessing(true);
-            setOcrProgress(0);
-            setProcessingStatus("Processando próxima imagem...");
-
-            try {
-                const data = await OCRExtractionService.extractFromImage(nextFile, (p) => setOcrProgress(p));
-                const previewUrl = URL.createObjectURL(nextFile);
-                reviewItem = { file: nextFile, previewUrl, data };
-            } catch (error) {
-                console.error(error);
-                addToast({ title: "Erro no OCR", description: "Falha ao processar imagem.", type: "error" });
-                setIsProcessing(false);
-                setProcessingStatus("");
-                return; // Aborta
-            } finally {
-                setIsProcessing(false);
-                setProcessingStatus("");
-            }
-        }
+        // NÃO toca na uploadQueue aqui - o background processor cuida disso
+        // para evitar condição de corrida que perde imagens
 
         if (reviewItem) {
             // Setup do review
             setPendingReview(reviewItem);
             setEditingMala(reviewItem.data.mala || '');
             setEditingEtiqueta(reviewItem.data.etiqueta || '');
-
             let rows = reviewItem.data.rows;
 
             const mediaRow = rows.find(r => r.numero === 'M');
@@ -191,6 +169,14 @@ export default function Registro() {
         }
     };
 
+    // Auto-carrega o próximo review quando um item fica pronto no processedQueue
+    // e não tem review pendente (evita a condição de corrida com o background processor)
+    useEffect(() => {
+        if (!pendingReview && processedQueue.length > 0 && !isProcessing) {
+            loadNextForReview();
+        }
+    }, [processedQueue.length, pendingReview, isProcessing]);
+
     const handleUpload = async (files: File[]) => {
         if (!loteId || files.length === 0) return;
 
@@ -200,6 +186,7 @@ export default function Registro() {
 
             setIsProcessing(true);
             setOcrProgress(0);
+            setProcessingStatus("Processando imagem...");
             try {
                 const data = await OCRExtractionService.extractFromImage(first, p => setOcrProgress(p));
                 const previewUrl = URL.createObjectURL(first);
@@ -208,6 +195,7 @@ export default function Registro() {
                 console.error(e);
             } finally {
                 setIsProcessing(false);
+                setProcessingStatus("");
             }
         } else {
             setUploadQueue(prev => [...prev, ...files]);
@@ -285,9 +273,15 @@ export default function Registro() {
             await SampleService.delete(sampleId);
             addToast({ title: "Registro Removido", type: "info" });
             setModalAction(null);
-            loadData();
-        } catch (error) {
-            addToast({ title: "Erro ao Remover", type: "error" });
+            await loadData();
+        } catch (error: any) {
+            console.error("Erro ao deletar amostra:", error);
+            addToast({ 
+                title: "Erro ao Remover", 
+                description: error?.message || "Permissão negada ou erro de conexão.", 
+                type: "error" 
+            });
+            setModalAction(null);
         }
     };
 
@@ -319,7 +313,31 @@ export default function Registro() {
             const rowsToSave = editingRows.filter((_, index) => selectedRows.has(index));
             const existingIds = new Set(samples.map(s => s.amostra_id));
 
-            const dataList = rowsToSave.map((row) => {
+            // Proteção contra duplicatas: filtra linhas que já existem no banco
+            const uniqueRowsToSave = rowsToSave.filter(row => {
+                return !samples.some(s => 
+                    s.etiqueta === editingEtiqueta &&
+                    s.mic === row.mic &&
+                    s.len === row.len &&
+                    s.str === row.str
+                );
+            });
+
+            if (uniqueRowsToSave.length === 0) {
+                addToast({ title: "Duplicata Detectada", description: "Estas amostras já existem no banco.", type: "info" });
+                // Limpa a revisão e avança para a próxima
+                if (pendingReview?.previewUrl) URL.revokeObjectURL(pendingReview.previewUrl);
+                setPendingReview(null);
+                setEditingRows([]);
+                setEditingMala('');
+                setEditingEtiqueta('');
+                setSelectedRows(new Set());
+                setIsSaving(false);
+                loadNextForReview();
+                return;
+            }
+
+            const dataList = uniqueRowsToSave.map((row) => {
                 let currentNextId = "";
                 for (let i = 1; i <= 28; i++) {
                     const potentialId = i.toString().padStart(2, '0');
@@ -381,6 +399,61 @@ export default function Registro() {
             });
         } finally {
             setIsSaving(false);
+        }
+    };
+
+    const handleSaveExcelSamples = async (rows: HVIDataRow[], malaId: string) => {
+        if (!loteId) return;
+        
+        try {
+            const existingIds = new Set(samples.map(s => s.amostra_id));
+            let savedCount = 0;
+
+            const dataList = rows.map((row) => {
+                let currentNextId = "";
+                for (let i = 1; i <= 1000; i++) {
+                    const potentialId = i.toString().padStart(2, '0');
+                    if (!existingIds.has(potentialId)) {
+                        currentNextId = potentialId;
+                        existingIds.add(potentialId);
+                        break;
+                    }
+                }
+                
+                return {
+                    lote_id: loteId,
+                    amostra_id: currentNextId,
+                    hvi: row.hvi || '1',
+                    mala: malaId || '',
+                    etiqueta: row.etiqueta || '',
+                    data_analise: row.data_analise,
+                    hora_analise: row.hora_analise,
+                    mic: row.mic,
+                    len: row.len,
+                    unf: row.unf,
+                    str: row.str,
+                    rd: row.rd,
+                    b: row.b,
+                    cor: classifySample(row),
+                    historico_modificacoes: []
+                };
+            });
+
+            if (dataList.length > 0) {
+                await SampleService.bulkCreate(dataList);
+                savedCount = dataList.length;
+            }
+
+            addToast({ title: "Amostras da Planilha Salvas", description: `${savedCount} registro(s) adicionado(s).`, type: "success" });
+            await loadData();
+        } catch (error: any) {
+            console.error("ERRO CRÍTICO AO SALVAR EXCEL:", error);
+            addToast({ 
+                title: "Falha no Salvamento", 
+                description: error.message || "Erro desconhecido ao persistir dados do Excel.", 
+                type: "error" 
+            });
+            throw error;
         }
     };
 
@@ -503,8 +576,8 @@ export default function Registro() {
                                     <div className="h-2 w-2 bg-blue-600 rounded-full animate-pulse" />
                                     <h3 className="text-sm font-bold uppercase tracking-[0.2em]">Identification</h3>
                                 </div>
-                                <div className="grid grid-cols-3 gap-6">
-                                    <div className="space-y-2">
+                                <div className="grid grid-cols-4 gap-6">
+                                    <div className="space-y-2 col-span-1">
                                         <label className="text-[9px] font-bold text-neutral-400 uppercase tracking-widest">Bag ID</label>
                                         <Input
                                             value={editingMala}
@@ -513,7 +586,7 @@ export default function Registro() {
                                             placeholder="UNIDENTIFIED"
                                         />
                                     </div>
-                                    <div className="space-y-2">
+                                    <div className="space-y-2 col-span-2">
                                         <label className="text-[9px] font-bold text-neutral-400 uppercase tracking-widest">Tag Reference</label>
                                         <Input
                                             value={editingEtiqueta}
@@ -522,9 +595,10 @@ export default function Registro() {
                                             placeholder="NO TAG"
                                         />
                                     </div>
-                                    <div className="space-y-2">
+                                    <div className="space-y-2 col-span-1">
                                         <label className="text-[9px] font-bold text-neutral-400 uppercase tracking-widest">Máquina HVI</label>
                                         <select
+                                            title="Máquina HVI"
                                             value={currentRow.hvi || '1'}
                                             onChange={(e) => updateCurrentRow('hvi', e.target.value)}
                                             className="w-full h-12 border-b-2 border-l-0 border-r-0 border-t-0 border-neutral-200 rounded-none font-mono text-lg bg-transparent px-0 focus:border-black focus:ring-0 cursor-pointer focus:outline-none"
@@ -636,10 +710,27 @@ export default function Registro() {
                 {/* Upload Section - Top */}
                 <div className="w-full h-[280px] border-b border-black flex flex-col bg-neutral-50 shrink-0 transition-all duration-300">
                     <div className="p-3 border-b border-black flex items-center justify-between bg-white shrink-0">
-                        <h3 className="text-xs font-bold uppercase tracking-widest text-black flex items-center gap-2">
-                            Digitization Station
-                        </h3>
-                        <span className="text-xs font-mono font-bold">{samples.length} / 28</span>
+                        <div className="flex items-center gap-4">
+                            <h3 className="text-xs font-bold uppercase tracking-widest text-black flex items-center gap-2">
+                                Digitization Station
+                            </h3>
+                            <Button 
+                                onClick={() => setIsExcelModalOpen(true)}
+                                variant="outline" 
+                                className="h-7 text-[10px] font-bold uppercase tracking-widest bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-emerald-100 hover:text-emerald-700"
+                            >
+                                Importar Planilha
+                            </Button>
+                        </div>
+                        <div className="flex items-center gap-4">
+                            {(uploadQueue.length > 0 || processedQueue.length > 0) && (
+                                <div className="flex items-center gap-2 bg-black text-white px-2 py-1 text-[9px] uppercase tracking-widest font-bold">
+                                    <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                                    <span>{uploadQueue.length + processedQueue.length} na Fila</span>
+                                </div>
+                            )}
+                            <span className="text-xs font-mono font-bold">{samples.length} / 28</span>
+                        </div>
                     </div>
 
                     <div className="p-4 overflow-y-auto flex-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
@@ -651,7 +742,7 @@ export default function Registro() {
                                         Processing Image
                                     </p>
                                     <p className="text-[10px] font-mono text-neutral-400 uppercase">
-                                        {processingStatus || "EXTRACTING DATA..."} {ocrProgress > 0 && `• {ocrProgress}%`}
+                                        {processingStatus || "EXTRACTING DATA..."} {ocrProgress > 0 && `• ${ocrProgress}%`}
                                     </p>
                                 </div>
                             </div>
@@ -774,6 +865,13 @@ export default function Registro() {
                     </div>
                 </div>
             </Modal>
+
+            {/* Excel Import Modal */}
+            <ExcelImportModal
+                isOpen={isExcelModalOpen}
+                onClose={() => setIsExcelModalOpen(false)}
+                onSave={handleSaveExcelSamples}
+            />
         </div>
     );
 }

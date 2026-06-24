@@ -29,6 +29,7 @@ export interface HVIPreviewData {
         b: number;
     };
     files?: Array<{ content: string; filename: string }>;
+    balancedReadings?: Record<string, number[]>;
 }
 
 
@@ -143,14 +144,29 @@ export class HVIFileGeneratorService {
             b:   acc.b   + (Number(s.b)   || 0)
         }), { mic: 0, len: 0, unf: 0, str: 0, rd: 0, b: 0 });
 
+        // Load manual overrides if they exist
+        let overrides: Record<string, string> = {};
+        const STORAGE_PREFIX = sample.lote_id ? `lote_${sample.lote_id}_` : '';
+        try {
+            const raw = localStorage.getItem(`${STORAGE_PREFIX}manual_overrides`);
+            if (raw) overrides = JSON.parse(raw);
+        } catch {}
+
+        const parseOverride = (key: string, fallback: number) => {
+            const val = overrides[`${color}-${key}`];
+            if (val === undefined || val === '') return fallback;
+            const parsed = parseFloat(String(val).replace(',', '.'));
+            return isNaN(parsed) ? fallback : parsed;
+        };
+
         // Média Primária da Cor
         const primaryAvg: ColorAverage = {
-            mic: Number((sum.mic / count).toFixed(2)),
-            len: Number((sum.len / count).toFixed(2)),
-            unf: Number((sum.unf / count).toFixed(1)),
-            str: Number((sum.str / count).toFixed(1)),
-            rd:  Number((sum.rd  / count).toFixed(1)),
-            b:   Number((sum.b   / count).toFixed(1))
+            mic: parseOverride('MIC', Number((sum.mic / count).toFixed(2))),
+            len: parseOverride('LEN', Number((sum.len / count).toFixed(2))),
+            unf: parseOverride('UNF', Number((sum.unf / count).toFixed(1))),
+            str: parseOverride('STR', Number((sum.str / count).toFixed(1))),
+            rd:  parseOverride('RD',  Number((sum.rd  / count).toFixed(1))),
+            b:   parseOverride('+B',  Number((sum.b   / count).toFixed(1)))
         };
 
         // Fallback se não houver template secundário:
@@ -699,26 +715,21 @@ export class HVIFileGeneratorService {
         const seqStrStart = String(seq).padStart(2, '0');
         const seqStrEnd = String(seq + 1).padStart(2, '0');
 
-        // ── Clamping de segurança para evitar erro -2 da máquina ─────────────
-        const safeMic  = Math.max(3.5, Math.min(5.5, mic));
-        const safeUi   = Math.max(79.0, Math.min(90.0, ui));
-        const safeStr  = Math.max(20.0, Math.min(45.0, str));
-        const safeElg  = Math.max(3.0, Math.min(10.0, elg));
-        const safeSfi  = Math.max(5.0, Math.min(25.0, sfi));
-        const safeRd   = Math.max(60.0, Math.min(95.0, rd));
-        const safePlusB = Math.max(4.0, Math.min(20.0, plusB));
-        const safeMat  = Math.max(0.75, Math.min(1.0, mat));
-        // SCI: mínimo 80 e máximo 160 — abaixo de 80 o HVI gera erro -2
-        const safeSci  = Math.max(80, Math.min(160, Math.round(sci)));
-        // CSP: mínimo 100 — abaixo disso o HVI gera erro -2
-        const safeCsp  = Math.max(100, Math.min(9999, Math.round(csp)));
-        // LEAF: 1 a 8 (escala da máquina)
-        const safeLeaf = Math.max(1, Math.min(8, Math.round(leaf)));
-        // AREA: nunca negativa
+        // ── Valores sem trava restrita (respeitando o que foi digitado no Preview) ─────────────
+        const safeMic  = mic;
+        const safeUi   = ui;
+        const safeStr  = str;
+        const safeElg  = elg;
+        const safeSfi  = sfi;
+        const safeRd   = rd;
+        const safePlusB = plusB;
+        const safeMat  = mat;
+        const safeSci  = Math.round(sci);
+        const safeCsp  = Math.round(csp);
+        const safeLeaf = Math.round(leaf);
         const safeArea = Math.max(0.01, area);
-        // UHML e LEN: sempre positivos
-        const safeUhml = Math.max(20.0, uhml);
-        const safeLen  = Math.max(15.0, len);
+        const safeUhml = Math.max(0.01, uhml);
+        const safeLen  = Math.max(0.01, len);
         const safeCount = Math.max(1.0, count);
 
         const uhmlStr = safeUhml.toFixed(2);
@@ -761,7 +772,8 @@ export class HVIFileGeneratorService {
     static async generatePreviewForSample(
         sample: Sample,
         allSamples: Sample[] = [],
-        tolerancias?: HVITolerancias
+        tolerancias?: HVITolerancias,
+        overrideReadings?: Record<string, number[]>
     ): Promise<{ success: boolean; message?: string; data?: HVIPreviewData }> {
         try {
             // Check if color has linked print template (STRICT LOCK)
@@ -821,64 +833,50 @@ export class HVIFileGeneratorService {
                 b: sampleB
             };
 
-            // ── Geração balanceada das 6 repetições respeitando a tolerância máxima global ──
-            const micVarLimit = Math.max(0.01, tols.mic - Math.abs(sampleMic - averages.mic));
-            const micReadings = this.getBalancedReadings(sampleMic, micVarLimit, 2, seedMod, count);
-
-            const lenVarLimit = Math.max(0.01, tols.len - Math.abs(sampleLen - averages.len));
-            const lenReadings = this.getBalancedReadings(sampleLen, lenVarLimit, 2, seedMod, count); // UHML
-
-            const unfVarLimit = Math.max(0.1, tols.unf - Math.abs(sampleUnf - averages.unf));
-            const unfReadings = this.getBalancedReadings(sampleUnf, unfVarLimit, 1, seedMod, count);  // UI
-
-            const strVarLimit = Math.max(0.1, tols.str - Math.abs(sampleStr - averages.str));
-            const strReadings = this.getBalancedReadings(sampleStr, strVarLimit, 1, seedMod, count);
-
-            const rdVarLimit  = Math.max(0.1, tols.rd - Math.abs(sampleRd - averages.rd));
-            const rdReadings  = this.getBalancedReadings(sampleRd, rdVarLimit,  1, seedMod, count);
-
-            const bVarLimit   = Math.max(0.1, tols.b - Math.abs(sampleB - averages.b));
-            const bReadings   = this.getBalancedReadings(sampleB, bVarLimit,   1, seedMod, count);
+            // ── Geração balanceada ou Override ──
+            const micReadings = overrideReadings?.mic || this.getBalancedReadings(sampleMic, Math.max(0.01, tols.mic - Math.abs(sampleMic - averages.mic)), 2, seedMod, count);
+            const lenReadings = overrideReadings?.len || this.getBalancedReadings(sampleLen, Math.max(0.01, tols.len - Math.abs(sampleLen - averages.len)), 2, seedMod, count);
+            const unfReadings = overrideReadings?.unf || this.getBalancedReadings(sampleUnf, Math.max(0.1, tols.unf - Math.abs(sampleUnf - averages.unf)), 1, seedMod, count);
+            const strReadings = overrideReadings?.str || this.getBalancedReadings(sampleStr, Math.max(0.1, tols.str - Math.abs(sampleStr - averages.str)), 1, seedMod, count);
+            const rdReadings  = overrideReadings?.rd  || this.getBalancedReadings(sampleRd, Math.max(0.1, tols.rd - Math.abs(sampleRd - averages.rd)), 1, seedMod, count);
+            const bReadings   = overrideReadings?.b   || this.getBalancedReadings(sampleB, Math.max(0.1, tols.b - Math.abs(sampleB - averages.b)), 1, seedMod, count);
 
             const elg          = averages.elg ?? 6.4;
             const sampleElg    = this.getVariedSampleTarget(elg, 0.2, 1, seedMod);
-            const elgVarLimit  = Math.max(0.1, 0.2 - Math.abs(sampleElg - elg));
-            const elgReadings  = this.getBalancedReadings(sampleElg, elgVarLimit, 1, seedMod, count);
+            const elgReadings  = overrideReadings?.elg || this.getBalancedReadings(sampleElg, Math.max(0.1, 0.2 - Math.abs(sampleElg - elg)), 1, seedMod, count);
 
             const sfi          = averages.sfi ?? 10.0;
             const sampleSfi    = this.getVariedSampleTarget(sfi, 1.0, 1, seedMod);
-            const sfiVarLimit  = Math.max(0.1, 1.0 - Math.abs(sampleSfi - sfi));
-            const sfiReadings  = this.getBalancedReadings(sampleSfi, sfiVarLimit, 1, seedMod, count);
+            const sfiReadings  = overrideReadings?.sfi || this.getBalancedReadings(sampleSfi, Math.max(0.1, 1.0 - Math.abs(sampleSfi - sfi)), 1, seedMod, count);
 
-            // SCI: se o template retornou 0 (não preenchido), usa fallback de 120
             const sciRaw       = (averages.sci && averages.sci > 10) ? averages.sci : 120;
             const sci          = Math.max(80, Math.min(160, sciRaw));
             const sampleSci    = this.getVariedSampleTarget(sci, 3, 0, seedMod);
-            const sciVarLimit  = Math.max(1, 3 - Math.abs(sampleSci - sci));
-            const sciReadings  = this.getBalancedReadings(sampleSci, sciVarLimit, 0, seedMod, count);
+            const sciReadings  = overrideReadings?.sci || this.getBalancedReadings(sampleSci, Math.max(1, 3 - Math.abs(sampleSci - sci)), 0, seedMod, count);
 
             const mat          = Math.max(0.75, Math.min(1.0, averages.mat ?? 0.85));
             const sampleMat    = this.getVariedSampleTarget(mat, 0.01, 2, seedMod);
-            const matVarLimit  = Math.max(0.001, 0.01 - Math.abs(sampleMat - mat));
-            const matReadings  = this.getBalancedReadings(sampleMat, matVarLimit, 2, seedMod, count);
+            const matReadings  = overrideReadings?.mat || this.getBalancedReadings(sampleMat, Math.max(0.001, 0.01 - Math.abs(sampleMat - mat)), 2, seedMod, count);
 
-            // CSP: se o template retornou 0 (não preenchido), usa fallback de 115
             const cspRaw       = (averages.csp && averages.csp > 10) ? averages.csp : 115;
             const csp          = Math.max(100, Math.min(9999, cspRaw));
             const sampleCsp    = this.getVariedSampleTarget(csp, 3, 0, seedMod);
-            const cspVarLimit  = Math.max(1, 3 - Math.abs(sampleCsp - csp));
-            const cspReadings  = this.getBalancedReadings(sampleCsp, cspVarLimit, 0, seedMod, count);
+            const cspReadings  = overrideReadings?.csp || this.getBalancedReadings(sampleCsp, Math.max(1, 3 - Math.abs(sampleCsp - csp)), 0, seedMod, count);
 
-            // LEAF: clampa entre 1 e 8
             const leaf         = Math.max(1, Math.min(8, averages.leaf ?? 2));
             const sampleLeaf   = this.getVariedSampleTarget(leaf, 1, 0, seedMod);
-            const leafVarLimit = Math.max(0, 1 - Math.abs(sampleLeaf - leaf));
-            const leafReadings = this.getBalancedReadings(sampleLeaf, leafVarLimit, 0, seedMod, count);
+            const leafReadings = overrideReadings?.leaf || this.getBalancedReadings(sampleLeaf, Math.max(0, 1 - Math.abs(sampleLeaf - leaf)), 0, seedMod, count);
 
             const area         = Math.max(0.01, averages.area ?? 0.25);
             const sampleArea   = this.getVariedSampleTarget(area, 0.05, 2, seedMod);
-            const areaVarLimit = Math.max(0.01, 0.05 - Math.abs(sampleArea - area));
-            const areaReadings = this.getBalancedReadings(sampleArea, areaVarLimit, 2, seedMod, count);
+            const areaReadings = overrideReadings?.area || this.getBalancedReadings(sampleArea, Math.max(0.01, 0.05 - Math.abs(sampleArea - area)), 2, seedMod, count);
+
+            const balancedReadingsRecord = {
+                mic: micReadings, len: lenReadings, unf: unfReadings, str: strReadings, 
+                rd: rdReadings, b: bReadings, elg: elgReadings, sfi: sfiReadings, 
+                sci: sciReadings, mat: matReadings, csp: cspReadings, leaf: leafReadings, 
+                area: areaReadings
+            };
 
 
             // Date & time formatting
@@ -1029,7 +1027,8 @@ export class HVIFileGeneratorService {
                     filename,
                     machineModel: machine.model,
                     generatedValues,
-                    files: files.length > 0 ? files : undefined
+                    files: files.length > 0 ? files : undefined,
+                    balancedReadings: balancedReadingsRecord
                 }
             };
 
@@ -1075,12 +1074,12 @@ export class HVIFileGeneratorService {
     }
 
     /**
-     * Download the HVI file content
+     * Download the HVI file content (Individual files)
      */
     static async downloadHVIFile(content: string, filename: string, files?: Array<{ content: string; filename: string }>): Promise<void> {
         if (files && files.length > 0) {
+            // Fazer download individual sequencialmente com um pequeno delay de 150ms para evitar bloqueios do navegador
             for (const f of files) {
-                // Usa bytes brutos para garantir CRLF (\r\n) no arquivo final
                 const bytes = this.toASCIIBytes(f.content);
                 const blob = new Blob([bytes as unknown as BlobPart], { type: 'application/octet-stream' });
                 const url = URL.createObjectURL(blob);
@@ -1091,12 +1090,12 @@ export class HVIFileGeneratorService {
                 a.click();
                 document.body.removeChild(a);
                 URL.revokeObjectURL(url);
-                
-                // Pequeno delay para evitar que o navegador bloqueie downloads paralelos
-                await new Promise(resolve => setTimeout(resolve, 300));
+                await new Promise(resolve => setTimeout(resolve, 150));
             }
         } else {
-            const blob = new Blob([content], { type: 'text/plain;charset=ascii' });
+            // Arquivo único
+            const bytes = this.toASCIIBytes(content);
+            const blob = new Blob([bytes as unknown as BlobPart], { type: 'application/octet-stream' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;

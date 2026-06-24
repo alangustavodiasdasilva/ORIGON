@@ -9,8 +9,6 @@ import { SyncProvider } from "@/contexts/SyncContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 import { ErrorBoundary } from "@/components/shared/ErrorBoundary";
-import { producaoService } from "@/services/producao.service";
-import { statusOSService } from "@/services/statusOS.service";
 import { realtimeService } from "@/services/RealtimeService";
 
 // Lazy imports — cada página só é carregada quando o usuário navegar até ela
@@ -24,10 +22,6 @@ const Export = lazy(() => import("@/pages/Export"));
 const Admin = lazy(() => import("@/pages/Admin"));
 const Login = lazy(() => import("@/pages/Login"));
 
-const Operacao = lazy(() => import("@/pages/Operacao"));
-const MonitoramentoOS = lazy(() => import("@/pages/MonitoramentoOS"));
-const Verificacao = lazy(() => import("@/pages/Verificacao"));
-const ProducaoOperadores = lazy(() => import("@/pages/ProducaoOperadores"));
 
 function AppRoutes() {
     const { user, isAuthenticated, isLoading: authLoading } = useAuth();
@@ -36,12 +30,12 @@ function AppRoutes() {
     useEffect(() => {
         if (isAuthenticated && user?.id) {
             try {
-                realtimeService.init(user.id, user.nome);
+                realtimeService.init(user.id, user.nome, user.foto);
             } catch (err) {
                 console.error("Falha ao inicializar o RealtimeService:", err);
             }
         }
-    }, [isAuthenticated, user?.id, user?.nome]);
+    }, [isAuthenticated, user?.id, user?.nome, user?.foto]);
 
     if (authLoading) {
         return <LoadingScreen />;
@@ -68,10 +62,7 @@ function AppRoutes() {
                     <Route path="analysis" element={<Analysis />} />
                     <Route path="icac" element={<Icac />} />
                     <Route path="interlaboratorial" element={<Interlaboratorial />} />
-                    <Route path="verificacao" element={<Verificacao />} />
-                    <Route path="operacao" element={<Operacao />} />
-                    <Route path="monitoramento-os" element={<MonitoramentoOS />} />
-                    <Route path="producao-operadores" element={<ProducaoOperadores />} />
+
                     <Route path="export" element={<Export />} />
                     <Route path="admin" element={<Admin />} />
                 </Route>

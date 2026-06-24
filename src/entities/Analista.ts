@@ -8,9 +8,9 @@ export interface Analista {
     id: string;
     nome: string;
     email: string;
-    foto?: string; // URL da foto ou Base64
+    foto?: string | null; // URL da foto ou Base64
     senha?: string; // Em produção, nunca salvar senha em plain text
-    lab_id?: string; // Pode ser null se for admin global
+    lab_id?: string | null; // Pode ser null se for admin global
     cargo: string;
     acesso: AccessLevel;
     created_at: string;
@@ -120,14 +120,14 @@ export const AnalistaService = {
                 const { data: updated, error } = await supabase.from('analistas').update(cleanData).eq('id', id).select().single();
 
                 if (error) {
-                    console.warn(`Supabase update warning for analista ${id}:`, error);
-                    return undefined;
+                    console.error(`Supabase update error for analista ${id}:`, error);
+                    throw new Error(error.message);
                 }
                 AuditLogService.logAction('analistas', id, 'UPDATE', oldAnalista, updated);
                 return updated;
-            } catch (err) {
+            } catch (err: any) {
                 console.warn(`Unexpected error updating analista ${id}:`, err);
-                return undefined;
+                throw err;
             }
         }
 

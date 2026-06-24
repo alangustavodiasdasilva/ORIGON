@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
-import { Activity, Database, Server, ShieldCheck, Users, Trash2, Edit, LogOut, FileSpreadsheet } from "lucide-react";
+import { Activity, Database, Server, ShieldCheck, Users, Trash2, Edit, LogOut, Upload } from "lucide-react";
 import { Navigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { AnalistaService, type Analista } from "@/entities/Analista";
@@ -13,8 +13,9 @@ import type { Lab } from "@/entities/Lab";
 import { MigrationService } from "@/services/MigrationService";
 import { Loader2 } from "lucide-react";
 import { usePresence } from "@/hooks/usePresence";
+import { useAudioAlerts } from "@/hooks/useAudioAlerts";
 import AuditLogsTab from "@/components/admin/AuditLogsTab";
-import ImportBITab from "@/components/admin/ImportBITab";
+import { supabase } from "@/lib/supabase";
 
 const isSupabaseEnabled = () => {
     const url = import.meta.env.VITE_SUPABASE_URL;
@@ -39,20 +40,8 @@ export default function Admin() {
 
     useEffect(() => {
         const loadCount = async () => {
-            let data = [];
-
-            // If we have a currentLab context, filter by it
-            if (currentLab) {
-                data = await AnalistaService.listByLab(currentLab.id);
-            } else if (user?.acesso === 'admin_lab' && user.lab_id) {
-                // Fallback for admin_lab if currentLab not set
-                data = await AnalistaService.listByLab(user.lab_id);
-            } else {
-                // Global view (only if no lab selected)
-                data = await AnalistaService.list();
-            }
-
-            const now = new Date().getTime();
+            // Load ALL analysts for the dictionary to resolve names/labs
+            const data = await AnalistaService.list();
             
             // Carregar labs se ainda n tiver
             const labsList = await LabService.list();
@@ -69,10 +58,24 @@ export default function Admin() {
         if (allAnalysts.length === 0) return;
         
         const onlineIds = onlineUsers.map(u => u.user_id);
-        const actualOnline = allAnalysts.filter(a => onlineIds.includes(a.id));
+        const actualOnline = allAnalysts.filter(a => {
+            if (!onlineIds.includes(a.id)) return false;
+            
+            // Sempre exibe o próprio usuário logado, independente de filtros de lab
+            if (String(a.id) === String(user?.id)) return true;
+            
+            // Admin global
+            if (user?.acesso === 'admin_global') {
+                if (currentLab) return String(a.lab_id) === String(currentLab.id);
+                return true;
+            }
+            
+            // Admin de laboratório
+            return String(a.lab_id) === String(user?.lab_id);
+        });
         
         setOnlineAnalysts(actualOnline);
-    }, [onlineUsers, allAnalysts]);
+    }, [onlineUsers, allAnalysts, user, currentLab]);
 
     const handleSync = async () => {
         if (!isSupabaseEnabled()) {
@@ -104,14 +107,13 @@ export default function Admin() {
         { id: "labs", label: "Laboratórios", icon: Database },
         { id: "analysts", label: "Access Control", icon: Users },
         { id: "machines", label: "Máquinas", icon: Server },
-        { id: "audit", label: "Auditoria", icon: ShieldCheck },
-        ...(user?.acesso === 'admin_global' ? [{ id: "import_bi", label: "Importar BI", icon: FileSpreadsheet }] : [])
+        { id: "audit", label: "Auditoria", icon: ShieldCheck }
     ];
 
-    // Se não for admin_global, removemos a aba de labs (ou podemos mantê-la e restringir dentro do componente)
+    // Se não for admin_global, removemos as abas de labs e auditoria
     const filteredTabs = user?.acesso === 'admin_global'
         ? tabs
-        : tabs.filter(t => t.id !== 'labs');
+        : tabs.filter(t => t.id !== 'labs' && t.id !== 'audit');
 
     return (
         <div className="max-w-7xl mx-auto space-y-16 animate-fade-in text-black pb-24">
@@ -199,7 +201,6 @@ export default function Admin() {
                 {activeTab === "analysts" && <AnalystsTab />}
                 {activeTab === "machines" && <SystemConfigTab />}
                 {activeTab === "audit" && <AuditLogsTab />}
-                {activeTab === "import_bi" && <ImportBITab />}
             </div>
         </div>
     );
@@ -207,6 +208,7 @@ export default function Admin() {
 
 // Subcomponents
 function DashboardTab({ onlineAnalysts, labs }: { onlineAnalysts: Analista[], labs: Lab[] }) {
+    const { user } = useAuth();
     return (
         <div className="grid gap-8 md:grid-cols-3">
             {/* Stat Card */}
@@ -223,7 +225,30 @@ function DashboardTab({ onlineAnalysts, labs }: { onlineAnalysts: Analista[], la
                             return (
                                 <div key={analyst.id} className="flex flex-col justify-center gap-0 group/item border-b border-neutral-100 last:border-0 pb-1">
                                     <div className="flex items-center gap-2">
-                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.5)]"></span>
+                                        <div className="relative">
+                                            {analyst.foto ? (
+                                                <>
+                                                <img 
+                                                    src={analyst.foto} 
+                                                    className="w-6 h-6 rounded-full object-cover" 
+                                                    alt={analyst.nome} 
+                                                    onError={(e) => {
+                                                        e.currentTarget.style.display = 'none';
+                                                        const fallback = e.currentTarget.parentElement?.querySelector('.fallback-initials');
+                                                        if (fallback) fallback.classList.remove('hidden');
+                                                    }}
+                                                />
+                                                <div className="fallback-initials hidden w-6 h-6 rounded-full bg-neutral-200 flex items-center justify-center text-[8px] font-bold">
+                                                    {analyst.nome.substring(0, 2).toUpperCase()}
+                                                </div>
+                                                </>
+                                            ) : (
+                                                <div className="w-6 h-6 rounded-full bg-neutral-200 flex items-center justify-center text-[8px] font-bold">
+                                                    {analyst.nome.substring(0, 2).toUpperCase()}
+                                                </div>
+                                            )}
+                                            <span className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.5)] border border-white z-10"></span>
+                                        </div>
                                         <span className="text-xs font-bold uppercase tracking-wider text-neutral-600 group-hover/item:text-black transition-colors truncate">
                                             {analyst.nome}
                                         </span>
@@ -246,17 +271,17 @@ function DashboardTab({ onlineAnalysts, labs }: { onlineAnalysts: Analista[], la
                 <div className="relative z-10 space-y-4">
                     <div className="flex items-center gap-3 mb-2">
                         <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                        <span className="text-[10px] font-bold uppercase tracking-widest text-neutral-400">DESENVOLVEDOR & ADMIN</span>
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-neutral-400">{user?.acesso.replace('_', ' ')}</span>
                     </div>
-                    <h3 className="text-3xl font-serif text-white">Alan Dias</h3>
+                    <h3 className="text-3xl font-serif text-white">{user?.nome}</h3>
                     <div className="text-xs font-mono text-neutral-400 max-w-md space-y-1">
                         <p className="flex items-center gap-2">
                             <span className="text-neutral-600">EMAIL:</span>
-                            <span className="text-white">alangds03@gmail.com</span>
+                            <span className="text-white">{user?.email}</span>
                         </p>
                         <p className="flex items-center gap-2">
                             <span className="text-neutral-600">CARGO:</span>
-                            <span className="text-white">ANALISTA DE INFORMAÇÕES</span>
+                            <span className="text-white">{user?.cargo || "N/A"}</span>
                         </p>
                         <p className="pt-2 text-neutral-500 border-t border-white/10 mt-2">
                             Sistema de Análise HVI Avançada - Versão 3.1
@@ -288,8 +313,10 @@ import type { Machine } from "@/entities/Machine";
 function SystemConfigTab() {
     const { user, currentLab } = useAuth();
     const { addToast } = useToast();
+    const { config: audioConfig, updateConfig: updateAudioConfig, playAlert } = useAudioAlerts();
     const [machines, setMachines] = useState<Machine[]>([]);
     const [labs, setLabs] = useState<Lab[]>([]);
+    const [isUploadingSound, setIsUploadingSound] = useState(false);
 
     // Flag para bloquear o realtime durante operações de delete (evita race condition)
     const isDeleteInProgressRef = useRef(false);
@@ -441,8 +468,111 @@ function SystemConfigTab() {
         return labs.find(l => l.id === id)?.nome || "Lab Desconhecido";
     };
 
+    const handleAudioUpload = async (e: React.ChangeEvent<HTMLInputElement>, color: 'green' | 'red') => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        setIsUploadingSound(true);
+        try {
+            const ext = file.name.split('.').pop();
+            const fileName = `audio_${color}_${Date.now()}.${ext}`;
+            
+            const { error: uploadError } = await supabase.storage
+                .from('audit-docs')
+                .upload(fileName, file, { cacheControl: '3600', upsert: false });
+
+            if (uploadError) throw uploadError;
+
+            const { data } = supabase.storage.from('audit-docs').getPublicUrl(fileName);
+            
+            updateAudioConfig({
+                ...audioConfig,
+                [color === 'green' ? 'greenUrl' : 'redUrl']: data.publicUrl
+            });
+
+            addToast({ title: "Sucesso", description: "Áudio enviado e configurado!", type: "success" });
+        } catch (err: any) {
+            console.error("Erro ao enviar áudio:", err);
+            addToast({ title: "Erro", description: "Falha ao enviar o arquivo de áudio.", type: "error" });
+        } finally {
+            setIsUploadingSound(false);
+            e.target.value = ''; // Reset input
+        }
+    };
+
     return (
         <div className="grid gap-8 lg:grid-cols-12">
+            
+            {/* Configurações Globais (Apenas Admin Global) */}
+            {user?.acesso === 'admin_global' && (
+                <div className="lg:col-span-12 border border-neutral-200 bg-white p-10 space-y-8 shadow-sm">
+                    <div className="flex items-center justify-between border-b border-black pb-4">
+                        <h3 className="text-xl font-serif">Preferências Globais (Áudio)</h3>
+                        <div className="flex gap-2">
+                            <button onClick={() => playAlert('green')} className="w-5 h-5 rounded-full bg-emerald-500 hover:bg-emerald-400 active:scale-95 transition-all shadow-[0_0_10px_rgba(16,185,129,0.3)] border border-emerald-400" title="Test Green Alert" />
+                            <button onClick={() => playAlert('red')} className="w-5 h-5 rounded-full bg-red-600 hover:bg-red-500 active:scale-95 transition-all shadow-[0_0_10px_rgba(220,38,38,0.3)] border border-red-500" title="Test Red Alert" />
+                        </div>
+                    </div>
+                    <div className="grid md:grid-cols-2 gap-6">
+                        <div className="space-y-2">
+                            <label className="text-xs font-bold uppercase tracking-widest text-neutral-500">Alerta Verde (Sucesso)</label>
+                            <div className="flex gap-2">
+                                <input 
+                                    type="text" 
+                                    value={audioConfig.greenUrl}
+                                    onChange={(e) => updateAudioConfig({ ...audioConfig, greenUrl: e.target.value })}
+                                    className="flex-1 h-12 border border-neutral-300 px-4 text-sm focus:border-black focus:ring-0 rounded-none bg-neutral-50"
+                                    placeholder="https://... ou faça upload"
+                                />
+                                <div className="relative">
+                                    <input 
+                                        type="file" 
+                                        accept="audio/*"
+                                        onChange={(e) => handleAudioUpload(e, 'green')}
+                                        disabled={isUploadingSound}
+                                        title="Fazer upload de áudio verde"
+                                        aria-label="Fazer upload de áudio verde"
+                                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
+                                    />
+                                    <button disabled={isUploadingSound} title="Upload Áudio Verde" aria-label="Upload Áudio Verde" className="h-12 px-4 border border-neutral-300 bg-white hover:bg-neutral-50 disabled:opacity-50 flex items-center justify-center">
+                                        <Upload className="h-4 w-4" />
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-xs font-bold uppercase tracking-widest text-neutral-500">Alerta Vermelho (Erro)</label>
+                            <div className="flex gap-2">
+                                <input 
+                                    type="text" 
+                                    value={audioConfig.redUrl}
+                                    onChange={(e) => updateAudioConfig({ ...audioConfig, redUrl: e.target.value })}
+                                    className="flex-1 h-12 border border-neutral-300 px-4 text-sm focus:border-black focus:ring-0 rounded-none bg-neutral-50"
+                                    placeholder="https://... ou faça upload"
+                                />
+                                <div className="relative">
+                                    <input 
+                                        type="file" 
+                                        accept="audio/*"
+                                        onChange={(e) => handleAudioUpload(e, 'red')}
+                                        disabled={isUploadingSound}
+                                        title="Fazer upload de áudio vermelho"
+                                        aria-label="Fazer upload de áudio vermelho"
+                                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
+                                    />
+                                    <button disabled={isUploadingSound} title="Upload Áudio Vermelho" aria-label="Upload Áudio Vermelho" className="h-12 px-4 border border-neutral-300 bg-white hover:bg-neutral-50 disabled:opacity-50 flex items-center justify-center">
+                                        <Upload className="h-4 w-4" />
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <p className="text-[10px] text-neutral-400 uppercase tracking-widest">
+                        Aviso: Alterações aqui são sincronizadas em tempo real para todos os laboratórios online.
+                    </p>
+                </div>
+            )}
+
             {/* Coluna Principal: Máquinas */}
             <div className="lg:col-span-12 border border-neutral-200 bg-white p-10 space-y-8 shadow-sm">
                 <div className="flex items-center justify-between border-b border-black pb-4">

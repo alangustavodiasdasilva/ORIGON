@@ -79,6 +79,7 @@ export default function HVIUpload({ onUpload, isProcessing, maxFiles = 28, disab
                 ref={inputRef}
                 type="file"
                 multiple
+                title="Upload de imagens"
                 className="hidden"
                 onChange={handleChange}
                 accept="image/png, image/jpeg, image/jpg"

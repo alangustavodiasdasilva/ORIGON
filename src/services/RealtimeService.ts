@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase';
 export interface PresenceState {
   user_id: string;
   user_name: string;
+  user_foto?: string | null;
   status: 'online' | 'away';
   current_page?: string;
   typing_on?: { table: string; id: string } | null;
@@ -16,7 +17,7 @@ class RealtimeService {
   private presenceListeners: Set<(state: Record<string, PresenceState[]>) => void> = new Set();
   
   // Singleton pattern ou init
-  public init(userId: string, userName: string) {
+  public init(userId: string, userName: string, userFoto?: string | null) {
     if (this.globalChannel) return;
 
     try {
@@ -25,6 +26,7 @@ class RealtimeService {
             presence: {
               key: userId,
             },
+            broadcast: { ack: true },
           },
         });
 
@@ -39,6 +41,7 @@ class RealtimeService {
                await this.globalChannel!.track({
                  user_id: userId,
                  user_name: userName,
+                 user_foto: userFoto || null,
                  status: 'online',
                  last_seen: new Date().toISOString(),
                });
@@ -82,6 +85,31 @@ class RealtimeService {
       this.globalChannel = null;
     }
     this.presenceListeners.clear();
+  }
+
+  // --- Broadcast Support ---
+  public broadcast(event: string, payload: any) {
+    if (!this.globalChannel) return;
+    this.globalChannel.send({
+      type: 'broadcast',
+      event: event,
+      payload: payload
+    });
+  }
+
+  public subscribeToBroadcast(event: string, callback: (payload: any) => void) {
+    if (!this.globalChannel) return () => {};
+    
+    // Subscribe to specific broadcast event
+    this.globalChannel.on('broadcast', { event }, (payload) => {
+      callback(payload.payload);
+    });
+
+    return () => {
+      // Supabase js currently doesn't have a specific off() for a single handler easily exposed without digging.
+      // A full unsubscribe would remove ALL handlers. Since we want this to be persistent, we might not unsubscribe.
+      // But we can just use the returned ref to unsubscribe if needed later, though usually we don't need to.
+    };
   }
 }
 

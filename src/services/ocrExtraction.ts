@@ -11,6 +11,7 @@ export interface HVIDataRow {
     str: number;
     rd: number;
     b: number;
+    etiqueta?: string;
 }
 
 export interface ExtractionResult {
@@ -165,12 +166,23 @@ const parseHVIData = (text: string): ExtractionResult => {
         text.match(/(\d{8})\s+\d{15,}/);
     if (malaMatch) result.mala = malaMatch[1];
 
-    // --- Extrai Etiqueta ---
+    // --- Extrai Etiqueta (SEMPRE 20 dígitos) ---
     const etiquetaMatch =
-        text.match(/Etiqueta[:\s]*(\d{12,25})/i) ||
-        text.match(/\d{8}\s+(\d{15,25})/) ||
-        text.match(/(\d{18,25})/);
-    if (etiquetaMatch) result.etiqueta = etiquetaMatch[1];
+        text.match(/Etiqueta[:\s]*(\d{20})/i) ||
+        text.match(/\d{8}\s+(\d{20})/) ||
+        text.match(/(\d{20})/);
+    if (etiquetaMatch) {
+        result.etiqueta = etiquetaMatch[1];
+    } else {
+        // Fallback: OCR pode ter colocado espaços no meio da etiqueta
+        const etiquetaSpacedMatch = text.match(/Etiqueta[:\s]*([\d\s]{20,35})/i);
+        if (etiquetaSpacedMatch) {
+            const cleaned = etiquetaSpacedMatch[1].replace(/\s+/g, '');
+            if (cleaned.length >= 20) {
+                result.etiqueta = cleaned.substring(0, 20);
+            }
+        }
+    }
 
     const individualRows: { numList: string[]; text: string }[] = [];
     const possibleStatsRows: { numList: string[]; text: string; lineIndex: number }[] = [];
