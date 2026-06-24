@@ -43,20 +43,12 @@ export const MachineService = {
                 model: m.modelo,
                 labId: m.lab_id,
                 created_at: m.created_at
-            }))
-                // FILTRO DE SEGURANÇA: Somente do 1 ao 7
-                .filter(m => {
-                    const num = parseInt(m.machineId.replace(/\D/g, ''), 10);
-                    return !isNaN(num) && num >= 1 && num <= 7;
-                });
+                }));
 
             saveStoredMachines(machines);
             return machines;
         }
-        return getStoredMachines().filter(m => {
-            const num = parseInt(m.machineId.replace(/\D/g, ''), 10);
-            return !isNaN(num) && num >= 1 && num <= 7;
-        });
+        return getStoredMachines();
     },
 
     async listByLab(labId: string): Promise<Machine[]> {
@@ -75,19 +67,10 @@ export const MachineService = {
                 model: m.modelo,
                 labId: m.lab_id,
                 created_at: m.created_at
-            }))
-                // FILTRO DE SEGURANÇA: Somente do 1 ao 7
-                .filter(m => {
-                    const num = parseInt(m.machineId.replace(/\D/g, ''), 10);
-                    return !isNaN(num) && num >= 1 && num <= 7;
-                });
+            }));
         }
         return getStoredMachines()
-            .filter(m => m.labId === labId)
-            .filter(m => {
-                const num = parseInt(m.machineId.replace(/\D/g, ''), 10);
-                return !isNaN(num) && num >= 1 && num <= 7;
-            });
+            .filter(m => m.labId === labId);
     },
 
     async get(id: string): Promise<Machine | undefined> {
@@ -110,13 +93,6 @@ export const MachineService = {
     async create(data: Omit<Machine, 'id' | 'created_at'>): Promise<Machine> {
         // SEGURANÇA: Rastreamento de chamada para descobrir quem está criando máquinas 'fantasma'
         console.trace(`MachineService.create chamado para: ${data.machineId}`);
-
-        // Validação Estrita: 1-7
-        const machineNum = parseInt(data.machineId.replace(/\D/g, ''), 10);
-        if (isNaN(machineNum) || machineNum < 1 || machineNum > 7) {
-            console.error(`BLOQUEIO DE SEGURANÇA: Tentativa de criar máquina fora do range 1-7: ${data.machineId}`);
-            throw new Error(`Máquina ${data.machineId} não autorizada. Contate o administrador.`);
-        }
 
         if (isSupabaseEnabled()) {
             const dbData = {
