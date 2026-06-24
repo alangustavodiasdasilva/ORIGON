@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import {
     ArrowLeft,
@@ -105,6 +105,52 @@ export default function Analysis() {
 
         return categories;
     }, [samples]);
+
+    // Track previous metrics to detect sample changes and clear manual overrides
+    const prevMetricsRef = useRef(metricsByColor);
+    useEffect(() => {
+        const prevMetrics = prevMetricsRef.current;
+        const overridesToClear: string[] = [];
+
+        Object.keys(metricsByColor).forEach(color => {
+            const currentCat = metricsByColor[color as keyof typeof metricsByColor];
+            const prevCat = prevMetrics[color as keyof typeof prevMetrics];
+            if (prevCat) {
+                const fields = [
+                    { key: 'mic', label: 'MIC' },
+                    { key: 'len', label: 'LEN' },
+                    { key: 'unf', label: 'UNF' },
+                    { key: 'str', label: 'STR' },
+                    { key: 'rd', label: 'RD' },
+                    { key: 'b', label: '+B' }
+                ];
+                
+                fields.forEach(({ key, label }) => {
+                    const currVal = currentCat[key as keyof typeof currentCat];
+                    const prevVal = prevCat[key as keyof typeof prevCat];
+                    if (currVal !== prevVal) {
+                        overridesToClear.push(`${color}-${label}`);
+                    }
+                });
+            }
+        });
+
+        if (overridesToClear.length > 0) {
+            setManualOverrides(prev => {
+                const next = { ...prev };
+                let changed = false;
+                overridesToClear.forEach(key => {
+                    if (next[key] !== undefined) {
+                        delete next[key];
+                        changed = true;
+                    }
+                });
+                return changed ? next : prev;
+            });
+        }
+
+        prevMetricsRef.current = metricsByColor;
+    }, [metricsByColor]);
 
     const handleExportCSV = () => {
         if (!samples.length || !lote) return;
@@ -512,7 +558,9 @@ export default function Analysis() {
                                             <div className="flex items-center gap-1.5">
                                                 <span className="text-[9px] font-black text-neutral-400 font-mono tracking-widest">{metric.label}</span>
                                                 {isOverridden && (
-                                                    <Lock className="w-2.5 h-2.5 text-amber-500" title="Valor travado manualmente (apague para destravar)" />
+                                                    <span title="Valor travado manualmente (apague para destravar)">
+                                                        <Lock className="w-2.5 h-2.5 text-amber-500" />
+                                                    </span>
                                                 )}
                                             </div>
                                             <input 
