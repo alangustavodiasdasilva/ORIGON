@@ -535,10 +535,6 @@ function SystemConfigTab() {
                 <div className="lg:col-span-12 border border-neutral-200 bg-white p-10 space-y-8 shadow-sm">
                     <div className="flex items-center justify-between border-b border-black pb-4">
                         <h3 className="text-xl font-serif">Preferências Globais (Áudio)</h3>
-                        <div className="flex gap-2">
-                            <button onClick={() => playAlert('green')} className="w-5 h-5 rounded-full bg-emerald-500 hover:bg-emerald-400 active:scale-95 transition-all shadow-[0_0_10px_rgba(16,185,129,0.3)] border border-emerald-400" title="Test Green Alert" />
-                            <button onClick={() => playAlert('red')} className="w-5 h-5 rounded-full bg-red-600 hover:bg-red-500 active:scale-95 transition-all shadow-[0_0_10px_rgba(220,38,38,0.3)] border border-red-500" title="Test Red Alert" />
-                        </div>
                     </div>
                     <div className="grid md:grid-cols-2 gap-6">
                         <div className="space-y-2">
