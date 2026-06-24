@@ -48,7 +48,17 @@ export default function Analysis() {
     const [manualOverrides, setManualOverrides] = useState<Record<string, string>>(() => {
         try {
             const stored = localStorage.getItem(`lote_${loteId}_manual_overrides`);
-            return stored ? JSON.parse(stored) : {};
+            if (stored) {
+                const parsed = JSON.parse(stored);
+                const cleaned: Record<string, string> = {};
+                for (const [k, v] of Object.entries(parsed)) {
+                    if (typeof v === 'string') {
+                        cleaned[k] = v.replace('.', ',');
+                    }
+                }
+                return cleaned;
+            }
+            return {};
         } catch { return {}; }
     });
 
