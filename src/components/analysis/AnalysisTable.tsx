@@ -331,14 +331,14 @@ export default function AnalysisTable({ samples, onUpdateSample, onColorChange, 
                                                         "w-full text-right bg-transparent border-none focus:ring-0 p-0 font-mono font-black transition-all",
                                                         "text-lg tracking-tight",
                                                         isOutlier ? "text-amber-600" : (isHighlighted ? "text-white" : "text-slate-900"),
-                                                        (isProcessing || sample.locked) && "opacity-50 cursor-not-allowed"
+                                                        (sample.locked) && "opacity-50 cursor-not-allowed"
                                                     )}
                                                     defaultValue={formatDecimalBR(value ?? 0, decimals)}
                                                     onBlur={(e) => handleBlur(e, sample, field, value, decimals)}
                                                     onKeyDown={(e) => handleKeyDown(e, rowIdx, colIdx, sortedSamples.length, fields.length)}
                                                     data-tablerow={rowIdx}
                                                     data-tablecol={colIdx}
-                                                    disabled={isProcessing || sample.locked}
+                                                    disabled={sample.locked}
                                                 />
                                             </div>
                                         </td>
