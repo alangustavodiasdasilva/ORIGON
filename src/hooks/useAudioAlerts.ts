@@ -22,6 +22,8 @@ export function useAudioAlerts(listen: boolean = false) {
     setConfig(newConfig);
     localStorage.setItem('fibertech_audio_config', JSON.stringify(newConfig));
     realtimeService.broadcast('config_sync', newConfig);
+    // Sincroniza localmente para outros componentes na mesma aba (ex: Layout.tsx)
+    window.dispatchEvent(new CustomEvent('local_config_sync', { detail: newConfig }));
   }, []);
 
   // Tocar um alerta localmente
@@ -65,6 +67,15 @@ export function useAudioAlerts(listen: boolean = false) {
       unsubsAlert();
     };
   }, [listen]); // Executa apenas quando 'listen' mudar (na montagem)
+
+  // Escutar atualizações de config feitas por outros componentes na MESMA aba
+  useEffect(() => {
+    const handleLocalSync = (e: CustomEvent<AudioConfig>) => {
+      setConfig(e.detail);
+    };
+    window.addEventListener('local_config_sync', handleLocalSync as EventListener);
+    return () => window.removeEventListener('local_config_sync', handleLocalSync as EventListener);
+  }, []);
 
   // Pedir configuração atual para a rede apenas UMA vez ao montar o componente
   useEffect(() => {
