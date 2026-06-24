@@ -484,6 +484,7 @@ export default function Analysis() {
                     <MovingAverageChart
                         samples={samples}
                         onColorChange={handleColorChange}
+                        tolerancias={tolerancias}
                     />
                 </div>
             </div>

@@ -9,6 +9,7 @@ interface MovingAverageChartProps {
     windowSize?: number;
     onSampleHover?: (sampleId: string | null) => void;
     onColorChange?: (sampleId: string, newColor: string) => void;
+    tolerancias?: Record<string, number>;
 }
 
 // Todos os parâmetros HVI incluindo UNF
@@ -73,7 +74,13 @@ function ColorButton({ color, active, activeStyle, className, onClick, ariaLabel
     );
 }
 
-export default function MovingAverageChart({ samples, windowSize = 3, onSampleHover, onColorChange }: MovingAverageChartProps) {
+export default function MovingAverageChart({
+    samples,
+    windowSize = 5,
+    onSampleHover,
+    onColorChange,
+    tolerancias
+}: MovingAverageChartProps) {
     const [selectedField, setSelectedField] = useState<typeof FIELDS[number]['key']>('mic');
     const [hoveredSample, setHoveredSample] = useState<ChartSample | null>(null);
     const [selectingColorSample, setSelectingColorSample] = useState<ChartSample | null>(null);
@@ -120,8 +127,19 @@ export default function MovingAverageChart({ samples, windowSize = 3, onSampleHo
         const stdDev = Math.sqrt(variance);
 
         const allValues = validSamples.map(s => s.parsedVal);
-        const minVal = Math.min(...allValues);
-        const maxVal = Math.max(...allValues);
+        
+        // Use tolerancias passed by props, or fallback
+        const TOLERANCES: Record<string, number> = {
+            mic: 0.05, len: 0.25, unf: 0.5, str: 0.75, rd: 0.5, b: 0.2
+        };
+        const definedDeviation = tolerancias ? (tolerancias[selectedField] || 0.5) : (TOLERANCES[selectedField] || 0.5);
+
+        // Include the tolerance band limits in the min/max calculation so it doesn't get clipped or look too huge
+        const minValPoints = Math.min(...allValues);
+        const maxValPoints = Math.max(...allValues);
+        
+        const minVal = Math.min(minValPoints, globalAvg - definedDeviation);
+        const maxVal = Math.max(maxValPoints, globalAvg + definedDeviation);
 
         const margin = (maxVal - minVal) * 0.2 || (maxVal * 0.1) || 1;
         const yMin = Math.max(0, minVal - margin);
@@ -139,12 +157,6 @@ export default function MovingAverageChart({ samples, windowSize = 3, onSampleHo
 
         const totalPoints = validSamples.length;
         const stepX = chartWidth / (Math.max(totalPoints - 1, 1));
-
-        const TOLERANCES: Record<string, number> = {
-            mic: 0.05, len: 0.25, unf: 0.5, str: 0.75, rd: 0.5, b: 0.2
-        };
-        const definedDeviation = TOLERANCES[selectedField] || 0.5;
-
 
         // Agrupar dados por cor (Séries)
         const series = Object.keys(COLORS_MAP).map(color => {
