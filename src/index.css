@@ -413,8 +413,7 @@ body.dark,
   color: #888;
 }
 
-.ctm-content {
-}
+
 .ctm-content::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -759,5 +758,6 @@ input[type=number]::-webkit-outer-spin-button {
 }
 input[type=number] {
   -moz-appearance: textfield;
+  appearance: textfield;
 }
 
