@@ -193,7 +193,7 @@ export default function MovingAverageChart({ samples, windowSize = 3, onSampleHo
                 groupAvgY: undefined,
                 groupStdDevUpperY: undefined,
                 groupStdDevLowerY: undefined
-            });
+            } as any);
         }
 
         // Linhas de grade baseadas nos valores reais
