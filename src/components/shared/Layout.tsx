@@ -32,7 +32,7 @@ export default function Layout() {
     const { user, logout } = useAuth();
     const { toasts } = useToast();
     const { t, language, setLanguage } = useLanguage();
-    const { broadcastAlert } = useAudioAlerts();
+    const { broadcastAlert } = useAudioAlerts(true);
 
     // Enable global keyboard shortcuts
     useKeyboardShortcuts();

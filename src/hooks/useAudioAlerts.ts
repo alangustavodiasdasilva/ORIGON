@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { realtimeService } from '@/services/RealtimeService';
 
 export interface AudioConfig {
@@ -11,7 +11,7 @@ const DEFAULT_CONFIG: AudioConfig = {
   redUrl: 'https://cdn.freesound.org/previews/131/131660_2398403-lq.mp3', // Generic error buzzer
 };
 
-export function useAudioAlerts() {
+export function useAudioAlerts(listen: boolean = false) {
   const [config, setConfig] = useState<AudioConfig>(() => {
     const saved = localStorage.getItem('fibertech_audio_config');
     return saved ? JSON.parse(saved) : DEFAULT_CONFIG;
@@ -40,25 +40,31 @@ export function useAudioAlerts() {
     realtimeService.broadcast('system_alert', { color });
   }, [playAlert]);
 
-  // Efeito principal: escutar WebSockets
+  // Ref para acessar as funções mais recentes sem precisar recriar os listeners
+  const callbacksRef = useRef({ setConfig, playAlert });
+  callbacksRef.current = { setConfig, playAlert };
+
+  // Efeito principal: escutar WebSockets APENAS UMA VEZ se listen for true
   useEffect(() => {
+    if (!listen) return;
+
     // 1. Escutar se algum administrador enviar uma nova configuração P2P
     const unsubsConfig = realtimeService.subscribeToBroadcast('config_sync', (payload: AudioConfig) => {
       console.log("Recebida nova configuração de áudio da rede");
-      setConfig(payload);
+      callbacksRef.current.setConfig(payload);
       localStorage.setItem('fibertech_audio_config', JSON.stringify(payload));
     });
 
     // 2. Escutar os botões apertados por qualquer laboratório
     const unsubsAlert = realtimeService.subscribeToBroadcast('system_alert', (payload: { color: 'green' | 'red' }) => {
-      playAlert(payload.color);
+      callbacksRef.current.playAlert(payload.color);
     });
 
     return () => {
       unsubsConfig();
       unsubsAlert();
     };
-  }, [playAlert]);
+  }, [listen]); // Executa apenas quando 'listen' mudar (na montagem)
 
   // Pedir configuração atual para a rede apenas UMA vez ao montar o componente
   useEffect(() => {
