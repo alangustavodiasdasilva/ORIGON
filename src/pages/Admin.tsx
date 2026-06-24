@@ -361,15 +361,14 @@ function SystemConfigTab() {
                 }
             }
 
-            const isGlobalAdmin = user?.acesso === 'admin_global';
             const targetLabId = currentLab?.id || (user?.acesso === 'admin_lab' ? user.lab_id : null);
             let data: Machine[] = [];
 
-            if (targetLabId && !isGlobalAdmin) {
-                // Fetch only for the specific lab
+            if (targetLabId) {
+                // Fetch only for the specific lab (works for admin_lab, or admin_global impersonating a lab)
                 data = await MachineService.listByLab(targetLabId);
             } else {
-                // Fetch all if global admin or no specific lab context
+                // Fetch all if no specific lab context
                 data = await MachineService.list();
             }
 
