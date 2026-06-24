@@ -98,15 +98,13 @@ export default function AnalysisTable({ samples, onUpdateSample, onColorChange, 
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, rowIdx: number, colIdx: number, rowsCount: number, colsCount: number) => {
         const key = e.key;
-        if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(key)) {
+        if (['ArrowUp', 'ArrowDown'].includes(key)) {
             e.preventDefault();
             let nextRow = rowIdx;
             let nextCol = colIdx;
             
             if (key === 'ArrowUp') nextRow = Math.max(0, rowIdx - 1);
             if (key === 'ArrowDown') nextRow = Math.min(rowsCount - 1, rowIdx + 1);
-            if (key === 'ArrowLeft') nextCol = Math.max(0, colIdx - 1);
-            if (key === 'ArrowRight') nextCol = Math.min(colsCount - 1, colIdx + 1);
 
             if (nextRow !== rowIdx || nextCol !== colIdx) {
                 const nextInput = document.querySelector(`input[data-tablerow="${nextRow}"][data-tablecol="${nextCol}"]`) as HTMLInputElement;

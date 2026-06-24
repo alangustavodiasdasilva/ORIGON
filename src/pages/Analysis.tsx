@@ -234,15 +234,13 @@ export default function Analysis() {
 
     const handleMediaKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, colorIndex: number, fieldIndex: number, colorsCount: number, fieldsCount: number) => {
         const key = e.key;
-        if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(key)) {
+        if (['ArrowUp', 'ArrowDown'].includes(key)) {
             e.preventDefault();
             let nextColor = colorIndex;
             let nextField = fieldIndex;
 
             if (key === 'ArrowUp') nextField = Math.max(0, fieldIndex - 1);
             if (key === 'ArrowDown') nextField = Math.min(fieldsCount - 1, fieldIndex + 1);
-            if (key === 'ArrowLeft') nextColor = Math.max(0, colorIndex - 1);
-            if (key === 'ArrowRight') nextColor = Math.min(colorsCount - 1, colorIndex + 1);
 
             if (nextColor !== colorIndex || nextField !== fieldIndex) {
                 const nextInput = document.querySelector(`input[data-mediacolor="${nextColor}"][data-mediafield="${nextField}"]`) as HTMLInputElement;
