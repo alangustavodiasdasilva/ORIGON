@@ -504,7 +504,7 @@ export default function Analysis() {
                                                 className="w-24 bg-transparent text-right text-xl font-serif font-bold text-neutral-800 tracking-tight outline-none hover:bg-neutral-50 focus:bg-white focus:ring-1 ring-neutral-200 rounded px-1 -mr-1 transition-all"
                                             />
                                         </div>
-                                    ))}                ))}
+                                    ))}
                                 </div>
 
                                 <div className="mt-2 pt-4 border-t border-neutral-100 flex flex-col gap-3">
