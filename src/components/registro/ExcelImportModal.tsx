@@ -1,6 +1,6 @@
 import { useState, useRef } from "react";
 import { createPortal } from "react-dom";
-import { X, FileSpreadsheet, Upload, AlertCircle } from "lucide-react";
+import { X, FileSpreadsheet, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ExcelExtractionService } from "@/services/ExcelExtractionService";
@@ -48,32 +48,6 @@ export function ExcelImportModal({ isOpen, onClose, onSave }: ExcelImportModalPr
         });
     };
 
-    const handleTimeBlur = (index: number) => {
-        setRows(prev => {
-            const next = [...prev];
-            let val = next[index].hora_analise.replace(/\D/g, '');
-            if (val.length === 4) {
-                val = `${val.substring(0, 2)}:${val.substring(2, 4)}`;
-                next[index] = { ...next[index], hora_analise: val };
-            }
-            return next;
-        });
-    };
-
-    const handleDateBlur = (index: number) => {
-        setRows(prev => {
-            const next = [...prev];
-            let val = next[index].data_analise.replace(/\D/g, '');
-            if (val.length === 8) { // ddmmyyyy
-                val = `${val.substring(0, 2)}/${val.substring(2, 4)}/${val.substring(4, 8)}`;
-                next[index] = { ...next[index], data_analise: val };
-            } else if (val.length === 6) { // ddmmyy
-                val = `${val.substring(0, 2)}/${val.substring(2, 4)}/20${val.substring(4, 6)}`;
-                next[index] = { ...next[index], data_analise: val };
-            }
-            return next;
-        });
-    };
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, index: number, field: string) => {
         if (e.key === 'Enter' || e.key === 'ArrowDown') {
@@ -84,32 +58,6 @@ export function ExcelImportModal({ isOpen, onClose, onSave }: ExcelImportModalPr
             e.preventDefault();
             const prevInput = document.getElementById(`input-${field}-${index - 1}`);
             if (prevInput) prevInput.focus();
-        } else if (e.key === 'ArrowRight') {
-            // Só pula para o lado se o cursor estiver no final do texto (ou texto todo selecionado)
-            const target = e.target as HTMLInputElement;
-            if (target.selectionStart === target.value.length || target.selectionStart === 0 && target.selectionEnd === target.value.length) {
-                e.preventDefault();
-                let nextField = '';
-                if (field === 'etiqueta') nextField = 'data';
-                if (field === 'data') nextField = 'hora';
-                if (nextField) {
-                    const nextInput = document.getElementById(`input-${nextField}-${index}`);
-                    if (nextInput) nextInput.focus();
-                }
-            }
-        } else if (e.key === 'ArrowLeft') {
-            // Só pula para o lado se o cursor estiver no começo do texto (ou texto todo selecionado)
-            const target = e.target as HTMLInputElement;
-            if (target.selectionStart === 0) {
-                e.preventDefault();
-                let prevField = '';
-                if (field === 'hora') prevField = 'data';
-                if (field === 'data') prevField = 'etiqueta';
-                if (prevField) {
-                    const prevInput = document.getElementById(`input-${prevField}-${index}`);
-                    if (prevInput) prevInput.focus();
-                }
-            }
         }
     };
 
@@ -202,14 +150,12 @@ export function ExcelImportModal({ isOpen, onClose, onSave }: ExcelImportModalPr
                                         <tr className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest border-b-2 border-black">
                                             <th className="px-4 py-4 w-12 text-left font-mono">#</th>
                                             <th className="px-4 py-4 text-left">Etiqueta</th>
-                                            <th className="px-4 py-4 w-32 text-center">Data</th>
-                                            <th className="px-4 py-4 w-24 text-center">Hora</th>
-                                            <th className="px-4 py-4 w-16 text-right">MIC</th>
-                                            <th className="px-4 py-4 w-16 text-right">LEN</th>
-                                            <th className="px-4 py-4 w-16 text-right">UNF</th>
-                                            <th className="px-4 py-4 w-16 text-right">STR</th>
-                                            <th className="px-4 py-4 w-16 text-right">RD</th>
-                                            <th className="px-4 py-4 w-16 text-right">+B</th>
+                                            <th className="px-4 py-4 w-[12%] text-right">MIC</th>
+                                            <th className="px-4 py-4 w-[12%] text-right">LEN</th>
+                                            <th className="px-4 py-4 w-[12%] text-right">UNF</th>
+                                            <th className="px-4 py-4 w-[12%] text-right">STR</th>
+                                            <th className="px-4 py-4 w-[12%] text-right">RD</th>
+                                            <th className="px-4 py-4 w-[12%] text-right">+B</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-neutral-100">
@@ -227,34 +173,6 @@ export function ExcelImportModal({ isOpen, onClose, onSave }: ExcelImportModalPr
                                                         spellCheck={false}
                                                         className="h-8 w-full text-sm font-mono font-bold border-0 border-b-2 border-transparent hover:border-neutral-200 focus:border-black focus-visible:ring-0 rounded-none shadow-none bg-transparent px-1 text-left transition-colors" 
                                                         placeholder="Etiqueta"
-                                                    />
-                                                </td>
-                                                <td className="px-4 py-2">
-                                                    <Input 
-                                                        id={`input-data-${idx}`}
-                                                        value={row.data_analise}
-                                                        onChange={e => updateRow(idx, 'data_analise', e.target.value)}
-                                                        onBlur={() => handleDateBlur(idx)}
-                                                        onKeyDown={e => handleKeyDown(e, idx, 'data')}
-                                                        onFocus={e => e.target.select()}
-                                                        autoComplete="off"
-                                                        spellCheck={false}
-                                                        className="h-8 w-full text-sm font-mono border-0 border-b-2 border-transparent hover:border-neutral-200 focus:border-black focus-visible:ring-0 rounded-none shadow-none bg-transparent placeholder:text-neutral-300 px-1 text-center transition-colors" 
-                                                        placeholder="DD/MM/YYYY"
-                                                    />
-                                                </td>
-                                                <td className="px-4 py-2">
-                                                    <Input 
-                                                        id={`input-hora-${idx}`}
-                                                        value={row.hora_analise}
-                                                        onChange={e => updateRow(idx, 'hora_analise', e.target.value)}
-                                                        onBlur={() => handleTimeBlur(idx)}
-                                                        onKeyDown={e => handleKeyDown(e, idx, 'hora')}
-                                                        onFocus={e => e.target.select()}
-                                                        autoComplete="off"
-                                                        spellCheck={false}
-                                                        className="h-8 w-full text-sm font-mono font-bold text-black border-0 border-b-2 border-transparent hover:border-neutral-200 focus:border-black focus-visible:ring-0 rounded-none shadow-none bg-transparent placeholder:text-neutral-300 px-1 text-center transition-colors" 
-                                                        placeholder="HH:MM"
                                                     />
                                                 </td>
                                                 <td className="px-4 py-3 text-right font-mono text-[13px] tabular-nums text-black">{row.mic.toFixed(2)}</td>

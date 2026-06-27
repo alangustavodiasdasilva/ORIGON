@@ -62,16 +62,44 @@ export class HVIFileGeneratorService {
      */
     private static async getMachineByHVI(hviNumber: string): Promise<Machine | null> {
         try {
-            const machines = await MachineService.list();
+            let machines: Machine[] = [];
+            const sessionData = localStorage.getItem("fibertech_session");
+            const selectedLabData = localStorage.getItem("fibertech_selected_lab");
+            
+            let labId = null;
+            if (selectedLabData) {
+                try { 
+                    const parsed = JSON.parse(selectedLabData);
+                    labId = parsed?.id || parsed;
+                } catch (e) {
+                    labId = selectedLabData;
+                }
+            } else if (sessionData) {
+                try {
+                    const user = JSON.parse(sessionData);
+                    if (user.lab_id && user.acesso !== 'admin_global') {
+                        labId = user.lab_id;
+                    }
+                } catch (e) {}
+            }
+
+            if (labId) {
+                machines = await MachineService.listByLab(labId);
+            } else {
+                machines = await MachineService.list();
+            }
 
             // Try exact match
             const exactMatch = machines.find(m => m.machineId === hviNumber);
             if (exactMatch) return exactMatch;
 
-            // Try loose match (ignoring spaces, case)
-            const looseMatch = machines.find(m =>
-                m.machineId.trim().toUpperCase() === hviNumber.trim().toUpperCase()
-            );
+            // Try loose match (ignoring spaces, case, or matching just the number)
+            const targetNum = hviNumber.replace(/\D/g, '');
+            const looseMatch = machines.find(m => {
+                if (m.machineId.trim().toUpperCase() === hviNumber.trim().toUpperCase()) return true;
+                if (targetNum && m.machineId.replace(/\D/g, '') === targetNum) return true;
+                return false;
+            });
             return looseMatch || null;
         } catch (error) {
             console.error('Error loading machines:', error);
@@ -373,14 +401,16 @@ export class HVIFileGeneratorService {
         sample: Sample, 
         count: number, 
         averages: ColorAverage, 
-        balancedReadings: Record<string, number[]>
+        balancedReadings: Record<string, number[]>,
+        customDate?: string,
+        customTime?: string
     ): string {
 
         // Date/Time formatting (Premier style)
         const now = new Date();
-        const dateStr = now.toLocaleDateString('pt-BR').replace(/\//g, '-');
+        const dateStr = customDate || now.toLocaleDateString('pt-BR').replace(/\//g, '-');
         // Include seconds for uniqueness
-        const timeStr = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true });
+        const timeStr = customTime || now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true });
         const dateTimeStr = `${dateStr} ${timeStr}`;
         const dateTimeStrHeader = `${dateStr}${timeStr.replace(/[: ]/g, '')}`;
 
@@ -732,18 +762,18 @@ export class HVIFileGeneratorService {
         const safeLen  = Math.max(0.01, len);
         const safeCount = Math.max(1.0, count);
 
-        const uhmlStr = safeUhml.toFixed(2);
-        const uiStr = safeUi.toFixed(1);
-        const strStr = safeStr.toFixed(1);
+        const uhmlStr = safeUhml.toFixed(2).padStart(5, ' ');
+        const uiStr = safeUi.toFixed(1).padStart(4, ' ');
+        const strStr = safeStr.toFixed(1).padStart(4, ' ');
         const elgStr = safeElg.toFixed(1).padStart(4, ' ');
-        const sfiStr = safeSfi.toFixed(1);
+        const sfiStr = safeSfi.toFixed(1).padStart(4, ' ');
         const lenStr = safeLen.toFixed(1).padStart(5, ' ');
         const countStr = safeCount.toFixed(1).padStart(5, ' ');
 
-        const micStr = safeMic.toFixed(2);
+        const micStr = safeMic.toFixed(2).padStart(4, ' ');
         const sciStr = String(safeSci).padStart(4, '0');
 
-        const rdStr = safeRd.toFixed(1);
+        const rdStr = safeRd.toFixed(1).padStart(4, ' ');
         const bStr = safePlusB.toFixed(1).padStart(4, ' ');
         const areaNStr = Math.round(safeArea * 100).toString().padStart(3, ' ');
         const areaStr = safeArea.toFixed(2);
@@ -772,9 +802,14 @@ export class HVIFileGeneratorService {
     static async generatePreviewForSample(
         sample: Sample,
         allSamples: Sample[] = [],
-        tolerancias?: HVITolerancias,
-        overrideReadings?: Record<string, number[]>
-    ): Promise<{ success: boolean; message?: string; data?: HVIPreviewData }> {
+        tolerancias: any = null,
+        overrideReadings?: Record<string, number[]>,
+        customEtiqueta?: string,
+        customDate?: string,
+        customTime?: string,
+        customHvi?: string
+    ): Promise<{
+        success: boolean; message?: string; data?: HVIPreviewData }> {
         try {
             // Check if color has linked print template (STRICT LOCK)
             if (!sample.cor || !this.hasColorPrint(sample.cor, sample.lote_id)) {
@@ -791,20 +826,21 @@ export class HVIFileGeneratorService {
                 };
             }
 
+            const targetHvi = customHvi || sample.hvi;
             // Check if sample has HVI number
-            if (!sample.hvi) {
+            if (!targetHvi) {
                 return {
                     success: false,
-                    message: 'Amostra não possui número HVI cadastrado'
+                    message: 'Amostra não possui número HVI cadastrado ou selecionado'
                 };
             }
 
             // Get machine info
-            const machine = await this.getMachineByHVI(sample.hvi);
+            const machine = await this.getMachineByHVI(targetHvi);
             if (!machine) {
                 return {
                     success: false,
-                    message: `Máquina HVI ${sample.hvi} não encontrada no cadastro`
+                    message: `Máquina HVI ${targetHvi} não encontrada no cadastro`
                 };
             }
 
@@ -841,54 +877,110 @@ export class HVIFileGeneratorService {
             const rdReadings  = overrideReadings?.rd  || this.getBalancedReadings(sampleRd, Math.max(0.1, tols.rd - Math.abs(sampleRd - averages.rd)), 1, seedMod, count);
             const bReadings   = overrideReadings?.b   || this.getBalancedReadings(sampleB, Math.max(0.1, tols.b - Math.abs(sampleB - averages.b)), 1, seedMod, count);
 
+            // ── Extração direta do template (rawRows) com LEVE DESVIO determinístico ──
+            const hasRawRows = averages.rawRows && averages.rawRows.length >= count;
+            const getRawReading = (key: string, fallback: number[], maxDev: number = 0.01, decimals: number = 2): number[] => {
+                if (hasRawRows) {
+                    let hash = 0;
+                    const seedStr = `${seedMod}_rawvar_${key}`;
+                    for (let i = 0; i < seedStr.length; i++) {
+                        hash = (hash << 5) - hash + seedStr.charCodeAt(i);
+                        hash |= 0;
+                    }
+                    let seed = Math.abs(hash) || 1;
+                    const rand = () => {
+                        seed ^= seed << 13;
+                        seed ^= seed >>> 17;
+                        seed ^= seed << 5;
+                        return (Math.abs(seed) % 1000000) / 1000000;
+                    };
+
+                    const result = averages.rawRows!.slice(0, count).map((row: any) => {
+                        const valRaw = row[key];
+                        if (valRaw === undefined || valRaw === null || valRaw === '') return fallback[0];
+                        
+                        const val = Number(valRaw);
+                        if (isNaN(val) || val === 0) return fallback[0];
+                        
+                        if (maxDev > 0) {
+                            const deviation = (rand() * 2 - 1) * maxDev;
+                            return parseFloat((val + deviation).toFixed(decimals));
+                        }
+                        return val;
+                    });
+
+                    // Shuffle array deterministically
+                    for (let i = result.length - 1; i > 0; i--) {
+                        const j = Math.floor(rand() * (i + 1));
+                        [result[i], result[j]] = [result[j], result[i]];
+                    }
+
+                    return result;
+                }
+                return fallback;
+            };
+
             const elg          = averages.elg ?? 6.4;
             const sampleElg    = this.getVariedSampleTarget(elg, 0.2, 1, seedMod);
-            const elgReadings  = overrideReadings?.elg || this.getBalancedReadings(sampleElg, Math.max(0.1, 0.2 - Math.abs(sampleElg - elg)), 1, seedMod, count);
+            const fallbackElg  = this.getBalancedReadings(sampleElg, Math.max(0.1, 0.2 - Math.abs(sampleElg - elg)), 1, seedMod, count);
+            const elgReadings  = overrideReadings?.elg || getRawReading('elg', fallbackElg, 0.1, 1);
 
             const sfi          = averages.sfi ?? 10.0;
             const sampleSfi    = this.getVariedSampleTarget(sfi, 1.0, 1, seedMod);
-            const sfiReadings  = overrideReadings?.sfi || this.getBalancedReadings(sampleSfi, Math.max(0.1, 1.0 - Math.abs(sampleSfi - sfi)), 1, seedMod, count);
+            const fallbackSfi  = this.getBalancedReadings(sampleSfi, Math.max(0.1, 1.0 - Math.abs(sampleSfi - sfi)), 1, seedMod, count);
+            const sfiReadings  = overrideReadings?.sfi || getRawReading('sfi', fallbackSfi, 0.2, 1);
 
             const sciRaw       = (averages.sci && averages.sci > 10) ? averages.sci : 120;
             const sci          = Math.max(80, Math.min(160, sciRaw));
             const sampleSci    = this.getVariedSampleTarget(sci, 3, 0, seedMod);
-            const sciReadings  = overrideReadings?.sci || this.getBalancedReadings(sampleSci, Math.max(1, 3 - Math.abs(sampleSci - sci)), 0, seedMod, count);
+            const fallbackSci  = this.getBalancedReadings(sampleSci, Math.max(1, 3 - Math.abs(sampleSci - sci)), 0, seedMod, count);
+            const sciReadings  = overrideReadings?.sci || getRawReading('sci', fallbackSci, 1.0, 0);
 
             const mat          = Math.max(0.75, Math.min(1.0, averages.mat ?? 0.85));
             const sampleMat    = this.getVariedSampleTarget(mat, 0.01, 2, seedMod);
-            const matReadings  = overrideReadings?.mat || this.getBalancedReadings(sampleMat, Math.max(0.001, 0.01 - Math.abs(sampleMat - mat)), 2, seedMod, count);
+            // Variação maior nas leituras (0.05) para não ficar "cravado", mas a média final continua = sampleMat
+            const fallbackMat  = this.getBalancedReadings(sampleMat, 0.01, 2, seedMod, count);
+            const matReadings  = overrideReadings?.mat || fallbackMat;
 
             const cspRaw       = (averages.csp && averages.csp > 10) ? averages.csp : 115;
             const csp          = Math.max(100, Math.min(9999, cspRaw));
             const sampleCsp    = this.getVariedSampleTarget(csp, 3, 0, seedMod);
-            const cspReadings  = overrideReadings?.csp || this.getBalancedReadings(sampleCsp, Math.max(1, 3 - Math.abs(sampleCsp - csp)), 0, seedMod, count);
+            const fallbackCsp  = this.getBalancedReadings(sampleCsp, Math.max(1, 3 - Math.abs(sampleCsp - csp)), 0, seedMod, count);
+            const cspReadings  = overrideReadings?.csp || getRawReading('csp', fallbackCsp, 1.0, 0);
 
-            const leaf         = Math.max(1, Math.min(8, averages.leaf ?? 2));
+            const leaf         = Math.max(1, Math.min(7, averages.leaf ?? 3));
             const sampleLeaf   = this.getVariedSampleTarget(leaf, 1, 0, seedMod);
-            const leafReadings = overrideReadings?.leaf || this.getBalancedReadings(sampleLeaf, Math.max(0, 1 - Math.abs(sampleLeaf - leaf)), 0, seedMod, count);
+            const fallbackLeaf = this.getBalancedReadings(sampleLeaf, Math.max(0, 1 - Math.abs(sampleLeaf - leaf)), 0, seedMod, count);
+            const leafReadings = overrideReadings?.leaf || getRawReading('leaf', fallbackLeaf, 0, 0);
 
             const area         = Math.max(0.01, averages.area ?? 0.25);
-            const sampleArea   = this.getVariedSampleTarget(area, 0.05, 2, seedMod);
-            const areaReadings = overrideReadings?.area || this.getBalancedReadings(sampleArea, Math.max(0.01, 0.05 - Math.abs(sampleArea - area)), 2, seedMod, count);
+            const sampleArea   = this.getVariedSampleTarget(area, 0.02, 2, seedMod);
+            // Variação maior nas leituras (0.10) para não ficar "cravado", mas a média final continua = sampleArea
+            const fallbackArea = this.getBalancedReadings(sampleArea, 0.01, 2, seedMod, count);
+            const areaReadings = overrideReadings?.area || fallbackArea;
+
+            const countVal     = Math.max(1, averages.count ?? 30);
+            const sampleCount  = this.getVariedSampleTarget(countVal, 2, 0, seedMod);
+            const fallbackCount= this.getBalancedReadings(sampleCount, Math.max(1, 2 - Math.abs(sampleCount - countVal)), 0, seedMod, count);
+            const countReadings= overrideReadings?.count || getRawReading('count', fallbackCount, 0, 0);
 
             const balancedReadingsRecord = {
                 mic: micReadings, len: lenReadings, unf: unfReadings, str: strReadings, 
                 rd: rdReadings, b: bReadings, elg: elgReadings, sfi: sfiReadings, 
                 sci: sciReadings, mat: matReadings, csp: cspReadings, leaf: leafReadings, 
-                area: areaReadings
+                area: areaReadings, count: countReadings
             };
 
 
             // Date & time formatting
-            const date = this.formatH1Date(sample.data_analise);
-            const timeBase = sample.hora_analise || "09:00";
-            const timeParts = timeBase.split(':');
-            const hours = parseInt(timeParts[0]) || 9;
-            const minutes = parseInt(timeParts[1]) || 0;
+            const now = new Date();
+            const date = this.formatH1Date(customDate); // Always format to DD-MMM-YY for USTER
+            const hours = now.getHours();
+            const minutes = now.getMinutes();
 
             // ── lineName derivado do número real da máquina ─────────────────────
             // machineId ex: 'HVI 01', 'HVI 5', 'HVI05' → extrai o número → 'Line5       '
-            const machineNum = parseInt(machine.machineId.replace(/\D/g, ''), 10);
+            const machineNum = parseInt(customHvi || machine.machineId.replace(/\D/g, ''), 10);
             const lineName = `Line${isNaN(machineNum) ? '5' : machineNum}`.padEnd(12, ' ');
 
             console.log(`[HVI] Amostra ${sample.amostra_id} cor=${sample.cor} modelo=${machine.model} linha=${lineName.trim()}`);
@@ -896,8 +988,9 @@ export class HVIFileGeneratorService {
             let content: string;
             let filename: string;
             let files: Array<{ content: string; filename: string }> = [];
+            const isUster = machine.model?.toUpperCase() === 'USTER';
 
-            if (machine.model === 'USTER') {
+            if (isUster) {
                 const baseNum = parseInt(sample.amostra_id);
                 const repContents: string[] = [];
 
@@ -927,18 +1020,28 @@ export class HVIFileGeneratorService {
                 for (let i = 0; i < count; i++) {
                     const repIndex = i + 1;
                     const offsetMin = offsets[i];
-                    const repMinutes = minutes + offsetMin;
-                    const repHour = (hours + Math.floor(repMinutes / 60)) % 24;
+                    let baseHours = hours;
+                    let baseMinutes = minutes;
+                    if (customTime) {
+                        const parts = customTime.split(':');
+                        if (parts.length >= 2) {
+                            baseHours = parseInt(parts[0], 10);
+                            baseMinutes = parseInt(parts[1], 10);
+                        }
+                    }
+                    const repMinutes = baseMinutes + offsetMin;
+                    const repHour = (baseHours + Math.floor(repMinutes / 60)) % 24;
                     const repMin = repMinutes % 60;
                     const repTime = `${String(repHour).padStart(2, '0')}:${String(repMin).padStart(2, '0')}`;
                     const seqStart = repIndex * 2 - 1;
 
-                    // Calculate on the fly for LEN and COUNT based on this rep's UHML
+                    // Calculate on the fly for LEN based on this rep's UHML
                     const repLen = parseFloat(((lenReadings[i] / 25.4) * 21).toFixed(1));
-                    const repCount = parseFloat((repLen * 2.45 - 0.3).toFixed(1));
+
+                    const effectiveSample = { ...sample, etiqueta: customEtiqueta || sample.etiqueta };
 
                     const repContent = this.generateH1FileContent(
-                        sample,
+                        effectiveSample,
                         date,
                         repTime,
                         seqStart,
@@ -951,7 +1054,7 @@ export class HVIFileGeneratorService {
                         elgReadings[i],
                         sfiReadings[i],
                         repLen,
-                        repCount,
+                        countReadings[i],
                         sciReadings[i],
                         rdReadings[i],
                         bReadings[i],
@@ -967,7 +1070,7 @@ export class HVIFileGeneratorService {
                         const fileNum = baseNum * count - count + repIndex;
                         repFilename = `RAX${String(fileNum).padStart(6, '0')}.H1`;
                     } else {
-                        const sampleLabel = sample.etiqueta?.replace(/[^a-zA-Z0-9]/g, '_') || sample.amostra_id;
+                        const sampleLabel = (customEtiqueta || sample.etiqueta)?.replace(/[^a-zA-Z0-9]/g, '_') || sample.amostra_id;
                         repFilename = `RAX${sampleLabel}_REP${repIndex}.H1`;
                     }
 
@@ -981,15 +1084,59 @@ export class HVIFileGeneratorService {
                 // PREMIER fallback logic
                 const repContents: string[] = [];
                 const timestamp = this.formatDateForFilename();
-                const sampleLabel = sample.etiqueta?.replace(/[^a-zA-Z0-9]/g, '_') || sample.amostra_id;
+                const sampleLabel = (customEtiqueta || sample.etiqueta)?.replace(/[^a-zA-Z0-9]/g, '_') || sample.amostra_id;
+
+                let tHash = 0;
+                const tSeedStr = `${sample.id || sample.amostra_id || "time"}_time`;
+                for (let i = 0; i < tSeedStr.length; i++) {
+                    tHash = (tHash << 5) - tHash + tSeedStr.charCodeAt(i);
+                    tHash |= 0;
+                }
+                let tSeed = Math.abs(tHash) || 1;
+                const tRand = () => {
+                    tSeed ^= tSeed << 13;
+                    tSeed ^= tSeed >>> 17;
+                    tSeed ^= tSeed << 5;
+                    return (Math.abs(tSeed) % 1000000) / 1000000;
+                };
+
+                const offsets = [0];
+                let currentOffset = 0;
+                for (let j = 1; j < count; j++) {
+                    currentOffset += Math.floor(tRand() * 2); // Adiciona 0 a 1 min para cada repetição
+                    offsets.push(currentOffset);
+                }
 
                 for (let i = 0; i < count; i++) {
                     const repIndex = i + 1;
+                    const dateStr = customDate || now.toLocaleDateString('pt-BR').replace(/\//g, '-');
+                    
+                    const offsetMin = offsets[i];
+                    let baseHours = now.getHours();
+                    let baseMinutes = now.getMinutes();
+                    if (customTime) {
+                        const parts = customTime.split(':');
+                        if (parts.length >= 2) {
+                            baseHours = parseInt(parts[0], 10);
+                            baseMinutes = parseInt(parts[1], 10);
+                        }
+                    }
+                    const repMinutes = baseMinutes + offsetMin;
+                    const repHour = (baseHours + Math.floor(repMinutes / 60)) % 24;
+                    const repMin = repMinutes % 60;
+                    
+                    let repTime = "";
+                    if (customTime) {
+                         repTime = `${String(repHour).padStart(2, '0')}:${String(repMin).padStart(2, '0')}`;
+                    } else {
+                         const fakeDate = new Date();
+                         fakeDate.setHours(repHour, repMin, now.getSeconds());
+                         repTime = fakeDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true });
+                    }
 
-                    // Calculates ml, count and area on the fly just like Uster
-                    const repLen = parseFloat(((lenReadings[i] / 25.4) * 21).toFixed(1));
-                    const repCount = parseFloat((repLen * 2.45 - 0.3).toFixed(1));
-                    const repArea = parseFloat((Math.random() * 0.15 + 0.35).toFixed(2));
+                    // Only calculating repMl on the fly for PREMIER if needed, Uster uses real area and count
+                    const repCount = countReadings[i];
+                    const repArea = areaReadings[i];
                     const repMl = parseFloat((lenReadings[i] * 0.75).toFixed(2));
 
                     const singleReadings = {
@@ -1009,7 +1156,8 @@ export class HVIFileGeneratorService {
                         csp:   [cspReadings[i]],
                     };
 
-                    const repContent = this.generatePremierFormatMultipleBalanced(sample, 1, averages, singleReadings);
+                    const effectiveSample = { ...sample, etiqueta: customEtiqueta || sample.etiqueta };
+                    const repContent = this.generatePremierFormatMultipleBalanced(effectiveSample, 1, averages, singleReadings, dateStr, repTime);
                     const repFilename = `HVI_PREMIER_${sampleLabel}_REP${repIndex}_${timestamp}.txt`;
 
                     files.push({ content: repContent, filename: repFilename });
@@ -1020,17 +1168,17 @@ export class HVIFileGeneratorService {
                 filename = files[0].filename;
             }
 
-            return {
-                success: true,
-                data: {
-                    content,
-                    filename,
-                    machineModel: machine.model,
-                    generatedValues,
-                    files: files.length > 0 ? files : undefined,
-                    balancedReadings: balancedReadingsRecord
-                }
-            };
+                return {
+                    success: true,
+                    data: {
+                        content,
+                        filename,
+                        machineModel: isUster ? 'USTER' : 'PREMIER',
+                        generatedValues,
+                        files: files.length > 0 ? files : undefined,
+                        balancedReadings: balancedReadingsRecord
+                    }
+                };
 
         } catch (error) {
             console.error('Error generating HVI preview:', error);

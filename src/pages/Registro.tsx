@@ -147,7 +147,7 @@ export default function Registro() {
             }
 
             setEditingRows(rows.length > 0 ? [...rows] : [{
-                numero: '1', hvi: '1', data_analise: new Date().toLocaleDateString('pt-BR'), hora_analise: new Date().toLocaleTimeString('pt-BR'),
+                numero: '1', hvi: '1', data_analise: '', hora_analise: '',
                 mic: 0, len: 0, unf: 0, str: 0, rd: 0, b: 0
             }]);
             setCurrentRowIndex(0);
@@ -788,7 +788,7 @@ export default function Registro() {
                                             <th className="px-6 py-4 w-[60px] text-center font-mono">#ID</th>
                                             <th className="px-4 py-4">Bag ID</th>
                                             <th className="px-4 py-4">Tag</th>
-                                            <th className="px-4 py-4">Timestamp</th>
+
                                             <th className="px-2 py-4 text-right font-mono">MIC</th>
                                             <th className="px-2 py-4 text-right font-mono">LEN</th>
                                             <th className="px-2 py-4 text-right font-mono">UNF</th>
@@ -804,9 +804,7 @@ export default function Registro() {
                                                 <td className="px-6 py-4 font-mono text-xs text-neutral-400 text-center">#{s.amostra_id}</td>
                                                 <td className="px-4 py-4 font-mono text-xs font-bold text-black">{s.mala || "-"}</td>
                                                 <td className="px-4 py-4 font-mono text-xs text-neutral-500">{s.etiqueta || "-"}</td>
-                                                <td className="px-4 py-4 text-[10px] font-mono text-neutral-400">
-                                                    {s.data_analise} <span className="opacity-50">{s.hora_analise}</span>
-                                                </td>
+
                                                 <td className="px-2 py-4 text-right font-mono text-xs tabular-nums">{formatDecimalBR(s.mic ?? 0, 2)}</td>
                                                 <td className="px-2 py-4 text-right font-mono text-xs tabular-nums text-neutral-500">{formatDecimalBR(s.len ?? 0, 2)}</td>
                                                 <td className="px-2 py-4 text-right font-mono text-xs tabular-nums text-neutral-500">{formatDecimalBR(s.unf ?? 0, 1)}</td>

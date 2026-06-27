@@ -2,6 +2,7 @@ import { X, Download, Eye, ArrowRight } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/button';
 import type { Sample } from '@/entities/Sample';
+import type { Machine } from '@/entities/Machine';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useState, useEffect, useRef } from 'react';
 
@@ -22,7 +23,8 @@ interface HVIPreviewModalProps {
         b: number;
     };
     balancedReadings?: Record<string, number[]>;
-    onRegenerate?: (readings: Record<string, number[]>) => void;
+    machines?: Machine[];
+    onRegenerate?: (readings: Record<string, number[]>, config?: { customEtiqueta: string, customDate: string, customTime: string, customHvi: string }) => void;
 }
 
 export default function HVIPreviewModal({
@@ -35,26 +37,82 @@ export default function HVIPreviewModal({
     originalSample,
     generatedValues,
     balancedReadings,
+    machines = [],
     onRegenerate
 }: HVIPreviewModalProps) {
     const { t } = useLanguage();
     const [editableReadings, setEditableReadings] = useState<Record<string, string[]>>({});
+    
+    const now = new Date();
+    const [customEtiqueta] = useState(originalSample.etiqueta || '');
+    // HTML date inputs expect YYYY-MM-DD
+    const localDate = new Date(now.getTime() - (now.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
+    const [customDate, setCustomDate] = useState(localDate);
+    const [customTime, setCustomTime] = useState(now.toTimeString().substring(0, 5));
+    const [customHvi, setCustomHvi] = useState(originalSample.hvi || '1');
+    const [isApproved, setIsApproved] = useState(false);
+
     const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const readingsRef = useRef(editableReadings);
+
+    useEffect(() => {
+        readingsRef.current = editableReadings;
+    }, [editableReadings]);
 
     // Sync state only initially when component mounts
     useEffect(() => {
         if (balancedReadings && Object.keys(editableReadings).length === 0) {
             const initial: Record<string, string[]> = {};
             for (const [k, arr] of Object.entries(balancedReadings)) {
-                // Formatting initial values correctly
-                initial[k] = arr.map(v => {
-                    if (k === 'mic' || k === 'len') return v.toFixed(2);
-                    return v.toFixed(1);
-                });
+                if (['mic', 'len', 'unf', 'str', 'rd', 'b'].includes(k)) {
+                    // Formatting initial values correctly
+                    initial[k] = arr.map(v => {
+                        if (k === 'mic' || k === 'len') return v.toFixed(2);
+                        return v.toFixed(1);
+                    });
+                }
             }
             setEditableReadings(initial);
         }
     }, [balancedReadings, editableReadings]);
+
+    const triggerRegeneration = (overrides: { customEtiqueta?: string, customDate?: string, customTime?: string, customHvi?: string } = {}, immediate: boolean = false) => {
+        setIsApproved(false);
+        if (timeoutRef.current) clearTimeout(timeoutRef.current);
+        
+        const execute = () => {
+            if (!onRegenerate) return;
+            
+            const currentReadings = readingsRef.current;
+            const safeReadings: Record<string, number[]> = {};
+            for (const k of Object.keys(currentReadings)) {
+                let fallback = 0;
+                if (originalSample) {
+                    const originalVal = (originalSample as any)[k];
+                    fallback = typeof originalVal === 'number' ? originalVal : parseFloat(originalVal) || 0;
+                }
+                safeReadings[k] = currentReadings[k].map(v => {
+                    const num = parseFloat(v);
+                    return isNaN(num) ? fallback : num;
+                });
+            }
+            
+            const activeDate = overrides.customDate ?? customDate;
+            const [y, m, d] = activeDate.split('-');
+            onRegenerate(safeReadings, { 
+                customEtiqueta: overrides.customEtiqueta ?? customEtiqueta, 
+                customDate: `${d}-${m}-${y}`, 
+                customTime: overrides.customTime ?? customTime,
+                customHvi: overrides.customHvi ?? customHvi 
+            });
+        };
+
+        if (immediate) {
+            execute();
+        } else {
+            timeoutRef.current = setTimeout(execute, 500);
+        }
+    };
 
     const handleReadingChange = (rowIdx: number, field: string, value: string) => {
         const cleanValue = value.replace(',', '.').replace(/[^\d.]/g, '');
@@ -65,31 +123,14 @@ export default function HVIPreviewModal({
             else newReadings[field] = [...newReadings[field]];
             
             newReadings[field][rowIdx] = cleanValue;
+            
+            // Immediately update the ref as well so debounced calls have the latest value
+            readingsRef.current = newReadings;
+            
             return newReadings;
         });
 
-        // Debounce regeneration
-        if (timeoutRef.current) clearTimeout(timeoutRef.current);
-        timeoutRef.current = setTimeout(() => {
-            setEditableReadings(currentReadings => {
-                if (onRegenerate) {
-                    const safeReadings: Record<string, number[]> = {};
-                    for (const k of Object.keys(currentReadings)) {
-                        let fallback = 0;
-                        if (originalSample) {
-                            const originalVal = (originalSample as any)[k];
-                            fallback = typeof originalVal === 'number' ? originalVal : parseFloat(originalVal) || 0;
-                        }
-                        safeReadings[k] = currentReadings[k].map(v => {
-                            const num = parseFloat(v);
-                            return isNaN(num) ? fallback : num;
-                        });
-                    }
-                    onRegenerate(safeReadings);
-                }
-                return currentReadings;
-            });
-        }, 500);
+        triggerRegeneration({}, false);
     };
 
     const handleBlur = (rowIdx: number, field: string, value: string) => {
@@ -217,6 +258,85 @@ export default function HVIPreviewModal({
                 <div className="flex-1 overflow-hidden bg-neutral-50 flex flex-col lg:flex-row">
                     {/* LEFT COLUMN: Tables */}
                     <div className="w-full lg:w-7/12 p-6 sm:p-8 overflow-y-auto border-b lg:border-b-0 lg:border-r border-neutral-200">
+                        {/* HEADER CONFIGURATION */}
+                        <div className="bg-white border border-neutral-200 shadow-sm mb-6 p-4">
+                            <h3 className="text-xs font-bold uppercase tracking-widest text-neutral-500 mb-4">Configuração do Cabeçalho</h3>
+                            <div className="flex flex-col sm:flex-row gap-4">
+                                <div className="flex-1">
+                                    <label className="block text-[11px] font-black text-blue-600 uppercase tracking-widest mb-1 flex items-center gap-1">
+                                        Número da Etiqueta
+                                    </label>
+                                    <div 
+                                        title="Etiqueta"
+                                        className="w-full px-3 py-2 text-base md:text-lg font-black font-mono border-2 border-blue-500 rounded bg-blue-50 text-blue-700 shadow-sm select-all tracking-widest overflow-hidden text-ellipsis whitespace-nowrap"
+                                    >
+                                        {customEtiqueta}
+                                    </div>
+                                </div>
+                                <div className="w-full sm:w-24">
+                                    <label className="block text-[10px] font-bold text-neutral-500 uppercase tracking-wider mb-1">
+                                        Máquina
+                                    </label>
+                                    <select 
+                                        title="Máquina HVI"
+                                        value={customHvi}
+                                        onChange={(e) => {
+                                            setCustomHvi(e.target.value);
+                                            triggerRegeneration({ customHvi: e.target.value }, true);
+                                        }}
+                                        className="w-full px-3 py-2 text-sm border border-neutral-300 rounded focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white"
+                                    >
+                                        {machines.length > 0 ? (
+                                            machines.map(m => (
+                                                <option key={m.id} value={m.machineId}>HVI {m.machineId}</option>
+                                            ))
+                                        ) : (
+                                            <>
+                                                <option value="1">HVI 1</option>
+                                                <option value="2">HVI 2</option>
+                                                <option value="3">HVI 3</option>
+                                                <option value="4">HVI 4</option>
+                                                <option value="5">HVI 5</option>
+                                                <option value="6">HVI 6</option>
+                                            </>
+                                        )}
+                                    </select>
+                                </div>
+                                <div className="w-full sm:w-32">
+                                    <label className="block text-[10px] font-bold text-neutral-500 uppercase tracking-wider mb-1">
+                                        Data
+                                    </label>
+                                    <input 
+                                        type="date" 
+                                        title="Data do Teste"
+                                        required
+                                        value={customDate}
+                                        onChange={(e) => {
+                                            setCustomDate(e.target.value);
+                                            triggerRegeneration({ customDate: e.target.value }, true);
+                                        }}
+                                        className="w-full px-3 py-2 text-sm border border-neutral-300 rounded focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                    />
+                                </div>
+                                <div className="w-full sm:w-24">
+                                    <label className="block text-[10px] font-bold text-neutral-500 uppercase tracking-wider mb-1">
+                                        Hora
+                                    </label>
+                                    <input 
+                                        type="time" 
+                                        title="Hora do Teste"
+                                        required
+                                        value={customTime}
+                                        onChange={(e) => {
+                                            setCustomTime(e.target.value);
+                                            triggerRegeneration({ customTime: e.target.value }, true);
+                                        }}
+                                        className="w-full px-3 py-2 text-sm border border-neutral-300 rounded focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
                         {/* TOP COMPARATIVE TABLE */}
                     <div className="bg-white border border-neutral-200 shadow-sm mb-6">
                         <div className="p-4 bg-neutral-50/50 border-b border-neutral-200 flex justify-between items-center">
@@ -460,6 +580,25 @@ export default function HVIPreviewModal({
                             </div>
                         </div>
                     )}
+                    
+                        {/* APPROVAL SECTION */}
+                        <div className="mt-8 flex flex-col items-center justify-center p-6 bg-blue-50 border border-blue-100 rounded-lg shadow-sm">
+                            <p className="text-xs font-medium text-blue-800 mb-4 text-center">
+                                Os valores digitados precisam ser revisados pelo analista antes de prosseguir.
+                                Esta aprovação será registrada no histórico da amostra.
+                            </p>
+                            <Button 
+                                onClick={() => setIsApproved(true)}
+                                disabled={isApproved}
+                                className={`h-10 px-8 font-bold text-[10px] uppercase tracking-widest transition-all ${
+                                    isApproved 
+                                    ? 'bg-green-600 text-white hover:bg-green-700' 
+                                    : 'bg-blue-600 text-white hover:bg-blue-700'
+                                }`}
+                            >
+                                {isApproved ? '✓ Valores Aprovados' : 'Aprovar Valores'}
+                            </Button>
+                        </div>
 
                     </div>
 
@@ -489,8 +628,17 @@ export default function HVIPreviewModal({
                             {t('hvi.cancel')}
                         </Button>
                         <Button
-                            onClick={onConfirm}
-                            className="h-12 px-8 rounded-none bg-black text-white hover:bg-neutral-800 font-bold text-[10px] uppercase tracking-widest transition-colors flex items-center gap-2"
+                            onClick={() => {
+                                if (!isApproved) {
+                                    alert("Por favor, aprove os valores antes de baixar.");
+                                    return;
+                                }
+                                onConfirm();
+                            }}
+                            disabled={!isApproved}
+                            className={`h-12 px-8 rounded-none font-bold text-[10px] uppercase tracking-widest transition-colors flex items-center gap-2 ${
+                                !isApproved ? 'bg-neutral-300 text-neutral-500 cursor-not-allowed' : 'bg-black text-white hover:bg-neutral-800'
+                            }`}
                         >
                             <Download className="h-4 w-4" />
                             {t('hvi.confirm_download')}

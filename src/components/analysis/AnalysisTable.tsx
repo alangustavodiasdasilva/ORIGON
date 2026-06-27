@@ -1,16 +1,18 @@
-import { useState } from "react";
-import type { Sample } from "@/entities/Sample";
+import { useState, useEffect } from "react";
+import { type Sample } from "@/entities/Sample";
+import { type Machine, MachineService } from "@/entities/Machine";
 import { cn } from "@/lib/utils";
 import { calculateStatistics } from "@/lib/stats";
-import { AlertTriangle, Palette, Box, Tag, Cpu, ArrowUpDown, ArrowUp, ArrowDown, Trash2, Calendar, Hash, FileDown, Lock } from "lucide-react";
+import { AlertTriangle, Palette, Box, Tag, Cpu, ArrowUpDown, ArrowUp, ArrowDown, Trash2, Hash, FileDown, CheckCircle2 } from "lucide-react";
 import { formatDecimalBR } from "@/services/ocrExtraction";
 import { HVIFileGeneratorService, type HVIPreviewData } from "@/services/HVIFileGeneratorService";
 import HVIPreviewModal from "@/components/HVIPreviewModal";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface AnalysisTableProps {
     samples: Sample[];
-    onUpdateSample: (id: string, field: string, value: any) => void;
+    onUpdateSample: (id: string, field: string, value: any) => Promise<void>;
     onColorChange: (id: string, color: string) => void;
     onDeleteSample: (id: string) => void;
     isProcessing: boolean;
@@ -35,9 +37,38 @@ const COLORS = [
 
 export default function AnalysisTable({ samples, onUpdateSample, onColorChange, onDeleteSample, isProcessing, highlightedSampleId, loteId, tolerancias }: AnalysisTableProps) {
     const { t } = useLanguage();
+    const { user, currentLab, isLoading } = useAuth();
     const fields = ['mic', 'len', 'unf', 'str', 'rd', 'b'] as const;
     const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
     const [previewModal, setPreviewModal] = useState<{ isOpen: boolean; data: HVIPreviewData | null; sample: Sample | null }>({ isOpen: false, data: null, sample: null });
+    const [machines, setMachines] = useState<Machine[]>([]);
+
+    useEffect(() => {
+        if (isLoading) return;
+        
+        let isActive = true;
+        const targetLabId = currentLab?.id || user?.lab_id;
+        
+        const fetchMachines = async () => {
+            try {
+                const fetched = targetLabId 
+                    ? await MachineService.listByLab(targetLabId)
+                    : await MachineService.list();
+                    
+                if (isActive) {
+                    setMachines(fetched);
+                }
+            } catch (error) {
+                console.error("Erro ao buscar máquinas:", error);
+            }
+        };
+        
+        fetchMachines();
+        
+        return () => {
+            isActive = false;
+        };
+    }, [currentLab?.id, user?.lab_id, isLoading]);
 
     const statsByField = fields.reduce((acc, field) => {
         const values = samples
@@ -143,11 +174,7 @@ export default function AnalysisTable({ samples, onUpdateSample, onColorChange, 
                                 <Tag className="h-3.5 w-3.5 hidden lg:inline" /> LABEL
                             </div>
                         </th>
-                        <th className="px-2 w-[8%]">
-                            <div className="flex items-center gap-1">
-                                <Calendar className="h-3.5 w-3.5 hidden lg:inline" /> DATA
-                            </div>
-                        </th>
+
                         <th
                              className="px-1 text-center w-[75px] cursor-pointer hover:text-blue-600 transition-colors"
                              onClick={() => handleSort('hvi')}
@@ -237,23 +264,23 @@ export default function AnalysisTable({ samples, onUpdateSample, onColorChange, 
                                     </div>
                                 </td>
                                 <td className="px-2 py-4 font-bold text-slate-400 text-[10px] truncate border-r border-slate-100/50">{sample.etiqueta || "-"}</td>
-                                <td className="px-2 py-4 font-mono font-bold text-slate-500 text-[9px] border-r border-slate-100/50">
-                                    <div className="flex flex-col leading-tight">
-                                        <span>{sample.data_analise || "--/--/--"}</span>
-                                        <span className="text-[8px] opacity-70">{sample.hora_analise || "--:--"}</span>
-                                    </div>
-                                </td>
+
                                 <td className="px-1 py-4 text-center border-r border-slate-100/50">
                                      <select
-                                         value={sample.hvi || "1"}
+                                         value={sample.hvi || (machines.length > 0 ? machines[0].machineId : "1")}
                                          disabled={isProcessing || sample.locked}
                                          onChange={(e) => onUpdateSample(sample.id, 'hvi', e.target.value)}
                                          title="Selecionar HVI"
                                          className="font-black text-blue-600 bg-transparent hover:bg-neutral-50 p-1 border-0 focus:ring-0 focus:outline-none cursor-pointer rounded text-[11px] text-center w-full focus:bg-white appearance-none"
                                      >
-                                         {[1, 2, 3, 4, 5, 6, 7].map(n => (
+                                         {machines.length > 0 ? machines.map(m => (
+                                             <option key={m.id} value={m.machineId}>{m.machineId} ({m.model === 'USTER' ? 'U' : 'P'})</option>
+                                         )) : [1, 2, 3, 4, 5, 6, 7].map(n => (
                                              <option key={n} value={String(n)}>HVI 0{n}</option>
                                          ))}
+                                         {machines.length > 0 && sample.hvi && !machines.some(m => m.machineId === sample.hvi) && (
+                                             <option value={sample.hvi}>{sample.hvi}</option>
+                                         )}
                                      </select>
                                  </td>
                                 <td className="px-2 py-4 border-r border-slate-100/50">
@@ -350,10 +377,10 @@ export default function AnalysisTable({ samples, onUpdateSample, onColorChange, 
                                                         onUpdateSample(sample.id, 'locked', false);
                                                     }
                                                 }}
-                                                className="p-1 text-amber-500 hover:text-amber-600 hover:bg-amber-50 rounded transition-all"
-                                                title="Amostra Bloqueada (Clique para Desbloquear)"
+                                                className="p-1 text-emerald-500 hover:text-emerald-600 hover:bg-emerald-50 rounded transition-all"
+                                                title="Amostra Finalizada (Clique para Desbloquear)"
                                             >
-                                                <Lock className="h-3.5 w-3.5" />
+                                                <CheckCircle2 className="h-4 w-4" />
                                             </button>
                                         ) : (
                                             <button
@@ -406,15 +433,20 @@ export default function AnalysisTable({ samples, onUpdateSample, onColorChange, 
             {previewModal.data && previewModal.sample && (
                 <HVIPreviewModal
                     isOpen={previewModal.isOpen}
+                    machines={machines}
                     onClose={() => setPreviewModal({ isOpen: false, data: null, sample: null })}
-                    onConfirm={() => {
-                        if (previewModal.data) {
-                            HVIFileGeneratorService.downloadHVIFile(previewModal.data.content, previewModal.data.filename, previewModal.data.files);
-                            if (previewModal.sample) {
-                                onUpdateSample(previewModal.sample.id, 'locked', true);
+                    onConfirm={async () => {
+                        if (previewModal.data && previewModal.sample) {
+                            try {
+                                await HVIFileGeneratorService.downloadHVIFile(previewModal.data.content, previewModal.data.filename, previewModal.data.files);
+                                
+                                await onUpdateSample(previewModal.sample.id, 'locked', true);
+                                
+                                setPreviewModal({ isOpen: false, data: null, sample: null });
+                            } catch (e) {
+                                alert("Erro ao salvar o bloqueio da amostra no banco de dados.");
+                                console.error(e);
                             }
-                            setPreviewModal({ isOpen: false, data: null, sample: null });
-
                         }
                     }}
                     content={previewModal.data.content}
@@ -423,14 +455,25 @@ export default function AnalysisTable({ samples, onUpdateSample, onColorChange, 
                     originalSample={previewModal.sample}
                     generatedValues={previewModal.data.generatedValues}
                     balancedReadings={previewModal.data.balancedReadings}
-                    onRegenerate={async (newReadings) => {
+                    onRegenerate={async (newReadings, config) => {
                         if (previewModal.sample) {
-                            const result = await HVIFileGeneratorService.generatePreviewForSample(previewModal.sample, samples, tolerancias, newReadings);
+                            const result = await HVIFileGeneratorService.generatePreviewForSample(
+                                previewModal.sample, 
+                                samples, 
+                                tolerancias, 
+                                newReadings,
+                                config?.customEtiqueta,
+                                config?.customDate,
+                                config?.customTime,
+                                (config as any)?.customHvi
+                            );
                             if (result.success && result.data) {
                                 setPreviewModal(prev => ({
                                     ...prev,
                                     data: result.data || null
                                 }));
+                            } else {
+                                alert(result.message || 'Erro ao regenerar o arquivo HVI. A máquina selecionada pode não estar cadastrada.');
                             }
                         }
                     }}

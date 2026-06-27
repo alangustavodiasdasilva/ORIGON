@@ -19,13 +19,16 @@ export interface Sample {
     hora_analise?: string;
     cor?: string; // Hex color code
     locked?: boolean;
+    aprovado_hvi?: boolean;
+    aprovado_por?: string;
+    aprovado_em?: string;
     historico_modificacoes: Array<{
         timestamp: string;
         usuario: string;
         campo: string;
         valor_anterior: any;
         valor_novo: any;
-        tipo_modificacao: 'criacao' | 'edicao' | 'cor_alterada';
+        tipo_modificacao: 'criacao' | 'edicao' | 'cor_alterada' | 'aprovacao_hvi';
     }>;
 }
 

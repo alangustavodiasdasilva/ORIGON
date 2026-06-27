@@ -123,12 +123,10 @@ export class ExcelExtractionService {
                             const rdVal = autoCorrectDecimal(getVal('rd') || '', 'rd');
                             const bVal = autoCorrectDecimal(getVal('b') || '', 'b');
 
-                            const d = new Date();
-
                             rows.push({
                                 numero: String(rows.length + 1),
-                                data_analise: d.toLocaleDateString('pt-BR'),
-                                hora_analise: d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+                                data_analise: '',
+                                hora_analise: '',
                                 hvi: hviVal,
                                 etiqueta: etiqueta || '',
                                 mic: isNaN(micVal) ? 0 : micVal,

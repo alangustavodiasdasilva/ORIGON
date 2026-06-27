@@ -99,8 +99,8 @@ const extractDateTime = (text: string): { data: string; hora: string } => {
     const dateMatch = text.match(/(\d{2}\/\d{2}\/\d{4})/);
     const timeMatch = text.match(/(\d{2}:\d{2}:\d{2})/);
     return {
-        data: dateMatch ? dateMatch[1] : new Date().toLocaleDateString('pt-BR'),
-        hora: timeMatch ? timeMatch[1] : new Date().toLocaleTimeString('pt-BR'),
+        data: dateMatch ? dateMatch[1] : '',
+        hora: timeMatch ? timeMatch[1] : '',
     };
 };
 
