@@ -1033,7 +1033,7 @@ export class HVIFileGeneratorService {
                 const offsets = [0];
                 let currentOffset = 0;
                 for (let j = 1; j < count; j++) {
-                    currentOffset += Math.floor(tRand() * 2); // Adiciona 0 a 1 min para cada repetição
+                    currentOffset += (1 + Math.floor(tRand() * 2)); // Adiciona 1 a 2 min para cada repetição
                     offsets.push(currentOffset);
                 }
 
@@ -1123,7 +1123,7 @@ export class HVIFileGeneratorService {
                 const offsets = [0];
                 let currentOffset = 0;
                 for (let j = 1; j < count; j++) {
-                    currentOffset += Math.floor(tRand() * 2); // Adiciona 0 a 1 min para cada repetição
+                    currentOffset += (1 + Math.floor(tRand() * 2)); // Adiciona 1 a 2 min para cada repetição
                     offsets.push(currentOffset);
                 }
 

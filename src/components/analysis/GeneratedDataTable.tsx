@@ -33,7 +33,7 @@ export default function GeneratedDataTable({ samples }: GeneratedDataTableProps)
             const offsets = [0];
             let currentOffset = 0;
             for (let j = 1; j < count; j++) {
-                currentOffset += Math.floor(tRand() * 2); // 0 ou 1 min
+                currentOffset += (1 + Math.floor(tRand() * 2)); // 1 ou 2 min
                 offsets.push(currentOffset);
             }
 
