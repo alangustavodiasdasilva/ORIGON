@@ -487,23 +487,6 @@ export default function Analysis() {
                                 )}
                             </div>
 
-                            <div className="relative mr-4">
-                                <select 
-                                    value={filterStatus}
-                                    onChange={(e) => setFilterStatus(e.target.value as any)}
-                                    title="Filtrar por Status de Geração"
-                                    aria-label="Filtrar por Status de Geração"
-                                    className="h-8 pl-3 pr-8 text-[11px] font-bold text-black border border-neutral-300 rounded bg-white focus:outline-none focus:border-black focus:ring-1 focus:ring-black uppercase transition-all appearance-none cursor-pointer"
-                                >
-                                    <option value="all">Todos</option>
-                                    <option value="generated">Gerados</option>
-                                    <option value="pending">Pendentes</option>
-                                </select>
-                                <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-neutral-400">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>
-                                </div>
-                            </div>
-
                             {(['#10b981', '#f59e0b', '#ef4444', '#3b82f6'] as const).map(c => (
                                 <button
                                     key={c}
