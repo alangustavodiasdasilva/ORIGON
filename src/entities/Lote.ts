@@ -10,6 +10,7 @@ export interface Lote {
     lab_id?: string;
     status: 'aberto' | 'finalizado';
     analista_responsavel: string;
+    configuracoes_analise?: Record<string, any>;
     created_at: string;
     updated_at: string;
 }

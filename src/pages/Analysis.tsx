@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import {
     ArrowLeft,
@@ -16,7 +16,7 @@ import { SampleService } from "@/entities/Sample";
 import { LoteService } from "@/entities/Lote";
 import AnalysisTable from "@/components/analysis/AnalysisTable";
 import MovingAverageChart from "@/components/analysis/MovingAverageChart";
-import ScenarioExplorer from "@/components/analysis/ScenarioExplorer";
+import GeneratedDataTable from "@/components/analysis/GeneratedDataTable";
 import PatternAnalysisModal from "@/components/analysis/PatternAnalysisModal";
 import ColorTemplatesModal from "@/components/analysis/ColorTemplatesModal";
 import { useToast } from "@/contexts/ToastContext";
@@ -46,28 +46,49 @@ export default function Analysis() {
         b: 0.25
     });
     
-    const [manualOverrides, setManualOverrides] = useState<Record<string, string>>(() => {
-        try {
-            const stored = localStorage.getItem(`lote_${loteId}_manual_overrides`);
-            if (stored) {
-                const parsed = JSON.parse(stored);
-                const cleaned: Record<string, string> = {};
-                for (const [k, v] of Object.entries(parsed)) {
-                    if (typeof v === 'string') {
-                        cleaned[k] = v.replace('.', ',');
-                    }
-                }
-                return cleaned;
-            }
-            return {};
-        } catch { return {}; }
-    });
+    const [manualOverrides, setManualOverrides] = useState<Record<string, string>>({});
+    const overridesSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    // Flag to avoid saving back to DB data we just loaded from DB
+    const skipNextOverridesSave = useRef(false);
 
+    // Debounced save to Supabase whenever manualOverrides changes
+    const saveOverridesToDB = useCallback((overrides: Record<string, string>) => {
+        if (!loteId) return;
+        if (overridesSaveTimerRef.current) clearTimeout(overridesSaveTimerRef.current);
+        overridesSaveTimerRef.current = setTimeout(async () => {
+            try {
+                const currentLote = await LoteService.get(loteId);
+                const config = currentLote?.configuracoes_analise || {};
+                await LoteService.update(loteId, {
+                    configuracoes_analise: { ...config, manual_overrides: overrides }
+                });
+            } catch (err: any) {
+                console.error('Erro ao salvar médias primárias no banco:', err);
+                addToast({ title: "Erro", description: "Não foi possível salvar a média (verifique a conexão ou permissão). " + err.message, type: "error" });
+            }
+        }, 800);
+    }, [loteId, addToast]);
+
+    const isInitialMountOverrides = useRef(true);
     useEffect(() => {
+        if (isInitialMountOverrides.current) {
+            isInitialMountOverrides.current = false;
+            return;
+        }
+        
+        if (skipNextOverridesSave.current) {
+            skipNextOverridesSave.current = false;
+            // Limpa qualquer timer pendente para não salvar por cima sem querer
+            if (overridesSaveTimerRef.current) clearTimeout(overridesSaveTimerRef.current);
+            return;
+        }
+        
+        // Also keep localStorage as fallback
         if (loteId) {
             localStorage.setItem(`lote_${loteId}_manual_overrides`, JSON.stringify(manualOverrides));
         }
-    }, [manualOverrides, loteId]);
+        saveOverridesToDB(manualOverrides);
+    }, [manualOverrides, loteId, saveOverridesToDB]);
 
 
     const metricsByColor = useMemo(() => {
@@ -106,51 +127,6 @@ export default function Analysis() {
         return categories;
     }, [samples]);
 
-    // Track previous metrics to detect sample changes and clear manual overrides
-    const prevMetricsRef = useRef(metricsByColor);
-    useEffect(() => {
-        const prevMetrics = prevMetricsRef.current;
-        const overridesToClear: string[] = [];
-
-        Object.keys(metricsByColor).forEach(color => {
-            const currentCat = metricsByColor[color as keyof typeof metricsByColor];
-            const prevCat = prevMetrics[color as keyof typeof prevMetrics];
-            if (prevCat) {
-                const fields = [
-                    { key: 'mic', label: 'MIC' },
-                    { key: 'len', label: 'LEN' },
-                    { key: 'unf', label: 'UNF' },
-                    { key: 'str', label: 'STR' },
-                    { key: 'rd', label: 'RD' },
-                    { key: 'b', label: '+B' }
-                ];
-                
-                fields.forEach(({ key, label }) => {
-                    const currVal = currentCat[key as keyof typeof currentCat];
-                    const prevVal = prevCat[key as keyof typeof prevCat];
-                    if (currVal !== prevVal) {
-                        overridesToClear.push(`${color}-${label}`);
-                    }
-                });
-            }
-        });
-
-        if (overridesToClear.length > 0) {
-            setManualOverrides(prev => {
-                const next = { ...prev };
-                let changed = false;
-                overridesToClear.forEach(key => {
-                    if (next[key] !== undefined) {
-                        delete next[key];
-                        changed = true;
-                    }
-                });
-                return changed ? next : prev;
-            });
-        }
-
-        prevMetricsRef.current = metricsByColor;
-    }, [metricsByColor]);
 
     const handleExportCSV = () => {
         if (!samples.length || !lote) return;
@@ -219,6 +195,36 @@ export default function Analysis() {
                 return;
             }
             setLote(l);
+
+            // Restore manualOverrides from DB (configuracoes_analise)
+            const dbOverrides = l.configuracoes_analise?.manual_overrides;
+            if (dbOverrides && typeof dbOverrides === 'object') {
+                const cleaned: Record<string, string> = {};
+                for (const [k, v] of Object.entries(dbOverrides)) {
+                    if (typeof v === 'string') {
+                        cleaned[k] = v.replace('.', ',');
+                    }
+                }
+                skipNextOverridesSave.current = true;
+                setManualOverrides(cleaned);
+            } else {
+                // Fallback: try localStorage for migration
+                try {
+                    const stored = localStorage.getItem(`lote_${loteId}_manual_overrides`);
+                    if (stored) {
+                        const parsed = JSON.parse(stored);
+                        const cleaned: Record<string, string> = {};
+                        for (const [k, v] of Object.entries(parsed)) {
+                            if (typeof v === 'string') {
+                                cleaned[k] = v.replace('.', ',');
+                            }
+                        }
+                        if (Object.keys(cleaned).length > 0) {
+                            setManualOverrides(cleaned);
+                        }
+                    }
+                } catch { /* ignore localStorage errors */ }
+            }
         }
 
         const s = await SampleService.listByLote(loteId);
@@ -324,7 +330,7 @@ export default function Analysis() {
     const [isPatternModalOpen, setIsPatternModalOpen] = useState(false);
     const [isStatsModalOpen, setIsStatsModalOpen] = useState(false);
     
-    const [activeTab, setActiveTab] = useState<'geral' | 'fitagem'>('geral');
+    const [activeTab, setActiveTab] = useState<'geral' | 'gerados'>('geral');
 
     const handleBulkColorUpdate = async (updates: Record<string, string>) => {
         setIsProcessing(true);
@@ -421,13 +427,13 @@ export default function Analysis() {
                         Visão Geral
                     </button>
                     <button 
-                        onClick={() => setActiveTab('fitagem')} 
+                        onClick={() => setActiveTab('gerados')} 
                         className={cn(
                             "px-8 py-4 font-bold uppercase tracking-widest text-[11px] border-b-[3px] transition-all", 
-                            activeTab === 'fitagem' ? "border-black text-black" : "border-transparent text-neutral-400 hover:text-black hover:bg-neutral-50"
+                            activeTab === 'gerados' ? "border-black text-black" : "border-transparent text-neutral-400 hover:text-black hover:bg-neutral-50"
                         )}
                     >
-                        Fitagem & Cenários
+                        Dados Gerados
                     </button>
                 </div>
             </div>
@@ -525,6 +531,7 @@ export default function Analysis() {
                             highlightedSampleId={null}
                             loteId={loteId || undefined}
                             tolerancias={tolerancias}
+                            configuracoesAnalise={lote?.configuracoes_analise}
                         />
                     </div>
                 </div>
@@ -617,12 +624,9 @@ export default function Analysis() {
             </div>
             )}
 
-            {activeTab === 'fitagem' && (
+            {activeTab === 'gerados' && (
                 <div className="space-y-12 pt-4 animate-fade-in">
-                    <ScenarioExplorer 
-                        samples={samples}
-                        onColorChange={handleColorChange}
-                    />
+                    <GeneratedDataTable samples={samples} />
                 </div>
             )}
 
@@ -642,6 +646,7 @@ export default function Analysis() {
                 }}
                 specificColor={activeColorForTemplate || undefined}
                 contextKey={loteId || undefined}
+                loteId={loteId || undefined}
             />
 
             <HVIStatisticalReportModal

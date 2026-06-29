@@ -111,38 +111,50 @@ export class HVIFileGeneratorService {
      * ── Média Secundária ──────────────────────────────────────────────────────
      * Lê EXCLUSIVAMENTE o template vinculado à cor desta amostra.
      * Nunca mistura dados de outras cores nem usa dados calculados de amostras.
+     * Prioriza dados do banco (configuracoes_analise.color_templates) com fallback para localStorage.
      */
-    private static getSecondaryTemplate(color: string, loteId: string): ColorAverage | null {
-        const STORAGE_PREFIX = loteId ? `lote_${loteId}_` : '';
-        const raw = localStorage.getItem(`${STORAGE_PREFIX}custom_color_averages`);
-        if (!raw) return null;
-        try {
-            const parsed = JSON.parse(raw);
-            const tpl = parsed[color];
-            if (!tpl || typeof tpl !== 'object') return null;
+    private static getSecondaryTemplate(color: string, loteId: string, configuracoesAnalise?: Record<string, any>): ColorAverage | null {
+        let parsed: any = null;
 
-            // Garantia: todos os campos estruturais vêm SOMENTE deste template
-            return {
-                mic:   Number(tpl.mic)   || 0,
-                len:   Number(tpl.len)   || 0,
-                unf:   Number(tpl.unf)   || 0,
-                str:   Number(tpl.str)   || 0,
-                rd:    Number(tpl.rd)    || 0,
-                b:     Number(tpl.b)     || 0,
-                cg:    String(tpl.cg     ?? ''),
-                elg:   Number(tpl.elg)   || 0,
-                area:  Number(tpl.area)  || 0,
-                count: Number(tpl.count) || 0,
-                mat:   Number(tpl.mat)   || 0,
-                leaf:  Number(tpl.leaf)  || 0,
-                sfi:   Number(tpl.sfi)   || 0,
-                csp:   Number(tpl.csp)   || 0,
-                sci:   Number(tpl.sci)   || 0,
-                rawRows: Array.isArray(tpl.rawRows) ? tpl.rawRows : undefined,
-            };
-        } catch {
-            return null;
+        // Priority 1: configuracoes_analise from DB
+        if (configuracoesAnalise?.color_templates) {
+            parsed = configuracoesAnalise.color_templates;
         }
+
+        // Priority 2: localStorage fallback
+        if (!parsed) {
+            const STORAGE_PREFIX = loteId ? `lote_${loteId}_` : '';
+            const raw = localStorage.getItem(`${STORAGE_PREFIX}custom_color_averages`);
+            if (!raw) return null;
+            try {
+                parsed = JSON.parse(raw);
+            } catch {
+                return null;
+            }
+        }
+
+        const tpl = parsed[color];
+        if (!tpl || typeof tpl !== 'object') return null;
+
+        // Garantia: todos os campos estruturais vêm SOMENTE deste template
+        return {
+            mic:   Number(tpl.mic)   || 0,
+            len:   Number(tpl.len)   || 0,
+            unf:   Number(tpl.unf)   || 0,
+            str:   Number(tpl.str)   || 0,
+            rd:    Number(tpl.rd)    || 0,
+            b:     Number(tpl.b)     || 0,
+            cg:    String(tpl.cg     ?? ''),
+            elg:   Number(tpl.elg)   || 0,
+            area:  Number(tpl.area)  || 0,
+            count: Number(tpl.count) || 0,
+            mat:   Number(tpl.mat)   || 0,
+            leaf:  Number(tpl.leaf)  || 0,
+            sfi:   Number(tpl.sfi)   || 0,
+            csp:   Number(tpl.csp)   || 0,
+            sci:   Number(tpl.sci)   || 0,
+            rawRows: Array.isArray(tpl.rawRows) ? tpl.rawRows : undefined,
+        };
     }
 
     /**
@@ -154,9 +166,9 @@ export class HVIFileGeneratorService {
      * NENHUM dado é compartilhado entre cores.
      * NENHUM dado da Média Secundária de uma cor é usado em outra amostra.
      */
-    private static getSampleTargetValues(sample: Sample, allSamples: Sample[] = []): ColorAverage {
+    private static getSampleTargetValues(sample: Sample, allSamples: Sample[] = [], configuracoesAnalise?: Record<string, any>): ColorAverage {
         const color = sample.cor || "#3b82f6";
-        const secondary = this.getSecondaryTemplate(color, sample.lote_id);
+        const secondary = this.getSecondaryTemplate(color, sample.lote_id, configuracoesAnalise);
 
         // ── Médias Primárias (Referência da Cor) ──────────────────────────────
         // Filtra todas as amostras da mesma cor para calcular a média real
@@ -222,22 +234,29 @@ export class HVIFileGeneratorService {
 
     /**
      * Check if a color has a linked print template
+     * Prioriza dados do banco (configuracoesAnalise) com fallback para localStorage.
      */
-    public static hasColorPrint(color?: string, contextKey?: string): boolean {
+    public static hasColorPrint(color?: string, contextKey?: string, configuracoesAnalise?: Record<string, any>): boolean {
         if (!color) return false;
+
+        // Priority 1: Check from DB config
+        if (configuracoesAnalise?.color_templates) {
+            const config = configuracoesAnalise.color_templates[color];
+            const result = !!(config && typeof config === 'object' && 'selectedLine' in config);
+            if (result) return true;
+        }
+
+        // Priority 2: localStorage fallback
         const STORAGE_PREFIX = contextKey ? `lote_${contextKey}_` : '';
         const key = `${STORAGE_PREFIX}custom_color_averages`;
         const customAveragesStr = localStorage.getItem(key);
         if (!customAveragesStr) {
-            console.log(`[hasColorPrint] MISS: Key "${key}" não encontrada no localStorage`);
             return false;
         }
         try {
             const customAverages = JSON.parse(customAveragesStr);
             const config = customAverages[color];
-            const result = !!(config && typeof config === 'object' && 'selectedLine' in config);
-            console.log(`[hasColorPrint] color="${color}", key="${key}", result=${result}, selectedLine=${config?.selectedLine}`);
-            return result;
+            return !!(config && typeof config === 'object' && 'selectedLine' in config);
         } catch {
             return false;
         }
@@ -807,12 +826,13 @@ export class HVIFileGeneratorService {
         customEtiqueta?: string,
         customDate?: string,
         customTime?: string,
-        customHvi?: string
+        customHvi?: string,
+        configuracoesAnalise?: Record<string, any>
     ): Promise<{
         success: boolean; message?: string; data?: HVIPreviewData }> {
         try {
             // Check if color has linked print template (STRICT LOCK)
-            if (!sample.cor || !this.hasColorPrint(sample.cor, sample.lote_id)) {
+            if (!sample.cor || !this.hasColorPrint(sample.cor, sample.lote_id, configuracoesAnalise)) {
                 const colorNames: Record<string, string> = {
                     "#3b82f6": "Azul",
                     "#ef4444": "Vermelho",
@@ -845,7 +865,7 @@ export class HVIFileGeneratorService {
             }
 
             // Get the averages (Sample values or Color Average)
-            const averages = this.getSampleTargetValues(sample, allSamples);
+            const averages = this.getSampleTargetValues(sample, allSamples, configuracoesAnalise);
 
             const count = 6;
             const tols = tolerancias || { mic: 0.10, len: 0.30, unf: 0.5, str: 0.5, rd: 0.5, b: 0.3 };
@@ -968,7 +988,7 @@ export class HVIFileGeneratorService {
                 mic: micReadings, len: lenReadings, unf: unfReadings, str: strReadings, 
                 rd: rdReadings, b: bReadings, elg: elgReadings, sfi: sfiReadings, 
                 sci: sciReadings, mat: matReadings, csp: cspReadings, leaf: leafReadings, 
-                area: areaReadings, count: countReadings
+                area: areaReadings, count: countReadings, cg: Array(count).fill(averages.cg)
             };
 
 

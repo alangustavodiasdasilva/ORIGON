@@ -22,6 +22,7 @@ export interface Sample {
     aprovado_hvi?: boolean;
     aprovado_por?: string;
     aprovado_em?: string;
+    leituras_geradas?: any[]; // Armazena as 6 leituras de HVI geradas
     historico_modificacoes: Array<{
         timestamp: string;
         usuario: string;

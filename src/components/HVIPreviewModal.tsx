@@ -25,6 +25,7 @@ interface HVIPreviewModalProps {
     balancedReadings?: Record<string, number[]>;
     machines?: Machine[];
     onRegenerate?: (readings: Record<string, number[]>, config?: { customEtiqueta: string, customDate: string, customTime: string, customHvi: string }) => void;
+    onSaveField?: (field: string, value: any) => Promise<void>;
 }
 
 export default function HVIPreviewModal({
@@ -38,17 +39,32 @@ export default function HVIPreviewModal({
     generatedValues,
     balancedReadings,
     machines = [],
-    onRegenerate
+    onRegenerate,
+    onSaveField
 }: HVIPreviewModalProps) {
     const { t } = useLanguage();
     const [editableReadings, setEditableReadings] = useState<Record<string, string[]>>({});
     
     const now = new Date();
     const [customEtiqueta] = useState(originalSample.etiqueta || '');
-    // HTML date inputs expect YYYY-MM-DD
+    // Initialize date from sample if saved, otherwise use current date
     const localDate = new Date(now.getTime() - (now.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
-    const [customDate, setCustomDate] = useState(localDate);
-    const [customTime, setCustomTime] = useState(now.toTimeString().substring(0, 5));
+    const [customDate, setCustomDate] = useState(() => {
+        if (originalSample.data_analise) {
+            // Try to convert DD/MM/YYYY or YYYY-MM-DD to YYYY-MM-DD
+            const d = originalSample.data_analise;
+            if (d.includes('/')) {
+                const parts = d.split('/');
+                if (parts.length === 3) return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+            }
+            return d;
+        }
+        return localDate;
+    });
+    const [customTime, setCustomTime] = useState(() => {
+        if (originalSample.hora_analise) return originalSample.hora_analise.substring(0, 5);
+        return now.toTimeString().substring(0, 5);
+    });
     const [customHvi, setCustomHvi] = useState(originalSample.hvi || '1');
     const [isApproved, setIsApproved] = useState(false);
 
@@ -283,6 +299,8 @@ export default function HVIPreviewModal({
                                         onChange={(e) => {
                                             setCustomHvi(e.target.value);
                                             triggerRegeneration({ customHvi: e.target.value }, true);
+                                            // Save HVI machine to sample
+                                            onSaveField?.('hvi', e.target.value);
                                         }}
                                         className="w-full px-3 py-2 text-sm border border-neutral-300 rounded focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white"
                                     >
@@ -314,6 +332,11 @@ export default function HVIPreviewModal({
                                         onChange={(e) => {
                                             setCustomDate(e.target.value);
                                             triggerRegeneration({ customDate: e.target.value }, true);
+                                            // Save date to sample (convert YYYY-MM-DD to DD/MM/YYYY for storage)
+                                            const [y, m, d] = e.target.value.split('-');
+                                            if (y && m && d) {
+                                                onSaveField?.('data_analise', `${d}/${m}/${y}`);
+                                            }
                                         }}
                                         className="w-full px-3 py-2 text-sm border border-neutral-300 rounded focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                                     />
@@ -330,6 +353,8 @@ export default function HVIPreviewModal({
                                         onChange={(e) => {
                                             setCustomTime(e.target.value);
                                             triggerRegeneration({ customTime: e.target.value }, true);
+                                            // Save time to sample
+                                            onSaveField?.('hora_analise', e.target.value);
                                         }}
                                         className="w-full px-3 py-2 text-sm border border-neutral-300 rounded focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                                     />

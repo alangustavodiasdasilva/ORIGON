@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { LoteService } from "@/entities/Lote";
 import { createPortal } from "react-dom";
 import { X, Save, Palette, ImagePlus, Loader2, Cpu, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -113,6 +114,7 @@ interface ColorTemplatesModalProps {
     onClose: () => void;
     specificColor?: string;
     contextKey?: string;
+    loteId?: string;
 }
 
 // ── Componentes auxiliares (evita inline style= flagado pelo linter) ────────────
@@ -140,7 +142,7 @@ function ProgressBarDiv({ progress, className }: { progress: number; className: 
 
 // ── Componente principal ───────────────────────────────────────────────────────
 
-export default function ColorTemplatesModal({ isOpen, onClose, specificColor, contextKey }: ColorTemplatesModalProps) {
+export default function ColorTemplatesModal({ isOpen, onClose, specificColor, contextKey, loteId }: ColorTemplatesModalProps) {
     const STORAGE_PREFIX = contextKey ? `lote_${contextKey}_` : '';
 
     const safeSetPreviews = (nextPreviews: Record<string, string>) => {
@@ -183,58 +185,98 @@ export default function ColorTemplatesModal({ isOpen, onClose, specificColor, co
 
     const draggingSplitter = useRef<DraggingRef | null>(null);
 
-    // ── Carrega estado do localStorage quando abre ou muda contextKey ──────────
+    // ── Carrega estado: prioriza Supabase, fallback para localStorage ──────────
     useEffect(() => {
         if (!isOpen) return;
 
-        try {
-            const c = JSON.parse(localStorage.getItem(`${STORAGE_PREFIX}print_cols_v2`) || 'null');
-            setColDividers(Array.isArray(c) ? c : defaultColDividers);
-        } catch { setColDividers(defaultColDividers); }
+        const loadFromDB = async () => {
+            let dbColorTemplates: any = null;
+            let dbScannedRows: any = null;
+            let dbPreviews: any = null;
 
-        try {
-            const r = JSON.parse(localStorage.getItem(`${STORAGE_PREFIX}print_rows_v2`) || 'null');
-            setRowDividers(Array.isArray(r) ? r : defaultRowDividers);
-        } catch { setRowDividers(defaultRowDividers); }
-
-        const stored = localStorage.getItem(`${STORAGE_PREFIX}custom_color_averages`);
-        let parsedAverages: Record<string, StoredTemplate> = {};
-
-        if (stored) {
-            try {
-                parsedAverages = JSON.parse(stored);
-                const merged: Record<string, ColorTemplate> = { ...DEFAULT_TEMPLATES };
-                const restoredSelected: Record<string, number> = {};
-                Object.keys(parsedAverages).forEach(color => {
-                    merged[color] = { ...DEFAULT_TEMPLATES[color], ...parsedAverages[color] };
-                    if (typeof parsedAverages[color]?.selectedLine === 'number') {
-                        restoredSelected[color] = parsedAverages[color].selectedLine as number;
+            // Try loading from Supabase first
+            if (loteId) {
+                try {
+                    const lote = await LoteService.get(loteId);
+                    const config = lote?.configuracoes_analise;
+                    if (config) {
+                        dbColorTemplates = config.color_templates;
+                        dbScannedRows = config.scanned_rows;
+                        dbPreviews = config.print_previews;
                     }
-                });
-                setTemplates(merged);
-                setSelectedLines(restoredSelected);
-            } catch {
+                } catch (err) {
+                    console.warn('Erro ao carregar templates do banco, usando localStorage:', err);
+                }
+            }
+
+            // ── Col/Row dividers (mantém localStorage, são configuração visual local) ──
+            try {
+                const c = JSON.parse(localStorage.getItem(`${STORAGE_PREFIX}print_cols_v2`) || 'null');
+                setColDividers(Array.isArray(c) ? c : defaultColDividers);
+            } catch { setColDividers(defaultColDividers); }
+
+            try {
+                const r = JSON.parse(localStorage.getItem(`${STORAGE_PREFIX}print_rows_v2`) || 'null');
+                setRowDividers(Array.isArray(r) ? r : defaultRowDividers);
+            } catch { setRowDividers(defaultRowDividers); }
+
+            // ── Color averages (templates) ──
+            let parsedAverages: Record<string, StoredTemplate> = {};
+            const templateSource = dbColorTemplates || (() => {
+                try {
+                    const stored = localStorage.getItem(`${STORAGE_PREFIX}custom_color_averages`);
+                    return stored ? JSON.parse(stored) : null;
+                } catch { return null; }
+            })();
+
+            if (templateSource) {
+                try {
+                    parsedAverages = templateSource;
+                    const merged: Record<string, ColorTemplate> = { ...DEFAULT_TEMPLATES };
+                    const restoredSelected: Record<string, number> = {};
+                    Object.keys(parsedAverages).forEach(color => {
+                        merged[color] = { ...DEFAULT_TEMPLATES[color], ...parsedAverages[color] };
+                        if (typeof parsedAverages[color]?.selectedLine === 'number') {
+                            restoredSelected[color] = parsedAverages[color].selectedLine as number;
+                        }
+                    });
+                    setTemplates(merged);
+                    setSelectedLines(restoredSelected);
+                } catch {
+                    setTemplates(DEFAULT_TEMPLATES);
+                    setSelectedLines({});
+                }
+            } else {
                 setTemplates(DEFAULT_TEMPLATES);
                 setSelectedLines({});
             }
-        } else {
-            setTemplates(DEFAULT_TEMPLATES);
-            setSelectedLines({});
-        }
 
-        // Recupera as imagens (previews) salvas
-        const storedPreviews = localStorage.getItem(`${STORAGE_PREFIX}custom_print_previews`);
-        setPreviews(storedPreviews ? JSON.parse(storedPreviews) : {});
+            // ── Previews ──
+            const previewSource = dbPreviews || (() => {
+                try {
+                    const storedPreviews = localStorage.getItem(`${STORAGE_PREFIX}custom_print_previews`);
+                    return storedPreviews ? JSON.parse(storedPreviews) : null;
+                } catch { return null; }
+            })();
+            setPreviews(previewSource || {});
 
-        // Recupera os scannedRows especificamente para a cor aberta
-        if (specificColor && parsedAverages[specificColor] && (parsedAverages[specificColor] as any).rawRows) {
-            setScannedRows((parsedAverages[specificColor] as any).rawRows);
-        } else {
-            const colorKey = specificColor ? `_${specificColor}` : '';
-            const storedScanned = localStorage.getItem(`${STORAGE_PREFIX}custom_print_scanned_rows${colorKey}`) 
-                || localStorage.getItem(`${STORAGE_PREFIX}custom_print_scanned_rows`);
-            setScannedRows(storedScanned ? JSON.parse(storedScanned) : PRINT_ROWS.map(r => ({ ...r })));
-        }
+            // ── Scanned rows ──
+            if (specificColor && parsedAverages[specificColor] && (parsedAverages[specificColor] as any).rawRows) {
+                setScannedRows((parsedAverages[specificColor] as any).rawRows);
+            } else {
+                const colorKey = specificColor ? `_${specificColor}` : '';
+                const scannedSource = dbScannedRows || (() => {
+                    try {
+                        const storedScanned = localStorage.getItem(`${STORAGE_PREFIX}custom_print_scanned_rows${colorKey}`) 
+                            || localStorage.getItem(`${STORAGE_PREFIX}custom_print_scanned_rows`);
+                        return storedScanned ? JSON.parse(storedScanned) : null;
+                    } catch { return null; }
+                })();
+                setScannedRows(scannedSource || PRINT_ROWS.map(r => ({ ...r })));
+            }
+        };
+
+        loadFromDB();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isOpen, contextKey]);
 
@@ -515,7 +557,7 @@ export default function ColorTemplatesModal({ isOpen, onClose, specificColor, co
 
 
     // ── Handlers ──────────────────────────────────────────────────────────────
-    const handleSave = () => {
+    const handleSave = async () => {
         const finalTemplates: Record<string, StoredTemplate> = {};
 
         COLORS.forEach(({ hex }) => {
@@ -540,9 +582,34 @@ export default function ColorTemplatesModal({ isOpen, onClose, specificColor, co
         });
 
         const colorKey = specificColor ? `_${specificColor}` : '';
+        // Keep localStorage as fallback
         localStorage.setItem(`${STORAGE_PREFIX}custom_color_averages`, JSON.stringify(finalTemplates));
         localStorage.setItem(`${STORAGE_PREFIX}custom_print_scanned_rows${colorKey}`, JSON.stringify(scannedRows));
         safeSetPreviews(previews);
+
+        // Save to Supabase
+        if (loteId) {
+            try {
+                const currentLote = await LoteService.get(loteId);
+                const config = currentLote?.configuracoes_analise || {};
+                await LoteService.update(loteId, {
+                    configuracoes_analise: {
+                        ...config,
+                        color_templates: finalTemplates,
+                        scanned_rows: scannedRows,
+                        // Previews can be large (base64 images), only save if small enough
+                        print_previews: (() => {
+                            const previewStr = JSON.stringify(previews);
+                            // Limit to ~500KB to avoid hitting Supabase row limits
+                            return previewStr.length < 500_000 ? previews : undefined;
+                        })()
+                    }
+                });
+            } catch (err) {
+                console.error('Erro ao salvar templates no banco:', err);
+            }
+        }
+
         onClose();
     };
 

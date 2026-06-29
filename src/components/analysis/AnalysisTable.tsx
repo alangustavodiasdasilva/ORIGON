@@ -26,6 +26,7 @@ interface AnalysisTableProps {
         rd: number;
         b: number;
     };
+    configuracoesAnalise?: Record<string, any>;
 }
 
 const COLORS = [
@@ -35,7 +36,7 @@ const COLORS = [
     { value: "#f59e0b", label: "Amarelo", name: "yellow" },
 ];
 
-export default function AnalysisTable({ samples, onUpdateSample, onColorChange, onDeleteSample, isProcessing, highlightedSampleId, loteId, tolerancias }: AnalysisTableProps) {
+export default function AnalysisTable({ samples, onUpdateSample, onColorChange, onDeleteSample, isProcessing, highlightedSampleId, loteId, tolerancias, configuracoesAnalise }: AnalysisTableProps) {
     const { t } = useLanguage();
     const { user, currentLab, isLoading } = useAuth();
     const fields = ['mic', 'len', 'unf', 'str', 'rd', 'b'] as const;
@@ -385,7 +386,7 @@ export default function AnalysisTable({ samples, onUpdateSample, onColorChange, 
                                         ) : (
                                             <button
                                                 onClick={async () => {
-                                                    const result = await HVIFileGeneratorService.generatePreviewForSample(sample, samples, tolerancias);
+                                                    const result = await HVIFileGeneratorService.generatePreviewForSample(sample, samples, tolerancias, undefined, undefined, undefined, undefined, undefined, configuracoesAnalise);
                                                     if (!result.success) {
                                                         alert(result.message);
                                                     } else if (result.data) {
@@ -394,11 +395,11 @@ export default function AnalysisTable({ samples, onUpdateSample, onColorChange, 
                                                 }}
                                                 className={cn(
                                                     "p-1 rounded transition-all",
-                                                    HVIFileGeneratorService.hasColorPrint(sample.cor, loteId || sample.lote_id) 
+                                                    HVIFileGeneratorService.hasColorPrint(sample.cor, loteId || sample.lote_id, configuracoesAnalise) 
                                                         ? "text-slate-400 hover:text-blue-600 hover:bg-blue-50" 
                                                         : "text-slate-200 cursor-not-allowed"
                                                 )}
-                                                title={HVIFileGeneratorService.hasColorPrint(sample.cor, loteId || sample.lote_id) 
+                                                title={HVIFileGeneratorService.hasColorPrint(sample.cor, loteId || sample.lote_id, configuracoesAnalise) 
                                                     ? "Gerar arquivo HVI" 
                                                     : "Trava Ativa: Vincule o print desta cor no painel de templates primeiro"
                                                 }
@@ -440,6 +441,21 @@ export default function AnalysisTable({ samples, onUpdateSample, onColorChange, 
                             try {
                                 await HVIFileGeneratorService.downloadHVIFile(previewModal.data.content, previewModal.data.filename, previewModal.data.files);
                                 
+                                const br = previewModal.data.balancedReadings as any;
+                                if (br && br.mic) {
+                                    const count = br.mic.length;
+                                    const leituras = [];
+                                    for (let i = 0; i < count; i++) {
+                                        leituras.push({
+                                            mic: br.mic[i], len: br.len[i], unf: br.unf[i], str: br.str[i],
+                                            rd: br.rd[i], b: br.b[i], elg: br.elg[i], sfi: br.sfi[i],
+                                            sci: br.sci[i], mat: br.mat[i], csp: br.csp[i], leaf: br.leaf[i],
+                                            area: br.area[i], count: br.count[i], cg: br.cg?.[i]
+                                        });
+                                    }
+                                    await onUpdateSample(previewModal.sample.id, 'leituras_geradas', leituras);
+                                }
+
                                 await onUpdateSample(previewModal.sample.id, 'locked', true);
                                 
                                 setPreviewModal({ isOpen: false, data: null, sample: null });
@@ -447,6 +463,11 @@ export default function AnalysisTable({ samples, onUpdateSample, onColorChange, 
                                 alert("Erro ao salvar o bloqueio da amostra no banco de dados.");
                                 console.error(e);
                             }
+                        }
+                    }}
+                    onSaveField={async (field: string, value: any) => {
+                        if (previewModal.sample) {
+                            await onUpdateSample(previewModal.sample.id, field, value);
                         }
                     }}
                     content={previewModal.data.content}
@@ -465,7 +486,8 @@ export default function AnalysisTable({ samples, onUpdateSample, onColorChange, 
                                 config?.customEtiqueta,
                                 config?.customDate,
                                 config?.customTime,
-                                (config as any)?.customHvi
+                                (config as any)?.customHvi,
+                                configuracoesAnalise
                             );
                             if (result.success && result.data) {
                                 setPreviewModal(prev => ({
