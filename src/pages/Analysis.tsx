@@ -478,6 +478,8 @@ export default function Analysis() {
                                 {searchQuery && (
                                     <button 
                                         onClick={() => setSearchQuery("")}
+                                        title="Limpar pesquisa"
+                                        aria-label="Limpar pesquisa"
                                         className="absolute right-2 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-black"
                                     >
                                         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
@@ -489,6 +491,8 @@ export default function Analysis() {
                                 <select 
                                     value={filterStatus}
                                     onChange={(e) => setFilterStatus(e.target.value as any)}
+                                    title="Filtrar por Status de Geração"
+                                    aria-label="Filtrar por Status de Geração"
                                     className="h-8 pl-3 pr-8 text-[11px] font-bold text-black border border-neutral-300 rounded bg-white focus:outline-none focus:border-black focus:ring-1 focus:ring-black uppercase transition-all appearance-none cursor-pointer"
                                 >
                                     <option value="all">Status: Todos</option>
