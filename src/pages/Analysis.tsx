@@ -35,6 +35,8 @@ export default function Analysis() {
     const [samples, setSamples] = useState<Sample[]>([]);
     const [isProcessing, setIsProcessing] = useState(false);
     const [filterColor, setFilterColor] = useState<string | null>(null);
+    const [searchQuery, setSearchQuery] = useState("");
+    const [filterStatus, setFilterStatus] = useState<'all' | 'generated' | 'pending'>('all');
     const [isTemplatesModalOpen, setIsTemplatesModalOpen] = useState(false);
     const [activeColorForTemplate, setActiveColorForTemplate] = useState<string | null>(null);
     const [tolerancias, setTolerancias] = useState({
@@ -91,6 +93,26 @@ export default function Analysis() {
     }, [manualOverrides, loteId, saveOverridesToDB]);
 
 
+    const filteredSamples = useMemo(() => {
+        return samples.filter(s => {
+            if (filterColor && s.cor !== filterColor) return false;
+            
+            if (filterStatus === 'generated') {
+                if (!s.locked) return false;
+            } else if (filterStatus === 'pending') {
+                if (s.locked) return false;
+            }
+
+            if (searchQuery) {
+                const search = searchQuery.toLowerCase();
+                const tagMatch = s.etiqueta?.toLowerCase().includes(search);
+                const idMatch = s.amostra_id?.toLowerCase().includes(search);
+                if (!tagMatch && !idMatch) return false;
+            }
+            return true;
+        });
+    }, [samples, filterColor, searchQuery, filterStatus]);
+
     const metricsByColor = useMemo(() => {
         const categories = {
             "#3b82f6": { label: "AZUL", border: "border-blue-500", samples: 0, mic: 0, len: 0, unf: 0, str: 0, rd: 0, b: 0 },
@@ -99,7 +121,7 @@ export default function Analysis() {
             "#f59e0b": { label: "AMARELO", border: "border-amber-500", samples: 0, mic: 0, len: 0, unf: 0, str: 0, rd: 0, b: 0 },
         };
 
-        samples.forEach(s => {
+        filteredSamples.forEach(s => {
             if (categories[s.cor as keyof typeof categories]) {
                 const cat = categories[s.cor as keyof typeof categories];
                 cat.samples++;
@@ -125,7 +147,7 @@ export default function Analysis() {
         });
 
         return categories;
-    }, [samples]);
+    }, [filteredSamples]);
 
 
     const handleExportCSV = () => {
@@ -353,10 +375,6 @@ export default function Analysis() {
     if (!loteId) return <div className="p-10 text-center font-mono uppercase tracking-widest text-[10px]">NO_BATCH_ID</div>;
     if (!lote) return <div className="p-10 text-center animate-pulse font-mono uppercase tracking-widest text-[10px]">LOADING_METRICS...</div>;
 
-    const filteredSamples = filterColor
-        ? samples.filter(s => s.cor === filterColor)
-        : samples;
-
     return (
         <div className="space-y-8 animate-fade-in relative pb-24 text-black">
             {/* Header */}
@@ -449,6 +467,39 @@ export default function Analysis() {
                         </div>
 
                         <div className="flex flex-wrap items-center gap-2">
+                            <div className="relative mr-4">
+                                <input
+                                    type="text"
+                                    placeholder="Pesquisar etiqueta..."
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    className="h-8 w-48 pl-3 pr-8 text-[11px] font-bold text-black border border-neutral-300 rounded bg-white focus:outline-none focus:border-black focus:ring-1 focus:ring-black placeholder:text-neutral-400 placeholder:font-normal uppercase transition-all"
+                                />
+                                {searchQuery && (
+                                    <button 
+                                        onClick={() => setSearchQuery("")}
+                                        className="absolute right-2 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-black"
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                                    </button>
+                                )}
+                            </div>
+
+                            <div className="relative mr-4">
+                                <select 
+                                    value={filterStatus}
+                                    onChange={(e) => setFilterStatus(e.target.value as any)}
+                                    className="h-8 pl-3 pr-8 text-[11px] font-bold text-black border border-neutral-300 rounded bg-white focus:outline-none focus:border-black focus:ring-1 focus:ring-black uppercase transition-all appearance-none cursor-pointer"
+                                >
+                                    <option value="all">Status: Todos</option>
+                                    <option value="generated">Status: Gerados</option>
+                                    <option value="pending">Status: Pendentes</option>
+                                </select>
+                                <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-neutral-400">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                                </div>
+                            </div>
+
                             {(['#10b981', '#f59e0b', '#ef4444', '#3b82f6'] as const).map(c => (
                                 <button
                                     key={c}
