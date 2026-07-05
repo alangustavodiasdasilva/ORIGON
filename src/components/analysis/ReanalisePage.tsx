@@ -188,8 +188,8 @@ export default function ReanalisePage() {
                 tols,
                 undefined,
                 etiquetas,
-                undefined,
-                undefined,
+                customDate || undefined,
+                customTime || undefined,
                 machine.machineId,
                 fakeConfig,
                 reps
@@ -225,6 +225,8 @@ export default function ReanalisePage() {
     };
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, index: number) => {
+        // Ignora setas se o usuário está digitando e quer navegar DENTRO do input?
+        // Só pula se estiver na borda, mas o mais seguro é focar no Enter/Tab para pular
         if (e.key === 'Enter' || e.key === 'ArrowRight' || e.key === 'ArrowDown') {
             e.preventDefault();
             const next = document.getElementById(`avg-field-${DISPLAY_FIELDS[index + 1]?.key}`);
@@ -259,7 +261,7 @@ export default function ReanalisePage() {
         try {
             const effective = getEffectiveAvg();
             const timestamp = new Date().toISOString().replace(/[-:T.Z]/g, '').slice(0, 12);
-            const label = etiquetas[0] || 'REANALISE';
+            const label = etiquetas;
 
             const fakeSample: any = {
                 id:         `reanalise_${timestamp}`,
@@ -287,7 +289,7 @@ export default function ReanalisePage() {
                 [fakeSample],
                 tols,
                 undefined,
-                etiquetas,
+                label,
                 customDate || undefined,
                 customTime || undefined,
                 selectedMachine.machineId,
