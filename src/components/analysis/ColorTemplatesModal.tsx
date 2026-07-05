@@ -672,23 +672,32 @@ export default function ColorTemplatesModal({ isOpen, onClose, specificColor, co
         if (field === 'cg' || field === 'leaf' || field === 'count' || field === 'csp' || field === 'sci') return;
         
         let numStr = String(value).replace(',', '.');
-        if (!numStr || numStr.includes('.')) return;
+        let hasDot = numStr.includes('.');
 
-        if (field === 'mic') {
-            if (numStr.length > 1) numStr = numStr.slice(0, 1) + '.' + numStr.slice(1);
-        } else if (field === 'len') {
-            if (numStr.length > 2) numStr = numStr.slice(0, 2) + '.' + numStr.slice(2);
-        } else if (field === 'unf' || field === 'str' || field === 'rd') {
-            if (numStr.length > 2) numStr = numStr.slice(0, 2) + '.' + numStr.slice(2);
-        } else if (field === 'elg' || field === 'b' || field === 'sfi') {
-            if (numStr.length >= 2) numStr = numStr.slice(0, -1) + '.' + numStr.slice(-1);
-        } else if (field === 'area' || field === 'mat') {
-            if (numStr.length >= 2) numStr = '0.' + numStr;
-            else if (numStr.length === 1 && numStr !== '0') numStr = '0.0' + numStr;
+        if (!hasDot && numStr) {
+            if (field === 'mic') {
+                if (numStr.length > 1) numStr = numStr.slice(0, 1) + '.' + numStr.slice(1);
+            } else if (field === 'len') {
+                if (numStr.length > 2) numStr = numStr.slice(0, 2) + '.' + numStr.slice(2);
+            } else if (field === 'unf' || field === 'str' || field === 'rd') {
+                if (numStr.length > 2) numStr = numStr.slice(0, 2) + '.' + numStr.slice(2);
+            } else if (field === 'elg' || field === 'b' || field === 'sfi') {
+                if (numStr.length >= 2) numStr = numStr.slice(0, -1) + '.' + numStr.slice(-1);
+            } else if (field === 'area' || field === 'mat') {
+                if (numStr.length >= 2) numStr = '0.' + numStr;
+                else if (numStr.length === 1 && numStr !== '0') numStr = '0.0' + numStr;
+            }
         }
 
-        if (numStr !== String(value)) {
-            updateScannedRow(rowIndex, field as keyof ColorTemplate, numStr);
+        let val = parseFloat(numStr);
+        if (!isNaN(val)) {
+            val = sanitizeValueHVI(val, field);
+        }
+
+        const finalStr = isNaN(val) ? '' : val.toString();
+
+        if (finalStr !== String(value)) {
+            updateScannedRow(rowIndex, field as keyof ColorTemplate, finalStr);
         }
     };
 

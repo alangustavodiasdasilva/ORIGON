@@ -757,7 +757,8 @@ export class HVIFileGeneratorService {
         csp: number
     ): string {
         // AMOSTRA: formato '{mala}#{repIndex}' — ex: '89801#01'
-        const amostraBase = `${sample.mala || ''}#${String(repIndex).padStart(2, '0')}`;
+        const safeMala = (sample.mala || '').replace(/\./g, '');
+        const amostraBase = `${safeMala}#${String(repIndex).padStart(2, '0')}`;
         const amostraPad = amostraBase.substring(0, 40).padEnd(40, ' ');
         const etiquetaPad = (sample.etiqueta || '').substring(0, 40).padEnd(40, ' ');
 
@@ -823,11 +824,12 @@ export class HVIFileGeneratorService {
         allSamples: Sample[] = [],
         tolerancias: any = null,
         overrideReadings?: Record<string, number[]>,
-        customEtiqueta?: string,
+        customEtiqueta?: string | string[],
         customDate?: string,
         customTime?: string,
         customHvi?: string,
-        configuracoesAnalise?: Record<string, any>
+        configuracoesAnalise?: Record<string, any>,
+        repCount?: number
     ): Promise<{
         success: boolean; message?: string; data?: HVIPreviewData }> {
         try {
@@ -867,7 +869,7 @@ export class HVIFileGeneratorService {
             // Get the averages (Sample values or Color Average)
             const averages = this.getSampleTargetValues(sample, allSamples, configuracoesAnalise);
 
-            const count = 6;
+            const count = repCount ?? 6;
             const tols = tolerancias || { mic: 0.10, len: 0.30, unf: 0.5, str: 0.5, rd: 0.5, b: 0.3 };
             const seedMod = sample.id || sample.amostra_id || "default";
 
@@ -1055,10 +1057,11 @@ export class HVIFileGeneratorService {
                     const repTime = `${String(repHour).padStart(2, '0')}:${String(repMin).padStart(2, '0')}`;
                     const seqStart = repIndex * 2 - 1;
 
-                    // Calculate on the fly for LEN based on this rep's UHML
                     const repLen = parseFloat(((lenReadings[i] / 25.4) * 21).toFixed(1));
 
-                    const effectiveSample = { ...sample, etiqueta: customEtiqueta || sample.etiqueta };
+                    let rawEtiqueta = (Array.isArray(customEtiqueta) ? customEtiqueta[i] : customEtiqueta) || sample.etiqueta;
+                    rawEtiqueta = rawEtiqueta?.replace(/\./g, '');
+                    const effectiveSample = { ...sample, etiqueta: rawEtiqueta };
 
                     const repContent = this.generateH1FileContent(
                         effectiveSample,
@@ -1090,8 +1093,8 @@ export class HVIFileGeneratorService {
                         const fileNum = baseNum * count - count + repIndex;
                         repFilename = `RAX${String(fileNum).padStart(6, '0')}.H1`;
                     } else {
-                        const sampleLabel = (customEtiqueta || sample.etiqueta)?.replace(/[^a-zA-Z0-9]/g, '_') || sample.amostra_id;
-                        repFilename = `RAX${sampleLabel}_REP${repIndex}.H1`;
+                        const sampleLabelForName = rawEtiqueta?.replace(/[^a-zA-Z0-9]/g, '_') || sample.amostra_id;
+                        repFilename = `RAX${sampleLabelForName}_REP${repIndex}.H1`;
                     }
 
                     files.push({ content: repContent, filename: repFilename });
@@ -1104,7 +1107,6 @@ export class HVIFileGeneratorService {
                 // PREMIER fallback logic
                 const repContents: string[] = [];
                 const timestamp = this.formatDateForFilename();
-                const sampleLabel = (customEtiqueta || sample.etiqueta)?.replace(/[^a-zA-Z0-9]/g, '_') || sample.amostra_id;
 
                 let tHash = 0;
                 const tSeedStr = `${sample.id || sample.amostra_id || "time"}_time`;
@@ -1176,9 +1178,13 @@ export class HVIFileGeneratorService {
                         csp:   [cspReadings[i]],
                     };
 
-                    const effectiveSample = { ...sample, etiqueta: customEtiqueta || sample.etiqueta };
+                    let rawEtiqueta = (Array.isArray(customEtiqueta) ? customEtiqueta[i] : customEtiqueta) || sample.etiqueta;
+                    rawEtiqueta = rawEtiqueta?.replace(/\./g, '');
+                    const effectiveSample = { ...sample, etiqueta: rawEtiqueta };
+
                     const repContent = this.generatePremierFormatMultipleBalanced(effectiveSample, 1, averages, singleReadings, dateStr, repTime);
-                    const repFilename = `HVI_PREMIER_${sampleLabel}_REP${repIndex}_${timestamp}.txt`;
+                    const sampleLabelForName = rawEtiqueta?.replace(/[^a-zA-Z0-9]/g, '_') || sample.amostra_id;
+                    const repFilename = `HVI_PREMIER_${sampleLabelForName}_REP${repIndex}_${timestamp}.txt`;
 
                     files.push({ content: repContent, filename: repFilename });
                     repContents.push(`=== ARQUIVO: ${repFilename} ===\n${repContent}`);

@@ -105,8 +105,9 @@ export default function AnalysisTable({ samples, onUpdateSample, onColorChange, 
         }
 
         let numStr = e.target.value.replace(',', '.');
+        let hasDot = numStr.includes('.');
         
-        if (numStr && !numStr.includes('.')) {
+        if (numStr && !hasDot) {
             if (field === 'mic') {
                 if (numStr.length > 1) numStr = numStr.slice(0, 1) + '.' + numStr.slice(1);
             } else if (field === 'len') {
@@ -121,7 +122,19 @@ export default function AnalysisTable({ samples, onUpdateSample, onColorChange, 
             }
         }
 
-        const val = parseFloat(numStr);
+        let val = parseFloat(numStr);
+        if (!isNaN(val)) {
+            if (field === 'mat') {
+                if (val >= 70 && val <= 100) val = val / 100;
+                else if (val >= 700 && val <= 1000) val = val / 1000;
+            } else if (field === 'mic') {
+                if (val >= 20 && val <= 90) val = val / 10;
+                else if (val >= 200 && val <= 900) val = val / 100;
+            } else if (field === 'len') {
+                if (val >= 200 && val <= 400) val = val / 100;
+            }
+        }
+
         if (!isNaN(val) && val !== value) {
             onUpdateSample(sample.id, field, val);
         }

@@ -37,6 +37,7 @@ export default function Analysis() {
     const [filterColor, setFilterColor] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState("");
     const [filterStatus, setFilterStatus] = useState<'all' | 'generated' | 'pending'>('all');
+    void setFilterStatus; // setter disponível para uso futuro
     const [isTemplatesModalOpen, setIsTemplatesModalOpen] = useState(false);
     const [activeColorForTemplate, setActiveColorForTemplate] = useState<string | null>(null);
     const [tolerancias, setTolerancias] = useState({

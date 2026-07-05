@@ -14,6 +14,7 @@ import {
     Upload,
     Menu,
     X,
+    ScanLine,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
@@ -66,6 +67,7 @@ export default function Layout() {
         { href: "/lotes", label: t('nav.batches'), icon: Package, public: true, prefetch: () => import("@/pages/Home") },
         { href: "/icac", label: t('nav.icac'), icon: Microscope, public: true, prefetch: () => import("@/pages/Icac") },
         { href: "/interlaboratorial", label: t('nav.interlab'), icon: Network, public: true, prefetch: () => import("@/pages/Interlaboratorial") },
+        { href: "/reanalise", label: "Reanálise", icon: ScanLine, public: true, prefetch: () => import("@/pages/Reanalise") },
 
         { href: "/admin", label: t('nav.config'), icon: ShieldCheck, allowedRoles: ['admin_global', 'admin_lab'], prefetch: () => import("@/pages/Admin") },
     ];
