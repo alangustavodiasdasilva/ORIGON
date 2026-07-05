@@ -16,8 +16,6 @@ const Inicio = lazy(() => import("@/pages/Inicio"));
 const Home = lazy(() => import("@/pages/Home"));
 const Registro = lazy(() => import("@/pages/Registro"));
 const Analysis = lazy(() => import("@/pages/Analysis"));
-const Icac = lazy(() => import("@/pages/Icac"));
-const Interlaboratorial = lazy(() => import("@/pages/Interlaboratorial"));
 const Export = lazy(() => import("@/pages/Export"));
 const Admin = lazy(() => import("@/pages/Admin"));
 const Login = lazy(() => import("@/pages/Login"));
@@ -61,8 +59,6 @@ function AppRoutes() {
                     <Route path="registro" element={<Registro />} />
 
                     <Route path="analysis" element={<Analysis />} />
-                    <Route path="icac" element={<Icac />} />
-                    <Route path="interlaboratorial" element={<Interlaboratorial />} />
 
                     <Route path="export" element={<Export />} />
                     <Route path="reanalise" element={<Reanalise />} />
