@@ -13,11 +13,18 @@ async function upload() {
             secure: false
         });
         
-        console.log("Conectado! Acessando pasta public_html...");
-        await client.ensureDir("public_html");
+        console.log("Conectado! Acessando diretório raiz...");
+        // O FTP já nos coloca em /public_html por padrão
         
         console.log("Enviando os arquivos da pasta dist...");
         await client.uploadFromDir("dist");
+        
+        console.log("Enviando o .htaccess explicitamente (pois arquivos ocultos às vezes são ignorados)...");
+        try {
+            await client.uploadFrom("dist/.htaccess", ".htaccess");
+        } catch(e) {
+            console.log("Aviso: Falha ao enviar .htaccess:", e);
+        }
         
         console.log("Upload concluído com sucesso!");
     }
