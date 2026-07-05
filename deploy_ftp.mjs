@@ -13,8 +13,8 @@ async function upload() {
             secure: false
         });
         
-        console.log("Conectado! Acessando diretório raiz...");
-        // O FTP já nos coloca em /public_html por padrão
+        console.log("Conectado! Acessando diretório do domínio...");
+        await client.cd("/domains/origo-hvi.com/public_html");
         
         console.log("Enviando os arquivos da pasta dist...");
         await client.uploadFromDir("dist");
