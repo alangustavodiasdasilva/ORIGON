@@ -428,9 +428,8 @@ export class HVIFileGeneratorService {
         // Date/Time formatting (Premier style)
         const now = new Date();
         const dateStr = customDate || now.toLocaleDateString('pt-BR').replace(/\//g, '-');
-        // Include seconds for uniqueness
-        const timeStr = customTime || now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true });
-        const dateTimeStr = `${dateStr} ${timeStr}`;
+        const timeStr = customTime || now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }).replace(' ', '');
+        const dateTimeStr = `${dateStr}${timeStr}`;
         const dateTimeStrHeader = `${dateStr}${timeStr.replace(/[: ]/g, '')}`;
 
         const header = [
@@ -1147,13 +1146,9 @@ export class HVIFileGeneratorService {
                     const repMin = repMinutes % 60;
                     
                     let repTime = "";
-                    if (customTime) {
-                         repTime = `${String(repHour).padStart(2, '0')}:${String(repMin).padStart(2, '0')}`;
-                    } else {
-                         const fakeDate = new Date();
-                         fakeDate.setHours(repHour, repMin, now.getSeconds());
-                         repTime = fakeDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true });
-                    }
+                    const fakeDate = new Date();
+                    fakeDate.setHours(repHour, repMin, 0);
+                    repTime = fakeDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }).replace(' ', '');
 
                     // Only calculating repMl on the fly for PREMIER if needed, Uster uses real area and count
                     const repCount = countReadings[i];

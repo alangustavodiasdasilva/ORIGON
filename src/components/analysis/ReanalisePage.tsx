@@ -261,7 +261,7 @@ export default function ReanalisePage() {
         try {
             const effective = getEffectiveAvg();
             const timestamp = new Date().toISOString().replace(/[-:T.Z]/g, '').slice(0, 12);
-            const label = etiquetas;
+            const label = etiquetas[0] || 'REANALISE';
 
             const fakeSample: any = {
                 id:         `reanalise_${timestamp}`,
@@ -289,7 +289,7 @@ export default function ReanalisePage() {
                 [fakeSample],
                 tols,
                 undefined,
-                label,
+                etiquetas,
                 customDate || undefined,
                 customTime || undefined,
                 selectedMachine.machineId,
