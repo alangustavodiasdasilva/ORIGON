@@ -428,8 +428,9 @@ export class HVIFileGeneratorService {
         // Date/Time formatting (Premier style)
         const now = new Date();
         const dateStr = customDate || now.toLocaleDateString('pt-BR').replace(/\//g, '-');
-        const timeStr = customTime || now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }).replace(' ', '');
-        const dateTimeStr = `${dateStr}${timeStr}`;
+        // Include seconds for uniqueness
+        const timeStr = customTime || now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true });
+        const dateTimeStr = `${dateStr} ${timeStr}`;
         const dateTimeStrHeader = `${dateStr}${timeStr.replace(/[: ]/g, '')}`;
 
         const header = [
@@ -443,8 +444,8 @@ export class HVIFileGeneratorService {
             ``,
             `"Test Type"\t":"\t"USDA"`,
             `"Test Date & Time"\t":"\t${dateTimeStr}`,
-            `"Remarks"\t":"\t"${sample.mala || 'N/A'}"`,
-            `"UHML"\t"ML"\t"UI"\t"Elg"\t"Str"\t"Mic"\t"Rd"\t"+b"\t"C.G."\t"SFI(W)"\t"Lf.Grade"\t"Tr.Cnt"\t"Tr.Area"\t"MR"\t""`,
+            `"Remarks"\t":"\t"${sample.etiqueta || 'N/A'}"`,
+            `\t\t"UHML"\t"ML"\t"UI"\t"Elg"\t"Str"\t"Mic"\t"Rd"\t"+b"\t"C.G."\t"SFI"\t"Lf.Grade"\t"Tr.Cnt"\t"Tr.Area"\t"MR"\t""`,
             `"Test No"\t"Sub ID"\t"(mm)"\t"(mm)"\t"(%)"\t"(%)"\t"(g/tex)"\t""\t""\t""\t""\t""\t""\t""\t"(%)"\t""\t""`,
             ``
         ];
@@ -507,7 +508,8 @@ export class HVIFileGeneratorService {
             numerics.csp.push(csp);
 
             rows.push([
-                `"${sample.etiqueta || 'SAMPLE'}"`,
+                i + 1,
+                `"${sample.etiqueta || 'SAMPLE'} "`,
                 fmt(uhml, 2), fmt(ml, 2), fmt(ui, 1), fmt(elg, 1), fmt(str, 1), fmt(mic, 2),
                 fmt(rd, 1), fmt(plusB, 1), cg, fmt(sfi, 1), grd, cnt, fmt(area, 2), fmt(mat, 2)
             ].join('\t'));
@@ -1146,9 +1148,13 @@ export class HVIFileGeneratorService {
                     const repMin = repMinutes % 60;
                     
                     let repTime = "";
-                    const fakeDate = new Date();
-                    fakeDate.setHours(repHour, repMin, 0);
-                    repTime = fakeDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }).replace(' ', '');
+                    if (customTime) {
+                         repTime = `${String(repHour).padStart(2, '0')}:${String(repMin).padStart(2, '0')}`;
+                    } else {
+                         const fakeDate = new Date();
+                         fakeDate.setHours(repHour, repMin, now.getSeconds());
+                         repTime = fakeDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true });
+                    }
 
                     // Only calculating repMl on the fly for PREMIER if needed, Uster uses real area and count
                     const repCount = countReadings[i];
