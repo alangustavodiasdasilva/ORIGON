@@ -157,7 +157,7 @@ export const parseStatusOSFileInChunks = async (
 
                 const aggregatedMap = new Map<string, StatusOSParsed>();
                 let totalVolume = 0;
-                let totalRejeitados = 0;
+                const totalRejeitados = 0;
 
                 for (let i = startIdx; i < rawRows.length; i++) {
                     const row = rawRows[i];
@@ -194,7 +194,7 @@ export const parseStatusOSFileInChunks = async (
                         if (!raw) return null;
                         const trimmed = String(raw).trim();
                         // 1. Tentar parse nativo direto
-                        let d = new Date(trimmed);
+                        const d = new Date(trimmed);
                         if (!isNaN(d.getTime())) return d;
                         
                         // 2. Tentar quebrar formato brasileiro (DD/MM/YYYY ou DD/MM/YY)
@@ -203,8 +203,8 @@ export const parseStatusOSFileInChunks = async (
                             const [p1, p2, p3] = parts;
                             // Se o primeiro elemento for dia (maior que 12 ou deduzido)
                             // Assumimos formato padrão PT-BR: DD/MM/YYYY
-                            let day = parseInt(p1);
-                            let month = parseInt(p2);
+                            const day = parseInt(p1);
+                            const month = parseInt(p2);
                             let year = parseInt(p3.split(' ')[0]); // ignora horas se houver
                             
                             if (year < 100) year += 2000;

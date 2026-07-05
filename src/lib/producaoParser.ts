@@ -118,7 +118,7 @@ export const parseProducaoFileInChunks = async (
                 let currentBlockDate: string | null = null;
                 let currentTurnoLabel: string = "";
                 let currentBatch: ProducaoParsed[] = [];
-                let result: ParseResult = { totalLido: 0, totalValidos: 0, totalRejeitados: 0, erros: [] };
+                const result: ParseResult = { totalLido: 0, totalValidos: 0, totalRejeitados: 0, erros: [] };
 
                 for (let i = 0; i < rows.length; i++) {
                     if (i === headerRowIndex) continue;

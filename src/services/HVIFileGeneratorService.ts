@@ -1009,7 +1009,7 @@ export class HVIFileGeneratorService {
 
             let content: string;
             let filename: string;
-            let files: Array<{ content: string; filename: string }> = [];
+            const files: Array<{ content: string; filename: string }> = [];
             const isUster = machine.model?.toUpperCase() === 'USTER';
 
             if (isUster) {

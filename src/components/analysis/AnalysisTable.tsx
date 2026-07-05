@@ -105,7 +105,7 @@ export default function AnalysisTable({ samples, onUpdateSample, onColorChange, 
         }
 
         let numStr = e.target.value.replace(',', '.');
-        let hasDot = numStr.includes('.');
+        const hasDot = numStr.includes('.');
         
         if (numStr && !hasDot) {
             if (field === 'mic') {

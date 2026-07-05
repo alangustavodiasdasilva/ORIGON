@@ -41,7 +41,7 @@ export const parseAndInsertBIFile = async (
                     }
                 }
 
-                let rowsToInsert: any[] = [];
+                const rowsToInsert: any[] = [];
 
                 if (modelType === 'producao_hvi') {
                     // Uses producaoParser.ts logic

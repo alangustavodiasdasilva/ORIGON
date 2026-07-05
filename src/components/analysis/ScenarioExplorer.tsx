@@ -1013,7 +1013,7 @@ export default function ScenarioExplorer({ samples, onColorChange }: ScenarioExp
                                                             const r = cell.r;
                                                             
                                                             // Estilo HSL dinâmico: r>0 esmeralda, r<0 carmim
-                                                            let bgClass = "bg-neutral-100";
+                                                            const bgClass = "bg-neutral-100";
                                                             let style: React.CSSProperties = {};
                                                             
                                                             if (isDiagonal) {

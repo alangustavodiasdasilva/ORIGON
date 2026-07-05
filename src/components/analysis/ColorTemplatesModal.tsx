@@ -672,7 +672,7 @@ export default function ColorTemplatesModal({ isOpen, onClose, specificColor, co
         if (field === 'cg' || field === 'leaf' || field === 'count' || field === 'csp' || field === 'sci') return;
         
         let numStr = String(value).replace(',', '.');
-        let hasDot = numStr.includes('.');
+        const hasDot = numStr.includes('.');
 
         if (!hasDot && numStr) {
             if (field === 'mic') {
