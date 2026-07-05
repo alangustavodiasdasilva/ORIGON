@@ -445,7 +445,7 @@ export class HVIFileGeneratorService {
             `"Test Type"\t":"\t"USDA"`,
             `"Test Date & Time"\t":"\t${dateTimeStr}`,
             `"Remarks"\t":"\t"${sample.etiqueta || 'N/A'}"`,
-            `\t\t"UHML"\t"ML"\t"UI"\t"Elg"\t"Str"\t"Mic"\t"Rd"\t"+b"\t"C.G."\t"SFI"\t"Lf.Grade"\t"Tr.Cnt"\t"Tr.Area"\t"MR"\t""`,
+            `"UHML"\t"ML"\t"UI"\t"Elg"\t"Str"\t"Mic"\t"Rd"\t"+b"\t"C.G."\t"SFI(W)"\t"Lf.Grade"\t"Tr.Cnt"\t"Tr.Area"\t"MR"\t""`,
             `"Test No"\t"Sub ID"\t"(mm)"\t"(mm)"\t"(%)"\t"(%)"\t"(g/tex)"\t""\t""\t""\t""\t""\t""\t""\t"(%)"\t""\t""`,
             ``
         ];
@@ -508,8 +508,7 @@ export class HVIFileGeneratorService {
             numerics.csp.push(csp);
 
             rows.push([
-                i + 1,
-                `"${sample.etiqueta || 'SAMPLE'} "`,
+                `"${sample.mala || sample.etiqueta || 'SAMPLE'}"`,
                 fmt(uhml, 2), fmt(ml, 2), fmt(ui, 1), fmt(elg, 1), fmt(str, 1), fmt(mic, 2),
                 fmt(rd, 1), fmt(plusB, 1), cg, fmt(sfi, 1), grd, cnt, fmt(area, 2), fmt(mat, 2)
             ].join('\t'));
