@@ -454,7 +454,7 @@ export default function ReanalisePage() {
                                 <input
                                     id="reanalise-os"
                                     type="text"
-                                    placeholder="ex: 00.9.789853745..."
+                                    placeholder="ex: 006789853745..."
                                     title="Ordem de Serviço"
                                     value={osInput}
                                     onChange={e => setOsInput(e.target.value)}
