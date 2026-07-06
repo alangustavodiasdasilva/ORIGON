@@ -261,7 +261,7 @@ export default function ReanalisePage() {
         try {
             const effective = getEffectiveAvg();
             const timestamp = new Date().toISOString().replace(/[-:T.Z]/g, '').slice(0, 12);
-            const label = etiquetas[0] || 'REANALISE';
+            const label = etiquetas;
 
             const fakeSample: any = {
                 id:         `reanalise_${timestamp}`,
@@ -289,7 +289,7 @@ export default function ReanalisePage() {
                 [fakeSample],
                 tols,
                 undefined,
-                etiquetas,
+                label,
                 customDate || undefined,
                 customTime || undefined,
                 selectedMachine.machineId,
@@ -361,6 +361,7 @@ export default function ReanalisePage() {
                                                 value={avgEdits[f.key] !== undefined ? avgEdits[f.key] : ''}
                                                 placeholder="0"
                                                 onChange={e => handleAvgEdit(f.key, e.target.value)}
+                                                onFocus={e => e.target.select()}
                                                 onBlur={e => handleBlur(f.key, e.target.value, f.decimals)}
                                                 onKeyDown={e => handleKeyDown(e, index)}
                                                 className="w-full h-12 text-center text-[14px] font-mono font-bold text-black border-none focus:bg-blue-50 focus:ring-inset focus:ring-2 focus:ring-blue-500 focus:relative focus:z-10 outline-none transition-colors"
@@ -436,6 +437,7 @@ export default function ReanalisePage() {
                                     max={100}
                                     value={repCount}
                                     onChange={e => setRepCount(e.target.value ? Number(e.target.value) : '')}
+                                    onFocus={e => e.target.select()}
                                     onBlur={() => { if (!repCount || repCount < 1) setRepCount(1); }}
                                     className="w-full h-10 border border-neutral-300 px-3 text-[14px] font-bold text-black bg-white focus:border-black outline-none rounded-none"
                                 />
@@ -456,6 +458,7 @@ export default function ReanalisePage() {
                                     title="Ordem de Serviço"
                                     value={osInput}
                                     onChange={e => setOsInput(e.target.value)}
+                                    onFocus={e => e.target.select()}
                                     className="w-full h-10 border border-neutral-300 px-3 text-[12px] font-bold text-black focus:border-black outline-none rounded-none bg-white"
                                 />
                             </div>
@@ -473,6 +476,7 @@ export default function ReanalisePage() {
                                             placeholder={`Arq ${idx + 1}`}
                                             title={`Etiqueta do arquivo ${idx + 1}`}
                                             value={val}
+                                            onFocus={e => e.target.select()}
                                             onChange={e => {
                                                 const next = [...etiquetas];
                                                 next[idx] = e.target.value;
