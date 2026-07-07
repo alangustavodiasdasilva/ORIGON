@@ -39,68 +39,77 @@ function parseNum(text: string): number {
 
 function sanitize(val: number, type: string): number {
     if (isNaN(val) || val === 0) return 0;
-    
-    // 1) Normalization
     switch (type) {
         case 'mic':
-            if (val >= 20 && val <= 99) val = val / 10;
-            else if (val >= 200 && val <= 999) val = val / 100;
+            if (val >= 20 && val <= 99) return val / 10;
+            if (val >= 200 && val <= 999) return val / 100;
+            if (val >= 2 && val <= 9.9) return val;
             break;
         case 'len':
-            if (val >= 200 && val <= 450) val = val / 10;
-            else if (val >= 2000 && val <= 4500) val = val / 100;
+            if (val >= 200 && val <= 450) return val / 10;
+            if (val >= 2000 && val <= 4500) return val / 100;
+            if (val >= 20 && val <= 45) return val;
             break;
         case 'unf':
-            if (val >= 500 && val <= 950) val = val / 10;
-            else if (val >= 5000 && val <= 9500) val = val / 100;
+            if (val >= 500 && val <= 950) return val / 10;
+            if (val >= 5000 && val <= 9500) return val / 100;
+            if (val >= 50 && val <= 95) return val;
             break;
         case 'str':
-            if (val >= 100 && val <= 500) val = val / 10;
-            else if (val >= 1000 && val <= 5000) val = val / 100;
+            if (val >= 100 && val <= 500) return val / 10;
+            if (val >= 1000 && val <= 5000) return val / 100;
+            if (val >= 10 && val <= 50) return val;
             break;
         case 'elg':
-            if (val >= 30 && val <= 150) val = val / 10;
-            else if (val >= 300 && val <= 1500) val = val / 100;
+            if (val >= 30 && val <= 150) return val / 10;
+            if (val >= 300 && val <= 1500) return val / 100;
+            if (val >= 3 && val <= 15) return val;
             break;
         case 'rd':
-            if (val >= 400 && val <= 900) val = val / 10;
-            else if (val >= 4000 && val <= 9000) val = val / 100;
+            if (val >= 400 && val <= 900) return val / 10;
+            if (val >= 4000 && val <= 9000) return val / 100;
+            if (val >= 40 && val <= 90) return val;
             break;
         case 'b':
-            if (val >= 40 && val <= 200) val = val / 10;
-            else if (val >= 400 && val <= 2000) val = val / 100;
+            if (val >= 40 && val <= 200) return val / 10;
+            if (val >= 400 && val <= 2000) return val / 100;
+            if (val >= 4 && val <= 20) return val;
             break;
         case 'area':
-            if (val >= 1 && val <= 200) val = val / 100;
+            if (val >= 1 && val <= 200) return val / 100;
+            if (val > 0 && val < 5) return val;
             break;
         case 'mat':
-            if (val >= 70 && val <= 100) val = val / 100;
-            else if (val >= 700 && val <= 1000) val = val / 1000;
+            if (val >= 70 && val <= 100) return val / 100;
+            if (val >= 700 && val <= 1000) return val / 1000;
+            if (val > 0.60 && val <= 1.0) return val;
             break;
         case 'sfi':
-            if (val >= 30 && val <= 200) val = val / 10;
-            else if (val >= 300 && val <= 2000) val = val / 100;
+            if (val >= 30 && val <= 200) return val / 10;
+            if (val >= 300 && val <= 2000) return val / 100;
+            if (val >= 3 && val <= 20) return val;
             break;
         case 'count':
         case 'leaf':
-            if (val > 300) val = 0;
-            else val = Math.round(val);
-            break;
+            if (val > 300) return 0;
+            return Math.round(val);
     }
-
-    // 2) Clamping min/max according to rules
-    switch (type) {
-        case 'len': if (val < 27.4) val = 27.4; else if (val > 31.9) val = 31.9; break;
-        case 'unf': if (val < 78) val = 78; else if (val > 85) val = 85; break;
-        case 'str': if (val < 27.4) val = 27.4; else if (val > 33.9) val = 33.9; break;
-        case 'elg': if (val < 5) val = 5; else if (val > 7.5) val = 7.5; break;
-        case 'mic': if (val < 3.5) val = 3.5; else if (val > 4.9) val = 4.9; break;
-        case 'rd':  if (val < 77) val = 77; else if (val > 85) val = 85; break;
-        case 'b':   if (val < 5.0) val = 5.0; else if (val > 13.0) val = 13.0; break;
-        case 'sfi': if (val < 7.5) val = 7.5; else if (val > 12.0) val = 12.0; break;
-    }
-
     return val;
+}
+
+function validateBounds(type: string, val: number): string | null {
+    if (val === 0) return null;
+    switch (type) {
+        case 'len': return (val < 27.4 || val > 31.9) ? 'LEN (Comprimento) deve estar entre 27.4 e 31.9' : null;
+        case 'unf': return (val < 78 || val > 85) ? 'UNF (Uniformidade) deve estar entre 78 e 85' : null;
+        case 'str': return (val < 27.4 || val > 33.9) ? 'STR (Resistência) deve estar entre 27.4 e 33.9' : null;
+        case 'elg': return (val < 5 || val > 7.5) ? 'ELG (Alongamento) deve estar entre 5 e 7.5' : null;
+        case 'mic': return (val < 3.5 || val > 4.9) ? 'MIC (Micronaire) deve estar entre 3.5 e 4.9' : null;
+        case 'rd': return (val < 77 || val > 85) ? 'RD (Refletância) deve estar entre 77 e 85' : null;
+        case 'b': return (val < 5.0 || val > 13.0) ? '+B (Amarelamento) deve estar entre 5.0 e 13.0' : null;
+        case 'sfi': return (val < 7.5 || val > 12.0) ? 'SFI (Fibras curtas) deve estar entre 7.5 e 12.0' : null;
+        default: return null;
+    }
 }
 
 function formatCG(raw: string): string {
@@ -226,6 +235,19 @@ export default function ReanalisePage() {
             const num = parseNum(value);
             if (isNaN(num)) return;
             const sanitized = sanitize(num, field);
+            
+            const errorMsg = validateBounds(field, sanitized);
+            if (errorMsg) {
+                alert(`Valor Inválido!\n\n${errorMsg}\n\nVocê digitou: ${sanitized}`);
+                handleAvgEdit(field, ''); // clear the invalid value
+                
+                // Keep focus on the field
+                setTimeout(() => {
+                    document.getElementById(`avg-field-${field}`)?.focus();
+                }, 10);
+                return;
+            }
+
             handleAvgEdit(field, decimals > 0 ? sanitized.toFixed(decimals) : String(sanitized));
         }
     };
