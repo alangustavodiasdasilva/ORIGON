@@ -39,61 +39,67 @@ function parseNum(text: string): number {
 
 function sanitize(val: number, type: string): number {
     if (isNaN(val) || val === 0) return 0;
+    
+    // 1) Normalization
     switch (type) {
         case 'mic':
-            if (val >= 20 && val <= 99) return val / 10;
-            if (val >= 200 && val <= 999) return val / 100;
-            if (val >= 2 && val <= 9.9) return val;
+            if (val >= 20 && val <= 99) val = val / 10;
+            else if (val >= 200 && val <= 999) val = val / 100;
             break;
         case 'len':
-            if (val >= 200 && val <= 450) return val / 10;
-            if (val >= 2000 && val <= 4500) return val / 100;
-            if (val >= 20 && val <= 45) return val;
+            if (val >= 200 && val <= 450) val = val / 10;
+            else if (val >= 2000 && val <= 4500) val = val / 100;
             break;
         case 'unf':
-            if (val >= 500 && val <= 950) return val / 10;
-            if (val >= 5000 && val <= 9500) return val / 100;
-            if (val >= 50 && val <= 95) return val;
+            if (val >= 500 && val <= 950) val = val / 10;
+            else if (val >= 5000 && val <= 9500) val = val / 100;
             break;
         case 'str':
-            if (val >= 100 && val <= 500) return val / 10;
-            if (val >= 1000 && val <= 5000) return val / 100;
-            if (val >= 10 && val <= 50) return val;
+            if (val >= 100 && val <= 500) val = val / 10;
+            else if (val >= 1000 && val <= 5000) val = val / 100;
             break;
         case 'elg':
-            if (val >= 30 && val <= 150) return val / 10;
-            if (val >= 300 && val <= 1500) return val / 100;
-            if (val >= 3 && val <= 15) return val;
+            if (val >= 30 && val <= 150) val = val / 10;
+            else if (val >= 300 && val <= 1500) val = val / 100;
             break;
         case 'rd':
-            if (val >= 400 && val <= 900) return val / 10;
-            if (val >= 4000 && val <= 9000) return val / 100;
-            if (val >= 40 && val <= 90) return val;
+            if (val >= 400 && val <= 900) val = val / 10;
+            else if (val >= 4000 && val <= 9000) val = val / 100;
             break;
         case 'b':
-            if (val >= 40 && val <= 200) return val / 10;
-            if (val >= 400 && val <= 2000) return val / 100;
-            if (val >= 4 && val <= 20) return val;
+            if (val >= 40 && val <= 200) val = val / 10;
+            else if (val >= 400 && val <= 2000) val = val / 100;
             break;
         case 'area':
-            if (val >= 1 && val <= 200) return val / 100;
-            if (val > 0 && val < 5) return val;
+            if (val >= 1 && val <= 200) val = val / 100;
             break;
         case 'mat':
-            if (val >= 70 && val <= 100) return val / 100;
-            if (val >= 700 && val <= 1000) return val / 1000;
-            if (val > 0.60 && val <= 1.0) return val;
+            if (val >= 70 && val <= 100) val = val / 100;
+            else if (val >= 700 && val <= 1000) val = val / 1000;
             break;
         case 'sfi':
-            if (val >= 30 && val <= 200) return val / 10;
-            if (val >= 300 && val <= 2000) return val / 100;
-            if (val >= 3 && val <= 20) return val;
+            if (val >= 30 && val <= 200) val = val / 10;
+            else if (val >= 300 && val <= 2000) val = val / 100;
             break;
         case 'count':
         case 'leaf':
-            if (val > 300) return 0;
-            return Math.round(val);
+            if (val > 300) val = 0;
+            else val = Math.round(val);
+            break;
     }
+
+    // 2) Clamping min/max according to rules
+    switch (type) {
+        case 'len': if (val < 27.4) val = 27.4; else if (val > 31.9) val = 31.9; break;
+        case 'unf': if (val < 78) val = 78; else if (val > 85) val = 85; break;
+        case 'str': if (val < 27.4) val = 27.4; else if (val > 33.9) val = 33.9; break;
+        case 'elg': if (val < 5) val = 5; else if (val > 7.5) val = 7.5; break;
+        case 'mic': if (val < 3.5) val = 3.5; else if (val > 4.9) val = 4.9; break;
+        case 'rd':  if (val < 77) val = 77; else if (val > 85) val = 85; break;
+        case 'b':   if (val < 5.0) val = 5.0; else if (val > 13.0) val = 13.0; break;
+        case 'sfi': if (val < 7.5) val = 7.5; else if (val > 12.0) val = 12.0; break;
+    }
+
     return val;
 }
 
