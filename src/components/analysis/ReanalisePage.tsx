@@ -774,7 +774,7 @@ export default function ReanalisePage() {
                         <ReanaliseDataTable 
                             gridData={gridData} 
                             labels={etiquetas} 
-                            machineId={selectedMachineId} 
+                            machineName={machines.find(m => m.id === selectedMachineId)?.machineId || ''} 
                             onChange={handleGridChange} 
                         />
                     </div>

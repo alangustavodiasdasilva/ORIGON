@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 
 const LIMITS = {
     mic: { min: 3.5, max: 4.9 },
@@ -15,71 +15,114 @@ const LIMITS = {
 interface ReanaliseDataTableProps {
     gridData: Record<string, any[]>;
     labels: string[];
-    machineId: string;
+    machineName: string;
     onChange: (index: number, key: string, value: any) => void;
 }
 
 const COLUMNS = [
-    { key: 'mic', label: 'Mic', step: '0.01', limitInfo: LIMITS.mic },
-    { key: 'len', label: 'Len', step: '0.01', limitInfo: LIMITS.len },
-    { key: 'unf', label: 'Unf', step: '0.1', limitInfo: LIMITS.unf },
-    { key: 'str', label: 'Str', step: '0.1', limitInfo: LIMITS.str },
-    { key: 'elg', label: 'Elg', step: '0.1', limitInfo: LIMITS.elg },
-    { key: 'rd', label: 'Rd', step: '0.1', limitInfo: LIMITS.rd },
-    { key: 'b', label: '+b', step: '0.1', limitInfo: LIMITS.b },
-    { key: 'cg', label: 'CG', step: '', isText: true },
-    { key: 'leaf', label: 'Leaf', step: '1', limitInfo: LIMITS.leaf },
-    { key: 'area', label: 'Area', step: '0.01' },
-    { key: 'count', label: 'Count', step: '1' },
-    { key: 'mat', label: 'Mat', step: '0.01' },
-    { key: 'sfi', label: 'SFI', step: '0.1', limitInfo: LIMITS.sfi }
+    { key: 'len', label: 'Len' },
+    { key: 'unf', label: 'Unf' },
+    { key: 'str', label: 'Str' },
+    { key: 'elg', label: 'Elg' },
+    { key: 'mic', label: 'Mic' },
+    { key: 'rd', label: 'Rd' },
+    { key: 'b', label: '+b' },
+    { key: 'cg', label: 'CG', isText: true },
+    { key: 'sfi', label: 'SFI' },
+    { key: 'leaf', label: 'Leaf' },
+    { key: 'count', label: 'Count' },
+    { key: 'area', label: 'Area' },
+    { key: 'mat', label: 'Mat' }
 ];
 
-export default function ReanaliseDataTable({ gridData, labels, machineId, onChange }: ReanaliseDataTableProps) {
+function CellInput({
+    value,
+    rowIndex,
+    colIndex,
+    col,
+    onChange,
+    onMove
+}: {
+    value: any,
+    rowIndex: number,
+    colIndex: number,
+    col: typeof COLUMNS[0],
+    onChange: (val: any) => void,
+    onMove: (dir: 'up' | 'down') => void
+}) {
+    const [localVal, setLocalVal] = useState(value === undefined ? '' : String(value));
+
+    // Sync from props se mudar via generate externo
+    useEffect(() => {
+        setLocalVal(value === undefined ? '' : String(value));
+    }, [value]);
+
+    const handleBlur = () => {
+        if (col.isText) {
+            onChange(localVal);
+            return;
+        }
+
+        const parsed = parseFloat(localVal.replace(',', '.'));
+        if (isNaN(parsed)) {
+            setLocalVal(value === undefined ? '' : String(value));
+            return;
+        }
+
+        const limits = (LIMITS as any)[col.key];
+        if (limits) {
+            if (parsed < limits.min || parsed > limits.max) {
+                alert(`Valor ${parsed} inválido para ${col.label.toUpperCase()}. O limite aceito é entre ${limits.min} e ${limits.max}.`);
+                setLocalVal(String(value)); // Reset to valid
+                return;
+            }
+        }
+        onChange(parsed);
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === 'Enter') {
+            handleBlur();
+            onMove('down');
+            e.preventDefault();
+        } else if (e.key === 'ArrowUp') {
+            handleBlur();
+            onMove('up');
+            e.preventDefault();
+        } else if (e.key === 'ArrowDown') {
+            handleBlur();
+            onMove('down');
+            e.preventDefault();
+        }
+    };
+
+    return (
+        <input
+            id={`grid-cell-${rowIndex}-${col.key}`}
+            type="text"
+            value={localVal}
+            onChange={(e) => setLocalVal(e.target.value)}
+            onKeyDown={handleKeyDown}
+            onBlur={handleBlur}
+            className="w-full h-full p-2 outline-none focus:bg-blue-100 focus:ring-inset focus:ring-2 focus:ring-blue-500 bg-transparent text-center font-mono"
+            style={{ minWidth: '60px' }}
+        />
+    );
+}
+
+export default function ReanaliseDataTable({ gridData, labels, machineName, onChange }: ReanaliseDataTableProps) {
     if (!gridData || !gridData.mic || gridData.mic.length === 0) {
         return null;
     }
 
     const rowCount = gridData.mic.length;
 
-    const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, rowIndex: number, colIndex: number) => {
-        let targetRow = rowIndex;
-        let targetCol = colIndex;
-
-        if (e.key === 'ArrowUp') {
-            targetRow -= 1;
-            e.preventDefault();
-        } else if (e.key === 'ArrowDown' || e.key === 'Enter') {
-            targetRow += 1;
-            e.preventDefault();
-        } else if (e.key === 'ArrowLeft') {
-            targetCol -= 1;
-            e.preventDefault();
-        } else if (e.key === 'ArrowRight') {
-            targetCol += 1;
-            e.preventDefault();
-        }
-
-        if (targetRow >= 0 && targetRow < rowCount && targetCol >= 0 && targetCol < COLUMNS.length) {
-            const nextField = document.getElementById(`grid-cell-${targetRow}-${COLUMNS[targetCol].key}`);
+    const handleMove = (rowIndex: number, colIndex: number, dir: 'up' | 'down') => {
+        const nextRow = dir === 'up' ? rowIndex - 1 : rowIndex + 1;
+        if (nextRow >= 0 && nextRow < rowCount) {
+            const nextField = document.getElementById(`grid-cell-${nextRow}-${COLUMNS[colIndex].key}`);
             if (nextField) {
                 (nextField as HTMLInputElement).focus();
-            }
-        }
-    };
-
-    const handleBlur = (e: React.FocusEvent<HTMLInputElement>, rowIndex: number, col: typeof COLUMNS[0]) => {
-        if (col.isText) return;
-        const val = parseFloat(e.target.value.replace(',', '.'));
-        if (isNaN(val)) return;
-
-        if (col.limitInfo) {
-            if (val < col.limitInfo.min || val > col.limitInfo.max) {
-                alert(`Valor ${val} inválido para ${col.label.toUpperCase()}. O limite aceito é entre ${col.limitInfo.min} e ${col.limitInfo.max}.`);
-                // Volta pro valor anterior (ele é recarregado do gridData pq o React vai re-renderizar)
-                onChange(rowIndex, col.key, gridData[col.key][rowIndex]);
-                e.target.focus();
-                return;
             }
         }
     };
@@ -94,11 +137,9 @@ export default function ReanaliseDataTable({ gridData, labels, machineId, onChan
                     <tr>
                         <th className="p-2 border-r border-slate-200 w-12 text-center">Nº</th>
                         <th className="p-2 border-r border-slate-200 min-w-[150px]">Fardo</th>
-                        <th className="p-2 border-r border-slate-200 text-center">Padrão</th>
                         {COLUMNS.map(col => (
                             <th key={col.key} className="p-2 border-r border-slate-200 text-center">{col.label}</th>
                         ))}
-                        <th className="p-2 border-r border-slate-200 text-center">Moist.</th>
                         <th className="p-2 border-r border-slate-200 text-center">Maq</th>
                     </tr>
                 </thead>
@@ -107,30 +148,22 @@ export default function ReanaliseDataTable({ gridData, labels, machineId, onChan
                         <tr key={rowIndex} className="hover:bg-blue-50/50 transition-colors">
                             <td className="p-2 border-r border-slate-100 text-center text-slate-500 font-mono">{rowIndex + 1}</td>
                             <td className="p-2 border-r border-slate-100 font-mono text-blue-700">{labels[rowIndex]}</td>
-                            <td className="p-2 border-r border-slate-100 text-center text-slate-400">-</td>
                             {COLUMNS.map((col, colIndex) => {
                                 const val = gridData[col.key] ? gridData[col.key][rowIndex] : '';
                                 return (
                                     <td key={col.key} className="p-0 border-r border-slate-100">
-                                        <input
-                                            id={`grid-cell-${rowIndex}-${col.key}`}
-                                            type={col.isText ? "text" : "number"}
-                                            step={col.step}
-                                            value={val === undefined ? '' : val}
-                                            onChange={(e) => {
-                                                const newVal = col.isText ? e.target.value : (e.target.value === '' ? '' : parseFloat(e.target.value.replace(',', '.')));
-                                                onChange(rowIndex, col.key, newVal);
-                                            }}
-                                            onKeyDown={(e) => handleKeyDown(e, rowIndex, colIndex)}
-                                            onBlur={(e) => handleBlur(e, rowIndex, col)}
-                                            className="w-full h-full p-2 outline-none focus:bg-blue-100 focus:ring-inset focus:ring-2 focus:ring-blue-500 bg-transparent text-right font-mono"
-                                            style={{ minWidth: '60px' }}
+                                        <CellInput
+                                            value={val}
+                                            rowIndex={rowIndex}
+                                            colIndex={colIndex}
+                                            col={col}
+                                            onChange={(newVal) => onChange(rowIndex, col.key, newVal)}
+                                            onMove={(dir) => handleMove(rowIndex, colIndex, dir)}
                                         />
                                     </td>
                                 );
                             })}
-                            <td className="p-2 border-r border-slate-100 text-center text-slate-500">0</td>
-                            <td className="p-2 border-r border-slate-100 text-center text-slate-500">{machineId}</td>
+                            <td className="p-2 border-r border-slate-100 text-center text-slate-500 font-bold">{machineName}</td>
                         </tr>
                     ))}
                 </tbody>
