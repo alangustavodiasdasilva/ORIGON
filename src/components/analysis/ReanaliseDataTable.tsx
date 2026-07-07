@@ -1,16 +1,61 @@
 import React, { useState, useEffect } from 'react';
 
-const LIMITS = {
-    mic: { min: 3.5, max: 4.9 },
-    len: { min: 27.4, max: 31.9 },
-    unf: { min: 78, max: 85 },
-    str: { min: 27.4, max: 33.9 },
-    elg: { min: 5, max: 7.5 },
-    rd: { min: 77, max: 85 },
-    b: { min: 5.0, max: 13.0 },
-    sfi: { min: 7.5, max: 12.0 },
-    leaf: { min: 1, max: 7 }
-};
+function sanitize(val: number, type: string): number {
+    if (isNaN(val) || val === 0) return 0;
+    switch (type) {
+        case 'mic':
+            if (val >= 20 && val <= 99) return val / 10;
+            if (val >= 200 && val <= 999) return val / 100;
+            if (val >= 2 && val <= 9.9) return val;
+            break;
+        case 'len':
+            if (val >= 200 && val <= 450) return val / 10;
+            if (val >= 2000 && val <= 4500) return val / 100;
+            if (val >= 20 && val <= 45) return val;
+            break;
+        case 'unf':
+            if (val >= 500 && val <= 950) return val / 10;
+            if (val >= 5000 && val <= 9500) return val / 100;
+            if (val >= 50 && val <= 95) return val;
+            break;
+        case 'str':
+            if (val >= 100 && val <= 500) return val / 10;
+            if (val >= 1000 && val <= 5000) return val / 100;
+            if (val >= 10 && val <= 50) return val;
+            break;
+        case 'elg':
+            if (val >= 30 && val <= 150) return val / 10;
+            if (val >= 300 && val <= 1500) return val / 100;
+            if (val >= 3 && val <= 15) return val;
+            break;
+        case 'rd':
+            if (val >= 400 && val <= 900) return val / 10;
+            if (val >= 4000 && val <= 9000) return val / 100;
+            if (val >= 40 && val <= 90) return val;
+            break;
+        case 'b':
+            if (val >= 40 && val <= 200) return val / 10;
+            if (val >= 400 && val <= 2000) return val / 100;
+            if (val >= 4 && val <= 20) return val;
+            break;
+        case 'area':
+            if (val >= 1 && val <= 200) return val / 100;
+            if (val > 0 && val < 5) return val;
+            break;
+        case 'mat':
+            if (val >= 70 && val <= 100) return val / 100;
+            if (val >= 700 && val <= 1000) return val / 1000;
+            if (val > 0.60 && val <= 1.0) return val;
+            break;
+        case 'sfi':
+            if (val >= 30 && val <= 200) return val / 10;
+            if (val >= 300 && val <= 2000) return val / 100;
+            if (val >= 3 && val <= 20) return val;
+            break;
+        default: return val;
+    }
+    return val;
+}
 
 interface ReanaliseDataTableProps {
     gridData: Record<string, any[]>;
@@ -20,19 +65,19 @@ interface ReanaliseDataTableProps {
 }
 
 const COLUMNS = [
+    { key: 'mic', label: 'Mic' },
     { key: 'len', label: 'Len' },
     { key: 'unf', label: 'Unf' },
     { key: 'str', label: 'Str' },
     { key: 'elg', label: 'Elg' },
-    { key: 'mic', label: 'Mic' },
     { key: 'rd', label: 'Rd' },
     { key: 'b', label: '+b' },
     { key: 'cg', label: 'CG', isText: true },
-    { key: 'sfi', label: 'SFI' },
     { key: 'leaf', label: 'Leaf' },
-    { key: 'count', label: 'Count' },
     { key: 'area', label: 'Area' },
-    { key: 'mat', label: 'Mat' }
+    { key: 'count', label: 'Count' },
+    { key: 'mat', label: 'Mat' },
+    { key: 'sfi', label: 'SFI' }
 ];
 
 function CellInput({
@@ -52,7 +97,6 @@ function CellInput({
 }) {
     const [localVal, setLocalVal] = useState(value === undefined ? '' : String(value));
 
-    // Sync from props se mudar via generate externo
     useEffect(() => {
         setLocalVal(value === undefined ? '' : String(value));
     }, [value]);
@@ -63,20 +107,17 @@ function CellInput({
             return;
         }
 
-        const parsed = parseFloat(localVal.replace(',', '.'));
+        let parsed = parseFloat(localVal.replace(',', '.'));
         if (isNaN(parsed)) {
             setLocalVal(value === undefined ? '' : String(value));
             return;
         }
 
-        const limits = (LIMITS as any)[col.key];
-        if (limits) {
-            if (parsed < limits.min || parsed > limits.max) {
-                alert(`Valor ${parsed} inválido para ${col.label.toUpperCase()}. O limite aceito é entre ${limits.min} e ${limits.max}.`);
-                setLocalVal(String(value)); // Reset to valid
-                return;
-            }
-        }
+        // Auto format (sanitize) the input value
+        parsed = sanitize(parsed, col.key);
+
+        // Update display to match the sanitized value
+        setLocalVal(String(parsed));
         onChange(parsed);
     };
 
@@ -104,8 +145,9 @@ function CellInput({
             onChange={(e) => setLocalVal(e.target.value)}
             onKeyDown={handleKeyDown}
             onBlur={handleBlur}
-            className="w-full h-full p-2 outline-none focus:bg-blue-100 focus:ring-inset focus:ring-2 focus:ring-blue-500 bg-transparent text-center font-mono"
-            style={{ minWidth: '60px' }}
+            onFocus={(e) => e.target.select()}
+            className="w-full h-full p-2 outline-none focus:bg-blue-100 focus:ring-inset focus:ring-2 focus:ring-blue-500 bg-transparent text-center font-mono text-sm"
+            style={{ minWidth: '65px' }}
         />
     );
 }
@@ -132,7 +174,7 @@ export default function ReanaliseDataTable({ gridData, labels, machineName, onCh
             <h3 className="p-3 bg-slate-50 font-bold text-slate-700 border-b border-slate-200">
                 Visualização de Dados Gerados (Editável)
             </h3>
-            <table className="w-full text-xs text-left border-collapse" style={{ minWidth: '900px' }}>
+            <table className="w-full text-sm text-left border-collapse" style={{ minWidth: '1000px' }}>
                 <thead className="bg-slate-100 border-b border-slate-200 text-slate-700 font-semibold">
                     <tr>
                         <th className="p-2 border-r border-slate-200 w-12 text-center">Nº</th>
