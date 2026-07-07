@@ -83,14 +83,12 @@ const COLUMNS = [
 function CellInput({
     value,
     rowIndex,
-    colIndex,
     col,
     onChange,
     onMove
 }: {
     value: any,
     rowIndex: number,
-    colIndex: number,
     col: typeof COLUMNS[0],
     onChange: (val: any) => void,
     onMove: (dir: 'up' | 'down' | 'left' | 'right') => void
@@ -213,7 +211,6 @@ export default function ReanaliseDataTable({ gridData, labels, machineName, onCh
                                         <CellInput
                                             value={val}
                                             rowIndex={rowIndex}
-                                            colIndex={colIndex}
                                             col={col}
                                             onChange={(newVal) => onChange(rowIndex, col.key, newVal)}
                                             onMove={(dir) => handleMove(rowIndex, colIndex, dir)}
