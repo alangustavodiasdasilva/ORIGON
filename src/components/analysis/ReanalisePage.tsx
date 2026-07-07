@@ -101,14 +101,18 @@ function sanitize(val: number, type: string): number {
 function validateBounds(type: string, val: number): string | null {
     if (val === 0) return null;
     switch (type) {
-        case 'len': return (val < 27.4 || val > 31.9) ? 'LEN (Comprimento) deve estar entre 27.4 e 31.9' : null;
-        case 'unf': return (val < 78 || val > 85) ? 'UNF (Uniformidade) deve estar entre 78 e 85' : null;
-        case 'str': return (val < 27.4 || val > 33.9) ? 'STR (Resistência) deve estar entre 27.4 e 33.9' : null;
-        case 'elg': return (val < 5 || val > 7.5) ? 'ELG (Alongamento) deve estar entre 5 e 7.5' : null;
-        case 'mic': return (val < 3.5 || val > 4.9) ? 'MIC (Micronaire) deve estar entre 3.5 e 4.9' : null;
-        case 'rd': return (val < 77 || val > 85) ? 'RD (Refletância) deve estar entre 77 e 85' : null;
-        case 'b': return (val < 5.0 || val > 13.0) ? '+B (Amarelamento) deve estar entre 5.0 e 13.0' : null;
-        case 'sfi': return (val < 7.5 || val > 12.0) ? 'SFI (Fibras curtas) deve estar entre 7.5 e 12.0' : null;
+        case 'len': return (val < 20 || val > 40) ? 'LEN (Comprimento) deve estar entre 20 e 40' : null;
+        case 'unf': return (val < 50 || val > 100) ? 'UNF (Uniformidade) deve estar entre 50 e 100' : null;
+        case 'str': return (val < 20 || val > 50) ? 'STR (Resistência) deve estar entre 20 e 50' : null;
+        case 'elg': return (val < 2 || val > 15) ? 'ELG (Alongamento) deve estar entre 2 e 15' : null;
+        case 'mic': return (val < 2 || val > 10) ? 'MIC (Micronaire) deve estar entre 2 e 10' : null;
+        case 'rd': return (val < 50 || val > 100) ? 'RD (Refletância) deve estar entre 50 e 100' : null;
+        case 'b': return (val < 2.0 || val > 20.0) ? '+B (Amarelamento) deve estar entre 2.0 e 20.0' : null;
+        case 'sfi': return (val < 2.0 || val > 20.0) ? 'SFI (Fibras curtas) deve estar entre 2.0 e 20.0' : null;
+        case 'leaf': return (val < 1 || val > 9) ? 'LEAF (Folha) deve estar entre 1 e 9' : null;
+        case 'area': return (val < 0 || val > 5) ? 'AREA deve estar entre 0 e 5' : null;
+        case 'count': return (val < 0 || val > 200) ? 'COUNT deve estar entre 0 e 200' : null;
+        case 'mat': return (val < 0.1 || val > 1.5) ? 'MAT deve estar entre 0.1 e 1.5' : null;
         default: return null;
     }
 }
@@ -320,14 +324,28 @@ export default function ReanalisePage() {
     };
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, index: number, editType: 'avg' | 'min' | 'max' = 'avg') => {
-        if (e.key === 'Enter' || e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+        if (e.key === 'Enter') {
             e.preventDefault();
             const next = document.getElementById(`${editType}-field-${DISPLAY_FIELDS[index + 1]?.key}`);
             if (next) (next as HTMLInputElement).focus();
-        } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+        } else if (e.key === 'ArrowDown') {
             e.preventDefault();
-            const prev = document.getElementById(`${editType}-field-${DISPLAY_FIELDS[index - 1]?.key}`);
-            if (prev) (prev as HTMLInputElement).focus();
+            if (editType === 'min') {
+                const next = document.getElementById(`max-field-${DISPLAY_FIELDS[index]?.key}`);
+                if (next) (next as HTMLInputElement).focus();
+            } else {
+                const next = document.getElementById(`${editType}-field-${DISPLAY_FIELDS[index + 1]?.key}`);
+                if (next) (next as HTMLInputElement).focus();
+            }
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            if (editType === 'max') {
+                const prev = document.getElementById(`min-field-${DISPLAY_FIELDS[index]?.key}`);
+                if (prev) (prev as HTMLInputElement).focus();
+            } else {
+                const prev = document.getElementById(`${editType}-field-${DISPLAY_FIELDS[index - 1]?.key}`);
+                if (prev) (prev as HTMLInputElement).focus();
+            }
         }
     };
 
