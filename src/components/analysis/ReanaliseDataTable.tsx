@@ -153,8 +153,7 @@ function CellInput({
             onKeyDown={handleKeyDown}
             onBlur={handleBlur}
             onFocus={(e) => e.target.select()}
-            className="w-full h-full p-2 outline-none focus:bg-blue-100 focus:ring-inset focus:ring-2 focus:ring-blue-500 bg-transparent text-center font-mono text-sm"
-            style={{ minWidth: '65px' }}
+            className="w-full h-full p-2 outline-none focus:bg-blue-100 focus:ring-inset focus:ring-2 focus:ring-blue-500 bg-transparent text-center font-mono text-sm min-w-[65px]"
         />
     );
 }
@@ -188,7 +187,7 @@ export default function ReanaliseDataTable({ gridData, labels, machineName, onCh
             <h3 className="p-3 bg-slate-50 font-bold text-slate-700 border-b border-slate-200">
                 Visualização de Dados Gerados (Editável)
             </h3>
-            <table className="w-full text-sm text-left border-collapse" style={{ minWidth: '1000px' }}>
+            <table className="w-full text-sm text-left border-collapse min-w-[1000px]">
                 <thead className="bg-slate-100 border-b border-slate-200 text-slate-700 font-semibold">
                     <tr>
                         <th className="p-2 border-r border-slate-200 w-12 text-center">Nº</th>

@@ -515,9 +515,9 @@ export default function ReanalisePage() {
                                         {DISPLAY_FIELDS.map((f, index) => (
                                             <td key={f.key} className="border-r border-neutral-200 last:border-r-0 p-0 relative">
                                                 <input
-                                                    id={`avg-field-${f.key}`}
+                                                    id={'avg-field-' + f.key}
                                                     type="text"
-                                                    title={`Média — ${f.label}`}
+                                                    title={'Média — ' + f.label}
                                                     value={avgEdits[f.key] !== undefined ? avgEdits[f.key] : ''}
                                                     placeholder="0"
                                                     onChange={e => handleAvgEdit(f.key, e.target.value)}
@@ -536,9 +536,9 @@ export default function ReanalisePage() {
                                             {DISPLAY_FIELDS.map((f, index) => (
                                                 <td key={f.key} className="border-r border-neutral-200 last:border-r-0 p-0 relative">
                                                     <input
-                                                        id={`min-field-${f.key}`}
+                                                        id={'min-field-' + f.key}
                                                         type="text"
-                                                        title={`Mínimo — ${f.label}`}
+                                                        title={'Mínimo - ' + f.label}
                                                         value={minEdits[f.key] !== undefined ? minEdits[f.key] : ''}
                                                         placeholder="0"
                                                         onChange={e => handleMinEdit(f.key, e.target.value)}
@@ -555,9 +555,9 @@ export default function ReanalisePage() {
                                             {DISPLAY_FIELDS.map((f, index) => (
                                                 <td key={f.key} className="border-r border-neutral-200 last:border-r-0 p-0 relative">
                                                     <input
-                                                        id={`max-field-${f.key}`}
+                                                        id={'max-field-' + f.key}
                                                         type="text"
-                                                        title={`Máximo — ${f.label}`}
+                                                        title={'Máximo - ' + f.label}
                                                         value={maxEdits[f.key] !== undefined ? maxEdits[f.key] : ''}
                                                         placeholder="0"
                                                         onChange={e => handleMaxEdit(f.key, e.target.value)}
