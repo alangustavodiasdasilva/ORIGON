@@ -128,6 +128,9 @@ export default function ReanalisePage() {
     const [loadingMachines, setLoadingMachines] = useState(true);
 
     const [avgEdits, setAvgEdits] = useState<Record<string, string>>({});
+    const [minEdits, setMinEdits] = useState<Record<string, string>>({});
+    const [maxEdits, setMaxEdits] = useState<Record<string, string>>({});
+    const [isRangeMode, setIsRangeMode] = useState(false);
     const [repCount, setRepCount] = useState<number | ''>(6);
     const [isExporting, setIsExporting] = useState(false);
     const [exportStatus, setExportStatus] = useState<{ ok: boolean; msg: string } | null>(null);
@@ -167,7 +170,7 @@ export default function ReanalisePage() {
             }
         }, 500); // 500ms debounce
         return () => clearTimeout(timer);
-    }, [avgEdits, selectedMachineId, repCount, etiquetas, customDate, customTime, osInput]);
+    }, [avgEdits, minEdits, maxEdits, isRangeMode, selectedMachineId, repCount, etiquetas, customDate, customTime, osInput]);
 
     const generateAutoPreview = async () => {
         const machine = machines.find(m => m.id === selectedMachineId);
@@ -196,12 +199,13 @@ export default function ReanalisePage() {
             };
 
             const reps = typeof repCount === 'number' ? repCount : 1;
+            const overrides = isRangeMode ? getRandomRangeOverrides(reps) : undefined;
 
             const result = await HVIFileGeneratorService.generatePreviewForSample(
                 fakeSample,
                 [fakeSample],
-                tols,
-                undefined,
+                isRangeMode ? { mic: 0, len: 0, unf: 0, str: 0, rd: 0, b: 0 } : tols,
+                overrides,
                 etiquetas,
                 customDate || undefined,
                 customTime || undefined,
@@ -226,11 +230,14 @@ export default function ReanalisePage() {
     };
 
     const handleAvgEdit = (field: string, value: string) => setAvgEdits(prev => ({ ...prev, [field]: value }));
+    const handleMinEdit = (field: string, value: string) => setMinEdits(prev => ({ ...prev, [field]: value }));
+    const handleMaxEdit = (field: string, value: string) => setMaxEdits(prev => ({ ...prev, [field]: value }));
 
-    const handleBlur = (field: string, value: string, decimals: number) => {
+    const handleBlur = (field: string, value: string, decimals: number, editType: 'avg' | 'min' | 'max' = 'avg') => {
         if (!value) return;
+        const updater = editType === 'avg' ? handleAvgEdit : (editType === 'min' ? handleMinEdit : handleMaxEdit);
         if (field === 'cg') {
-            handleAvgEdit(field, formatCG(value));
+            updater(field, formatCG(value));
         } else {
             const num = parseNum(value);
             if (isNaN(num)) return;
@@ -238,30 +245,28 @@ export default function ReanalisePage() {
             
             const errorMsg = validateBounds(field, sanitized);
             if (errorMsg) {
-                alert(`Valor Inválido!\n\n${errorMsg}\n\nVocê digitou: ${sanitized}`);
-                handleAvgEdit(field, ''); // clear the invalid value
+                alert(`Valor Inválido no campo ${editType.toUpperCase()}!\n\n${errorMsg}\n\nVocê digitou: ${sanitized}`);
+                updater(field, ''); // clear the invalid value
                 
                 // Keep focus on the field
                 setTimeout(() => {
-                    document.getElementById(`avg-field-${field}`)?.focus();
+                    document.getElementById(`${editType}-field-${field}`)?.focus();
                 }, 10);
                 return;
             }
 
-            handleAvgEdit(field, decimals > 0 ? sanitized.toFixed(decimals) : String(sanitized));
+            updater(field, decimals > 0 ? sanitized.toFixed(decimals) : String(sanitized));
         }
     };
 
-    const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, index: number) => {
-        // Ignora setas se o usuário está digitando e quer navegar DENTRO do input?
-        // Só pula se estiver na borda, mas o mais seguro é focar no Enter/Tab para pular
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, index: number, editType: 'avg' | 'min' | 'max' = 'avg') => {
         if (e.key === 'Enter' || e.key === 'ArrowRight' || e.key === 'ArrowDown') {
             e.preventDefault();
-            const next = document.getElementById(`avg-field-${DISPLAY_FIELDS[index + 1]?.key}`);
+            const next = document.getElementById(`${editType}-field-${DISPLAY_FIELDS[index + 1]?.key}`);
             if (next) (next as HTMLInputElement).focus();
         } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
             e.preventDefault();
-            const prev = document.getElementById(`avg-field-${DISPLAY_FIELDS[index - 1]?.key}`);
+            const prev = document.getElementById(`${editType}-field-${DISPLAY_FIELDS[index - 1]?.key}`);
             if (prev) (prev as HTMLInputElement).focus();
         }
     };
@@ -278,6 +283,37 @@ export default function ReanalisePage() {
             }
         }
         return result;
+    };
+
+    const getRandomRangeOverrides = (count: number): Record<string, number[]> => {
+        const overrides: Record<string, number[]> = {
+            mic: [], len: [], unf: [], str: [], elg: [], rd: [], b: [], sfi: [], mat: [], area: [], count: [], sci: [], csp: [], leaf: []
+        };
+        for (let i = 0; i < count; i++) {
+            for (const f of DISPLAY_FIELDS) {
+                if (f.key === 'cg') continue; // CG is not randomizable nicely in range yet, keep empty so it falls back
+                const minVal = parseFloat(minEdits[f.key]?.replace(',', '.') || '0');
+                const maxVal = parseFloat(maxEdits[f.key]?.replace(',', '.') || '0');
+                
+                let rnd = minVal;
+                if (!isNaN(minVal) && !isNaN(maxVal) && maxVal > minVal) {
+                    rnd = minVal + Math.random() * (maxVal - minVal);
+                } else if (!isNaN(minVal) && minVal !== 0) {
+                    rnd = minVal;
+                } else if (!isNaN(maxVal) && maxVal !== 0) {
+                    rnd = maxVal;
+                } else if (f.key !== 'cg') {
+                    // Fallback se não preencheu, pega da média se existir
+                    const avgVal = parseFloat(avgEdits[f.key]?.replace(',', '.') || '0');
+                    rnd = !isNaN(avgVal) && avgVal !== 0 ? avgVal : DEFAULT_AVG[f.key as keyof AvgValues] as number;
+                }
+
+                if (overrides[f.key]) {
+                    overrides[f.key].push(rnd);
+                }
+            }
+        }
+        return overrides;
     };
 
     const selectedMachine = machines.find(m => m.id === selectedMachineId);
@@ -311,12 +347,13 @@ export default function ReanalisePage() {
             };
 
             const reps = typeof repCount === 'number' ? repCount : 1;
+            const overrides = isRangeMode ? getRandomRangeOverrides(reps) : undefined;
 
             const result = await HVIFileGeneratorService.generatePreviewForSample(
                 fakeSample,
                 [fakeSample],
-                tols,
-                undefined,
+                isRangeMode ? { mic: 0, len: 0, unf: 0, str: 0, rd: 0, b: 0 } : tols,
+                overrides,
                 label,
                 customDate || undefined,
                 customTime || undefined,
@@ -363,14 +400,29 @@ export default function ReanalisePage() {
             <div className="space-y-8">
                 {/* ── Linha Superior: Valores (Full Width) ── */}
                 <div className="space-y-3">
-                    <span className="text-[10px] font-black uppercase tracking-widest text-neutral-500">
-                        1. Valores para Exportação
-                    </span>
+                    <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-neutral-500">
+                            1. Valores para Exportação
+                        </span>
+                        <div className="flex items-center gap-2">
+                            <span className={`text-[10px] font-bold ${!isRangeMode ? 'text-black' : 'text-neutral-400'}`}>Média Exata</span>
+                            <button 
+                                onClick={() => setIsRangeMode(!isRangeMode)}
+                                className={`w-10 h-5 rounded-full p-1 flex items-center transition-colors ${isRangeMode ? 'bg-blue-600' : 'bg-neutral-300'}`}
+                            >
+                                <div className={`w-3 h-3 rounded-full bg-white shadow-sm transition-transform ${isRangeMode ? 'translate-x-5' : 'translate-x-0'}`} />
+                            </button>
+                            <span className={`text-[10px] font-bold ${isRangeMode ? 'text-blue-600' : 'text-neutral-400'}`}>Intervalo (Mín/Máx)</span>
+                        </div>
+                    </div>
                     {/* Tabela de Inputs (Estilo Planilha) */}
-                    <div className="border border-neutral-200 shadow-sm bg-white overflow-x-auto">
+                    <div className="border border-neutral-200 shadow-sm bg-white overflow-x-auto custom-scrollbar">
                         <table className="w-full border-collapse min-w-[900px]">
                             <thead>
                                 <tr className="bg-neutral-100">
+                                    <th className="border-r border-b border-neutral-200 py-2 px-2 text-left w-20">
+                                        <span className="text-[10px] font-black uppercase text-neutral-500 tracking-widest pl-2">Tipo</span>
+                                    </th>
                                     {DISPLAY_FIELDS.map(f => (
                                         <th key={f.key} className="border-r border-b border-neutral-200 last:border-r-0 py-2 px-2 text-center select-none">
                                             <span className="text-[10px] font-black uppercase text-neutral-500 tracking-widest">{f.label}</span>
@@ -379,24 +431,68 @@ export default function ReanalisePage() {
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr>
-                                    {DISPLAY_FIELDS.map((f, index) => (
-                                        <td key={f.key} className="border-r border-neutral-200 last:border-r-0 p-0 relative">
-                                            <input
-                                                id={`avg-field-${f.key}`}
-                                                type="text"
-                                                title={`Média — ${f.label}`}
-                                                value={avgEdits[f.key] !== undefined ? avgEdits[f.key] : ''}
-                                                placeholder="0"
-                                                onChange={e => handleAvgEdit(f.key, e.target.value)}
-                                                onFocus={e => e.target.select()}
-                                                onBlur={e => handleBlur(f.key, e.target.value, f.decimals)}
-                                                onKeyDown={e => handleKeyDown(e, index)}
-                                                className="w-full h-12 text-center text-[14px] font-mono font-bold text-black border-none focus:bg-blue-50 focus:ring-inset focus:ring-2 focus:ring-blue-500 focus:relative focus:z-10 outline-none transition-colors"
-                                            />
-                                        </td>
-                                    ))}
-                                </tr>
+                                {!isRangeMode ? (
+                                    <tr>
+                                        <td className="border-r border-neutral-200 bg-neutral-50 text-[10px] font-bold uppercase text-neutral-500 pl-4 py-3">Média</td>
+                                        {DISPLAY_FIELDS.map((f, index) => (
+                                            <td key={f.key} className="border-r border-neutral-200 last:border-r-0 p-0 relative">
+                                                <input
+                                                    id={`avg-field-${f.key}`}
+                                                    type="text"
+                                                    title={`Média — ${f.label}`}
+                                                    value={avgEdits[f.key] !== undefined ? avgEdits[f.key] : ''}
+                                                    placeholder="0"
+                                                    onChange={e => handleAvgEdit(f.key, e.target.value)}
+                                                    onFocus={e => e.target.select()}
+                                                    onBlur={e => handleBlur(f.key, e.target.value, f.decimals, 'avg')}
+                                                    onKeyDown={e => handleKeyDown(e, index, 'avg')}
+                                                    className="w-full h-12 text-center text-[14px] font-mono font-bold text-black border-none focus:bg-blue-50 focus:ring-inset focus:ring-2 focus:ring-blue-500 focus:relative focus:z-10 outline-none transition-colors"
+                                                />
+                                            </td>
+                                        ))}
+                                    </tr>
+                                ) : (
+                                    <>
+                                        <tr className="border-b border-neutral-200">
+                                            <td className="border-r border-neutral-200 bg-blue-50/50 text-[10px] font-bold uppercase text-blue-600 pl-4 py-3">Mínimo</td>
+                                            {DISPLAY_FIELDS.map((f, index) => (
+                                                <td key={f.key} className="border-r border-neutral-200 last:border-r-0 p-0 relative">
+                                                    <input
+                                                        id={`min-field-${f.key}`}
+                                                        type="text"
+                                                        title={`Mínimo — ${f.label}`}
+                                                        value={minEdits[f.key] !== undefined ? minEdits[f.key] : ''}
+                                                        placeholder="0"
+                                                        onChange={e => handleMinEdit(f.key, e.target.value)}
+                                                        onFocus={e => e.target.select()}
+                                                        onBlur={e => handleBlur(f.key, e.target.value, f.decimals, 'min')}
+                                                        onKeyDown={e => handleKeyDown(e, index, 'min')}
+                                                        className="w-full h-12 text-center text-[14px] font-mono font-bold text-blue-700 border-none bg-transparent focus:bg-blue-100 focus:ring-inset focus:ring-2 focus:ring-blue-500 focus:relative focus:z-10 outline-none transition-colors"
+                                                    />
+                                                </td>
+                                            ))}
+                                        </tr>
+                                        <tr>
+                                            <td className="border-r border-neutral-200 bg-emerald-50/50 text-[10px] font-bold uppercase text-emerald-600 pl-4 py-3">Máximo</td>
+                                            {DISPLAY_FIELDS.map((f, index) => (
+                                                <td key={f.key} className="border-r border-neutral-200 last:border-r-0 p-0 relative">
+                                                    <input
+                                                        id={`max-field-${f.key}`}
+                                                        type="text"
+                                                        title={`Máximo — ${f.label}`}
+                                                        value={maxEdits[f.key] !== undefined ? maxEdits[f.key] : ''}
+                                                        placeholder="0"
+                                                        onChange={e => handleMaxEdit(f.key, e.target.value)}
+                                                        onFocus={e => e.target.select()}
+                                                        onBlur={e => handleBlur(f.key, e.target.value, f.decimals, 'max')}
+                                                        onKeyDown={e => handleKeyDown(e, index, 'max')}
+                                                        className="w-full h-12 text-center text-[14px] font-mono font-bold text-emerald-700 border-none bg-transparent focus:bg-emerald-100 focus:ring-inset focus:ring-2 focus:ring-emerald-500 focus:relative focus:z-10 outline-none transition-colors"
+                                                    />
+                                                </td>
+                                            ))}
+                                        </tr>
+                                    </>
+                                )}
                             </tbody>
                         </table>
                     </div>
