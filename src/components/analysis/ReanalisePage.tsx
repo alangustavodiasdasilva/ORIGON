@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { MachineService, type Machine } from "@/entities/Machine";
 import { useAuth } from "@/contexts/AuthContext";
 import { HVIFileGeneratorService } from "@/services/HVIFileGeneratorService";
+import ReanaliseDataTable from "./ReanaliseDataTable";
 
 interface AvgValues {
     mic: number; len: number; unf: number; str: number;
@@ -135,6 +136,7 @@ export default function ReanalisePage() {
     const [isExporting, setIsExporting] = useState(false);
     const [exportStatus, setExportStatus] = useState<{ ok: boolean; msg: string } | null>(null);
     const [previewFiles, setPreviewFiles] = useState<{ name: string, content: string }[] | null>(null);
+    const [gridData, setGridData] = useState<Record<string, any[]> | null>(null);
     const [isAutoPreviewing, setIsAutoPreviewing] = useState(false);
 
     const [etiquetas, setEtiquetas] = useState<string[]>(Array(6).fill(''));
@@ -216,9 +218,11 @@ export default function ReanalisePage() {
 
             if (result.success && result.data && result.data.files) {
                 setPreviewFiles(result.data.files.map((f: any) => ({ name: f.filename, content: f.content })));
+                setGridData(result.data.balancedReadings || null);
                 setExportStatus(null);
             } else {
                 setPreviewFiles(null);
+                setGridData(null);
                 setExportStatus({ ok: false, msg: result.message || 'Falha ao gerar prévia' });
             }
         } catch (err: any) {
@@ -226,6 +230,62 @@ export default function ReanalisePage() {
             setExportStatus({ ok: false, msg: err.message || 'Erro inesperado' });
         } finally {
             setIsAutoPreviewing(false);
+        }
+    };
+
+    const handleGridChange = async (rowIndex: number, key: string, value: any) => {
+        if (!gridData || !selectedMachineId) return;
+        
+        // Atualiza estado local do grid
+        const newGridData = { ...gridData };
+        if (newGridData[key]) {
+            const arr = [...newGridData[key]];
+            arr[rowIndex] = value;
+            newGridData[key] = arr;
+        }
+        setGridData(newGridData);
+
+        // Gera novos arquivos TXT sem re-randomizar
+        const machine = machines.find(m => m.id === selectedMachineId);
+        if (!machine) return;
+
+        const effective = getEffectiveAvg();
+        const timestamp = new Date().toISOString().replace(/[-:T.Z]/g, '').slice(0, 12);
+        const label = etiquetas[0] || 'REANALISE';
+
+        const fakeSample: any = {
+            id: `reanalise_${timestamp}`,
+            amostra_id: '1',
+            lote_id: 'reanalise',
+            mala: osInput || 'REANALISE',
+            etiqueta: label,
+            hvi: machine.machineId,
+            cor: '#10b981',
+            mic: effective.mic, len: effective.len, unf: effective.unf,
+            str: effective.str, rd: effective.rd, b: effective.b,
+        };
+
+        const fakeConfig = {
+            color_templates: { '#10b981': { ...effective, selectedLine: 0 } }
+        };
+
+        const reps = typeof repCount === 'number' ? repCount : 1;
+
+        const result = await HVIFileGeneratorService.generatePreviewForSample(
+            fakeSample,
+            [fakeSample],
+            isRangeMode ? { mic: 0, len: 0, unf: 0, str: 0, rd: 0, b: 0 } : { mic: 0.05, len: 0.15, unf: 0.3, str: 0.3, rd: 0.3, b: 0.2 },
+            newGridData,
+            etiquetas,
+            customDate || undefined,
+            customTime || undefined,
+            machine.machineId,
+            fakeConfig,
+            reps
+        );
+
+        if (result.success && result.data && result.data.files) {
+            setPreviewFiles(result.data.files.map((f: any) => ({ name: f.filename, content: f.content })));
         }
     };
 
@@ -260,28 +320,14 @@ export default function ReanalisePage() {
     };
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, index: number, editType: 'avg' | 'min' | 'max' = 'avg') => {
-        if (e.key === 'Enter' || e.key === 'ArrowRight') {
+        if (e.key === 'Enter' || e.key === 'ArrowRight' || e.key === 'ArrowDown') {
             e.preventDefault();
             const next = document.getElementById(`${editType}-field-${DISPLAY_FIELDS[index + 1]?.key}`);
             if (next) (next as HTMLInputElement).focus();
-        } else if (e.key === 'ArrowLeft') {
+        } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
             e.preventDefault();
             const prev = document.getElementById(`${editType}-field-${DISPLAY_FIELDS[index - 1]?.key}`);
             if (prev) (prev as HTMLInputElement).focus();
-        } else if (e.key === 'ArrowDown') {
-            e.preventDefault();
-            if (editType === 'min') {
-                const down = document.getElementById(`max-field-${DISPLAY_FIELDS[index].key}`);
-                if (down) (down as HTMLInputElement).focus();
-            } else if (editType === 'avg') {
-                // if it were avg, maybe nothing below
-            }
-        } else if (e.key === 'ArrowUp') {
-            e.preventDefault();
-            if (editType === 'max') {
-                const up = document.getElementById(`min-field-${DISPLAY_FIELDS[index].key}`);
-                if (up) (up as HTMLInputElement).focus();
-            }
         }
     };
 
@@ -722,6 +768,17 @@ export default function ReanalisePage() {
                         </div>
                     </div>
                 </div>
+                
+                {gridData && selectedMachineId && (
+                    <div className="mt-8 animate-fade-in-up">
+                        <ReanaliseDataTable 
+                            gridData={gridData} 
+                            labels={etiquetas} 
+                            machineId={selectedMachineId} 
+                            onChange={handleGridChange} 
+                        />
+                    </div>
+                )}
             </div>
         </div>
     );
