@@ -93,7 +93,7 @@ function CellInput({
     colIndex: number,
     col: typeof COLUMNS[0],
     onChange: (val: any) => void,
-    onMove: (dir: 'up' | 'down') => void
+    onMove: (dir: 'up' | 'down' | 'left' | 'right') => void
 }) {
     const [localVal, setLocalVal] = useState(value === undefined ? '' : String(value));
 
@@ -149,6 +149,7 @@ function CellInput({
         <input
             id={`grid-cell-${rowIndex}-${col.key}`}
             type="text"
+            title={col.label}
             value={localVal}
             onChange={(e) => setLocalVal(e.target.value)}
             onKeyDown={handleKeyDown}

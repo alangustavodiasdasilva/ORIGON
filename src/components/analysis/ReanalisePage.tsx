@@ -333,21 +333,15 @@ export default function ReanalisePage() {
             const prev = document.getElementById(`${editType}-field-${DISPLAY_FIELDS[index - 1]?.key}`);
             if (prev) (prev as HTMLInputElement).focus();
         } else if (e.key === 'ArrowDown') {
-            e.preventDefault();
             if (editType === 'min') {
+                e.preventDefault();
                 const next = document.getElementById(`max-field-${DISPLAY_FIELDS[index]?.key}`);
-                if (next) (next as HTMLInputElement).focus();
-            } else {
-                const next = document.getElementById(`${editType}-field-${DISPLAY_FIELDS[index + 1]?.key}`);
                 if (next) (next as HTMLInputElement).focus();
             }
         } else if (e.key === 'ArrowUp') {
-            e.preventDefault();
             if (editType === 'max') {
+                e.preventDefault();
                 const prev = document.getElementById(`min-field-${DISPLAY_FIELDS[index]?.key}`);
-                if (prev) (prev as HTMLInputElement).focus();
-            } else {
-                const prev = document.getElementById(`${editType}-field-${DISPLAY_FIELDS[index - 1]?.key}`);
                 if (prev) (prev as HTMLInputElement).focus();
             }
         }
@@ -384,7 +378,7 @@ export default function ReanalisePage() {
                     rnd = minVal;
                 } else if (!isNaN(maxVal) && maxVal !== 0) {
                     rnd = maxVal;
-                } else if (f.key !== 'cg') {
+                } else {
                     // Fallback se não preencheu, pega da média se existir
                     const avgVal = parseFloat(avgEdits[f.key]?.replace(',', '.') || '0');
                     rnd = !isNaN(avgVal) && avgVal !== 0 ? avgVal : DEFAULT_AVG[f.key as keyof AvgValues] as number;
@@ -490,6 +484,8 @@ export default function ReanalisePage() {
                             <span className={`text-[10px] font-bold ${!isRangeMode ? 'text-black' : 'text-neutral-400'}`}>Média Exata</span>
                             <button 
                                 onClick={() => setIsRangeMode(!isRangeMode)}
+                                title="Alternar Modo de Intervalo"
+                                aria-label="Alternar Modo de Intervalo"
                                 className={`w-10 h-5 rounded-full p-1 flex items-center transition-colors ${isRangeMode ? 'bg-blue-600' : 'bg-neutral-300'}`}
                             >
                                 <div className={`w-3 h-3 rounded-full bg-white shadow-sm transition-transform ${isRangeMode ? 'translate-x-5' : 'translate-x-0'}`} />
