@@ -260,14 +260,28 @@ export default function ReanalisePage() {
     };
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, index: number, editType: 'avg' | 'min' | 'max' = 'avg') => {
-        if (e.key === 'Enter' || e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+        if (e.key === 'Enter' || e.key === 'ArrowRight') {
             e.preventDefault();
             const next = document.getElementById(`${editType}-field-${DISPLAY_FIELDS[index + 1]?.key}`);
             if (next) (next as HTMLInputElement).focus();
-        } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+        } else if (e.key === 'ArrowLeft') {
             e.preventDefault();
             const prev = document.getElementById(`${editType}-field-${DISPLAY_FIELDS[index - 1]?.key}`);
             if (prev) (prev as HTMLInputElement).focus();
+        } else if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            if (editType === 'min') {
+                const down = document.getElementById(`max-field-${DISPLAY_FIELDS[index].key}`);
+                if (down) (down as HTMLInputElement).focus();
+            } else if (editType === 'avg') {
+                // if it were avg, maybe nothing below
+            }
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            if (editType === 'max') {
+                const up = document.getElementById(`min-field-${DISPLAY_FIELDS[index].key}`);
+                if (up) (up as HTMLInputElement).focus();
+            }
         }
     };
 
