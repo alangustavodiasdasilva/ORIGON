@@ -324,10 +324,14 @@ export default function ReanalisePage() {
     };
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, index: number, editType: 'avg' | 'min' | 'max' = 'avg') => {
-        if (e.key === 'Enter') {
+        if (e.key === 'Enter' || e.key === 'ArrowRight') {
             e.preventDefault();
             const next = document.getElementById(`${editType}-field-${DISPLAY_FIELDS[index + 1]?.key}`);
             if (next) (next as HTMLInputElement).focus();
+        } else if (e.key === 'ArrowLeft') {
+            e.preventDefault();
+            const prev = document.getElementById(`${editType}-field-${DISPLAY_FIELDS[index - 1]?.key}`);
+            if (prev) (prev as HTMLInputElement).focus();
         } else if (e.key === 'ArrowDown') {
             e.preventDefault();
             if (editType === 'min') {
@@ -749,7 +753,7 @@ export default function ReanalisePage() {
                     </div>
 
                     {/* ── Coluna Direita: Pré-visualização Fixa ── */}
-                    <div className="w-full lg:w-[450px] shrink-0 sticky top-6">
+                    <div className="w-full lg:w-[450px] shrink-0">
                         <div className="flex items-center justify-between mb-3">
                             <span className="text-[10px] font-black uppercase tracking-widest text-neutral-500">
                                 Exemplo dos Arquivos ({previewFiles?.length || 0})

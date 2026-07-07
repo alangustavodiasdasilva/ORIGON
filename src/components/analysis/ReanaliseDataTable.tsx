@@ -134,6 +134,14 @@ function CellInput({
             handleBlur();
             onMove('down');
             e.preventDefault();
+        } else if (e.key === 'ArrowLeft') {
+            handleBlur();
+            onMove('left');
+            e.preventDefault();
+        } else if (e.key === 'ArrowRight') {
+            handleBlur();
+            onMove('right');
+            e.preventDefault();
         }
     };
 
@@ -159,10 +167,17 @@ export default function ReanaliseDataTable({ gridData, labels, machineName, onCh
 
     const rowCount = gridData.mic.length;
 
-    const handleMove = (rowIndex: number, colIndex: number, dir: 'up' | 'down') => {
-        const nextRow = dir === 'up' ? rowIndex - 1 : rowIndex + 1;
-        if (nextRow >= 0 && nextRow < rowCount) {
-            const nextField = document.getElementById(`grid-cell-${nextRow}-${COLUMNS[colIndex].key}`);
+    const handleMove = (rowIndex: number, colIndex: number, dir: 'up' | 'down' | 'left' | 'right') => {
+        let nextRow = rowIndex;
+        let nextCol = colIndex;
+
+        if (dir === 'up') nextRow = rowIndex - 1;
+        if (dir === 'down') nextRow = rowIndex + 1;
+        if (dir === 'left') nextCol = colIndex - 1;
+        if (dir === 'right') nextCol = colIndex + 1;
+
+        if (nextRow >= 0 && nextRow < rowCount && nextCol >= 0 && nextCol < COLUMNS.length) {
+            const nextField = document.getElementById(`grid-cell-${nextRow}-${COLUMNS[nextCol].key}`);
             if (nextField) {
                 (nextField as HTMLInputElement).focus();
             }
