@@ -1097,6 +1097,10 @@ export class HVIFileGeneratorService {
                         const sampleLabelForName = rawEtiqueta?.replace(/[^a-zA-Z0-9]/g, '_') || sample.amostra_id;
                         repFilename = `RAX${sampleLabelForName}_REP${repIndex}.H1`;
                     }
+                    
+                    if (sample.lote_id === 'reanalise') {
+                        repFilename = `M${machineNum}_${repFilename}`;
+                    }
 
                     files.push({ content: repContent, filename: repFilename });
                     repContents.push(`=== ARQUIVO: ${repFilename} ===\n${repContent}`);
@@ -1185,7 +1189,11 @@ export class HVIFileGeneratorService {
 
                     const repContent = this.generatePremierFormatMultipleBalanced(effectiveSample, 1, averages, singleReadings, dateStr, repTime);
                     const sampleLabelForName = rawEtiqueta?.replace(/[^a-zA-Z0-9]/g, '_') || sample.amostra_id;
-                    const repFilename = `HVI_PREMIER_${sampleLabelForName}_REP${repIndex}_${timestamp}.txt`;
+                    let repFilename = `HVI_PREMIER_${sampleLabelForName}_REP${repIndex}_${timestamp}.txt`;
+                    
+                    if (sample.lote_id === 'reanalise') {
+                        repFilename = `M${machineNum}_${repFilename}`;
+                    }
 
                     files.push({ content: repContent, filename: repFilename });
                     repContents.push(`=== ARQUIVO: ${repFilename} ===\n${repContent}`);
