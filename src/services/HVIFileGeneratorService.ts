@@ -873,15 +873,16 @@ export class HVIFileGeneratorService {
             const tols = tolerancias || { mic: 0.10, len: 0.30, unf: 0.5, str: 0.5, rd: 0.5, b: 0.3 };
             const seedMod = sample.id || sample.amostra_id || "default";
 
-            // ── Variação determinística das médias por amostra (máx 40% da tolerância) ──
-            const sampleMic = this.getVariedSampleTarget(averages.mic, tols.mic, 2, seedMod);
-            const sampleLen = this.getVariedSampleTarget(averages.len, tols.len, 2, seedMod);
-            const sampleUnf = this.getVariedSampleTarget(averages.unf, tols.unf, 1, seedMod);
-            const sampleStr = this.getVariedSampleTarget(averages.str, tols.str, 1, seedMod);
-            const sampleRd  = this.getVariedSampleTarget(averages.rd,  tols.rd,  1, seedMod);
-            const sampleB   = this.getVariedSampleTarget(averages.b,   tols.b,   1, seedMod);
+            // ── Média do arquivo = Média configurada (sem desvio na média) ──
+            // As leituras individuais variam dentro da tolerância, mas a média final é exata.
+            const sampleMic = averages.mic;
+            const sampleLen = averages.len;
+            const sampleUnf = averages.unf;
+            const sampleStr = averages.str;
+            const sampleRd  = averages.rd;
+            const sampleB   = averages.b;
 
-            // For preview modal: show the actual varied averages generated in the HVI file
+            // For preview modal: show the actual averages used in the HVI file
             const generatedValues = {
                 mic: sampleMic,
                 len: sampleLen,
@@ -892,12 +893,12 @@ export class HVIFileGeneratorService {
             };
 
             // ── Geração balanceada ou Override ──
-            const micReadings = overrideReadings?.mic || this.getBalancedReadings(sampleMic, Math.max(0.01, tols.mic - Math.abs(sampleMic - averages.mic)), 2, seedMod, count);
-            const lenReadings = overrideReadings?.len || this.getBalancedReadings(sampleLen, Math.max(0.01, tols.len - Math.abs(sampleLen - averages.len)), 2, seedMod, count);
-            const unfReadings = overrideReadings?.unf || this.getBalancedReadings(sampleUnf, Math.max(0.1, tols.unf - Math.abs(sampleUnf - averages.unf)), 1, seedMod, count);
-            const strReadings = overrideReadings?.str || this.getBalancedReadings(sampleStr, Math.max(0.1, tols.str - Math.abs(sampleStr - averages.str)), 1, seedMod, count);
-            const rdReadings  = overrideReadings?.rd  || this.getBalancedReadings(sampleRd, Math.max(0.1, tols.rd - Math.abs(sampleRd - averages.rd)), 1, seedMod, count);
-            const bReadings   = overrideReadings?.b   || this.getBalancedReadings(sampleB, Math.max(0.1, tols.b - Math.abs(sampleB - averages.b)), 1, seedMod, count);
+            const micReadings = overrideReadings?.mic?.length ? overrideReadings.mic : this.getBalancedReadings(sampleMic, Math.max(0.01, tols.mic), 2, seedMod, count);
+            const lenReadings = overrideReadings?.len?.length ? overrideReadings.len : this.getBalancedReadings(sampleLen, Math.max(0.01, tols.len), 2, seedMod, count);
+            const unfReadings = overrideReadings?.unf?.length ? overrideReadings.unf : this.getBalancedReadings(sampleUnf, Math.max(0.1, tols.unf), 1, seedMod, count);
+            const strReadings = overrideReadings?.str?.length ? overrideReadings.str : this.getBalancedReadings(sampleStr, Math.max(0.1, tols.str), 1, seedMod, count);
+            const rdReadings  = overrideReadings?.rd?.length  ? overrideReadings.rd  : this.getBalancedReadings(sampleRd, Math.max(0.1, tols.rd), 1, seedMod, count);
+            const bReadings   = overrideReadings?.b?.length   ? overrideReadings.b   : this.getBalancedReadings(sampleB, Math.max(0.1, tols.b), 1, seedMod, count);
 
             // ── Extração direta do template (rawRows) com LEVE DESVIO determinístico ──
             const hasRawRows = averages.rawRows && averages.rawRows.length >= count;
@@ -943,48 +944,41 @@ export class HVIFileGeneratorService {
             };
 
             const elg          = averages.elg ?? 6.4;
-            const sampleElg    = this.getVariedSampleTarget(elg, 0.2, 1, seedMod);
-            const fallbackElg  = this.getBalancedReadings(sampleElg, Math.max(0.1, 0.2 - Math.abs(sampleElg - elg)), 1, seedMod, count);
-            const elgReadings  = overrideReadings?.elg || getRawReading('elg', fallbackElg, 0.1, 1);
+            const fallbackElg  = this.getBalancedReadings(elg, 0.2, 1, seedMod, count);
+            const elgReadings  = overrideReadings?.elg?.length ? overrideReadings.elg : getRawReading('elg', fallbackElg, 0.1, 1);
 
             const sfi          = averages.sfi ?? 10.0;
-            const sampleSfi    = this.getVariedSampleTarget(sfi, 1.0, 1, seedMod);
-            const fallbackSfi  = this.getBalancedReadings(sampleSfi, Math.max(0.1, 1.0 - Math.abs(sampleSfi - sfi)), 1, seedMod, count);
-            const sfiReadings  = overrideReadings?.sfi || getRawReading('sfi', fallbackSfi, 0.2, 1);
+            const fallbackSfi  = this.getBalancedReadings(sfi, 1.0, 1, seedMod, count);
+            const sfiReadings  = overrideReadings?.sfi?.length ? overrideReadings.sfi : getRawReading('sfi', fallbackSfi, 0.2, 1);
 
             const sciRaw       = (averages.sci && averages.sci > 10) ? averages.sci : 120;
             const sci          = Math.max(80, Math.min(160, sciRaw));
-            const sampleSci    = this.getVariedSampleTarget(sci, 3, 0, seedMod);
-            const fallbackSci  = this.getBalancedReadings(sampleSci, Math.max(1, 3 - Math.abs(sampleSci - sci)), 0, seedMod, count);
-            const sciReadings  = overrideReadings?.sci || getRawReading('sci', fallbackSci, 1.0, 0);
+            const fallbackSci  = this.getBalancedReadings(sci, 3, 0, seedMod, count);
+            const sciReadings  = overrideReadings?.sci?.length ? overrideReadings.sci : getRawReading('sci', fallbackSci, 1.0, 0);
 
             const mat          = Math.max(0.75, Math.min(1.0, averages.mat ?? 0.85));
-            const sampleMat    = this.getVariedSampleTarget(mat, 0.01, 2, seedMod);
-            // Variação maior nas leituras (0.05) para não ficar "cravado", mas a média final continua = sampleMat
-            const fallbackMat  = this.getBalancedReadings(sampleMat, 0.01, 2, seedMod, count);
-            const matReadings  = overrideReadings?.mat || fallbackMat;
+            // Variação 0.04 = oscila entre ~0.81 e ~0.93 para alvo típico de 0.87
+            const fallbackMat  = this.getBalancedReadings(mat, 0.04, 2, seedMod, count);
+            const matReadings  = overrideReadings?.mat?.length ? overrideReadings.mat : fallbackMat;
 
             const cspRaw       = (averages.csp && averages.csp > 10) ? averages.csp : 115;
             const csp          = Math.max(100, Math.min(9999, cspRaw));
-            const sampleCsp    = this.getVariedSampleTarget(csp, 3, 0, seedMod);
-            const fallbackCsp  = this.getBalancedReadings(sampleCsp, Math.max(1, 3 - Math.abs(sampleCsp - csp)), 0, seedMod, count);
-            const cspReadings  = overrideReadings?.csp || getRawReading('csp', fallbackCsp, 1.0, 0);
+            const fallbackCsp  = this.getBalancedReadings(csp, 3, 0, seedMod, count);
+            const cspReadings  = overrideReadings?.csp?.length ? overrideReadings.csp : getRawReading('csp', fallbackCsp, 1.0, 0);
 
             const leaf         = Math.max(1, Math.min(7, averages.leaf ?? 3));
-            const sampleLeaf   = this.getVariedSampleTarget(leaf, 1, 0, seedMod);
-            const fallbackLeaf = this.getBalancedReadings(sampleLeaf, Math.max(0, 1 - Math.abs(sampleLeaf - leaf)), 0, seedMod, count);
-            const leafReadings = overrideReadings?.leaf || getRawReading('leaf', fallbackLeaf, 0, 0);
+            const fallbackLeaf = this.getBalancedReadings(leaf, 1, 0, seedMod, count);
+            const leafReadings = overrideReadings?.leaf?.length ? overrideReadings.leaf : fallbackLeaf;
 
             const area         = Math.max(0.01, averages.area ?? 0.25);
-            const sampleArea   = this.getVariedSampleTarget(area, 0.02, 2, seedMod);
-            // Variação maior nas leituras (0.10) para não ficar "cravado", mas a média final continua = sampleArea
-            const fallbackArea = this.getBalancedReadings(sampleArea, 0.01, 2, seedMod, count);
-            const areaReadings = overrideReadings?.area || fallbackArea;
+            // Variação proporcional: 30% do valor (ex: area=0.33 → maxVar=0.099)
+            const areaMaxVar   = Math.max(0.03, area * 0.30);
+            const fallbackArea = this.getBalancedReadings(area, areaMaxVar, 2, seedMod, count);
+            const areaReadings = overrideReadings?.area?.length ? overrideReadings.area : fallbackArea;
 
             const countVal     = Math.max(1, averages.count ?? 30);
-            const sampleCount  = this.getVariedSampleTarget(countVal, 2, 0, seedMod);
-            const fallbackCount= this.getBalancedReadings(sampleCount, Math.max(1, 2 - Math.abs(sampleCount - countVal)), 0, seedMod, count);
-            const countReadings= overrideReadings?.count || getRawReading('count', fallbackCount, 0, 0);
+            const fallbackCount= this.getBalancedReadings(countVal, 5, 0, seedMod, count);
+            const countReadings= overrideReadings?.count?.length ? overrideReadings.count : fallbackCount;
 
             const balancedReadingsRecord = {
                 mic: micReadings, len: lenReadings, unf: unfReadings, str: strReadings, 

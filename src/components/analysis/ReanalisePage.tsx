@@ -77,8 +77,8 @@ function sanitize(val: number, type: string): number {
             if (val >= 4 && val <= 20) return val;
             break;
         case 'area':
-            if (val >= 1 && val <= 200) return val / 100;
-            if (val > 0 && val < 5) return val;
+            if (val >= 20 && val <= 180) return val / 100;
+            if (val >= 0.20 && val <= 1.80) return val;
             break;
         case 'mat':
             if (val >= 70 && val <= 100) return val / 100;
@@ -110,7 +110,7 @@ function validateBounds(type: string, val: number): string | null {
         case 'b': return (val < 2.0 || val > 20.0) ? '+B (Amarelamento) deve estar entre 2.0 e 20.0' : null;
         case 'sfi': return (val < 2.0 || val > 20.0) ? 'SFI (Fibras curtas) deve estar entre 2.0 e 20.0' : null;
         case 'leaf': return (val < 1 || val > 9) ? 'LEAF (Folha) deve estar entre 1 e 9' : null;
-        case 'area': return (val < 0 || val > 5) ? 'AREA deve estar entre 0 e 5' : null;
+        case 'area': return (val < 0.20 || val > 1.80) ? 'AREA deve estar entre 0.20 e 1.80' : null;
         case 'count': return (val < 0 || val > 200) ? 'COUNT deve estar entre 0 e 200' : null;
         case 'mat': return (val < 0.1 || val > 1.5) ? 'MAT deve estar entre 0.1 e 1.5' : null;
         default: return null;
@@ -184,7 +184,7 @@ export default function ReanalisePage() {
         setIsAutoPreviewing(true);
         try {
             const effective = getEffectiveAvg();
-            const timestamp = new Date().toISOString().replace(/[-:T.Z]/g, '').slice(0, 12);
+            const timestamp = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
             const label = etiquetas[0] || 'REANALISE';
 
             const fakeSample: any = {
@@ -254,7 +254,7 @@ export default function ReanalisePage() {
         if (!machine) return;
 
         const effective = getEffectiveAvg();
-        const timestamp = new Date().toISOString().replace(/[-:T.Z]/g, '').slice(0, 12);
+        const timestamp = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
         const label = etiquetas[0] || 'REANALISE';
 
         const fakeSample: any = {
@@ -368,8 +368,19 @@ export default function ReanalisePage() {
         for (let i = 0; i < count; i++) {
             for (const f of DISPLAY_FIELDS) {
                 if (f.key === 'cg') continue; // CG is not randomizable nicely in range yet, keep empty so it falls back
-                const minVal = parseFloat(minEdits[f.key]?.replace(',', '.') || '0');
-                const maxVal = parseFloat(maxEdits[f.key]?.replace(',', '.') || '0');
+                
+                const minRaw = minEdits[f.key]?.trim();
+                const maxRaw = maxEdits[f.key]?.trim();
+                const avgRaw = avgEdits[f.key]?.trim();
+
+                // Se o usuário não preencheu NENHUM campo (min, max ou média) para esta propriedade,
+                // não geramos override para ela, assim ela usará a variação aleatória balanceada normal.
+                if (!minRaw && !maxRaw && !avgRaw) {
+                    continue;
+                }
+
+                const minVal = parseFloat(minRaw?.replace(',', '.') || '0');
+                const maxVal = parseFloat(maxRaw?.replace(',', '.') || '0');
                 
                 let rnd = minVal;
                 if (!isNaN(minVal) && !isNaN(maxVal) && maxVal > minVal) {
@@ -379,13 +390,14 @@ export default function ReanalisePage() {
                 } else if (!isNaN(maxVal) && maxVal !== 0) {
                     rnd = maxVal;
                 } else {
-                    // Fallback se não preencheu, pega da média se existir
-                    const avgVal = parseFloat(avgEdits[f.key]?.replace(',', '.') || '0');
+                    // Fallback se não preencheu min/max, pega da média
+                    const avgVal = parseFloat(avgRaw?.replace(',', '.') || '0');
                     rnd = !isNaN(avgVal) && avgVal !== 0 ? avgVal : DEFAULT_AVG[f.key as keyof AvgValues] as number;
                 }
 
                 if (overrides[f.key]) {
-                    overrides[f.key].push(rnd);
+                    const fixedRnd = parseFloat(rnd.toFixed(f.decimals));
+                    overrides[f.key].push(fixedRnd);
                 }
             }
         }
@@ -400,7 +412,7 @@ export default function ReanalisePage() {
         setExportStatus(null);
         try {
             const effective = getEffectiveAvg();
-            const timestamp = new Date().toISOString().replace(/[-:T.Z]/g, '').slice(0, 12);
+            const timestamp = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
             const label = etiquetas;
 
             const fakeSample: any = {
