@@ -1099,7 +1099,8 @@ export class HVIFileGeneratorService {
                     }
                     
                     if (sample.lote_id === 'reanalise') {
-                        repFilename = `U${machineNum}_${repFilename}`;
+                        const mNum = isNaN(machineNum) ? 1 : machineNum;
+                        repFilename = `U${mNum}_${repFilename}`;
                     }
 
                     files.push({ content: repContent, filename: repFilename });
@@ -1192,7 +1193,8 @@ export class HVIFileGeneratorService {
                     let repFilename = `HVI_PREMIER_${sampleLabelForName}_REP${repIndex}_${timestamp}.txt`;
                     
                     if (sample.lote_id === 'reanalise') {
-                        repFilename = `M${machineNum}_${repFilename}`;
+                        const mNum = isNaN(machineNum) ? 1 : machineNum;
+                        repFilename = `M${mNum}_${repFilename}`;
                     }
 
                     files.push({ content: repContent, filename: repFilename });
