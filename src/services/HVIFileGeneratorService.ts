@@ -186,11 +186,18 @@ export class HVIFileGeneratorService {
 
         // Load manual overrides if they exist
         let overrides: Record<string, string> = {};
-        const STORAGE_PREFIX = sample.lote_id ? `lote_${sample.lote_id}_` : '';
-        try {
-            const raw = localStorage.getItem(`${STORAGE_PREFIX}manual_overrides`);
-            if (raw) overrides = JSON.parse(raw);
-        } catch {}
+        
+        // Priorizar as overrides que vêm do banco via parâmetro
+        if (configuracoesAnalise?.manual_overrides) {
+            overrides = configuracoesAnalise.manual_overrides;
+        } else {
+            // Fallback para localStorage
+            const STORAGE_PREFIX = sample.lote_id ? `lote_${sample.lote_id}_` : '';
+            try {
+                const raw = localStorage.getItem(`${STORAGE_PREFIX}manual_overrides`);
+                if (raw) overrides = JSON.parse(raw);
+            } catch {}
+        }
 
         const parseOverride = (key: string, fallback: number) => {
             const val = overrides[`${color}-${key}`];
