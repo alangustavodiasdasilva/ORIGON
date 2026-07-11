@@ -1040,8 +1040,14 @@ export class HVIFileGeneratorService {
                     offsets.push(currentOffset);
                 }
 
+                let startRep = 1;
+                const storedRep = localStorage.getItem('hvi_global_rep_uster');
+                startRep = storedRep && !isNaN(parseInt(storedRep, 10)) ? parseInt(storedRep, 10) + 1 : 1;
+                localStorage.setItem('hvi_global_rep_uster', (startRep + count - 1).toString());
+
                 for (let i = 0; i < count; i++) {
-                    const repIndex = i + 1;
+                    const localRep = i + 1;
+                    const repIndex = startRep + i;
                     const offsetMin = offsets[i];
                     let baseHours = hours;
                     let baseMinutes = minutes;
@@ -1091,7 +1097,7 @@ export class HVIFileGeneratorService {
 
                     let repFilename = "";
                     if (!isNaN(baseNum)) {
-                        const fileNum = baseNum * count - count + repIndex;
+                        const fileNum = baseNum * count - count + localRep;
                         repFilename = `RAX${String(fileNum).padStart(6, '0')}.H1`;
                     } else {
                         const sampleLabelForName = rawEtiqueta?.replace(/[^a-zA-Z0-9]/g, '_') || sample.amostra_id;
@@ -1135,8 +1141,13 @@ export class HVIFileGeneratorService {
                     offsets.push(currentOffset);
                 }
 
+                let startRepPremier = 1;
+                const storedRepPremier = localStorage.getItem('hvi_global_rep_premier');
+                startRepPremier = storedRepPremier && !isNaN(parseInt(storedRepPremier, 10)) ? parseInt(storedRepPremier, 10) + 1 : 1;
+                localStorage.setItem('hvi_global_rep_premier', (startRepPremier + count - 1).toString());
+
                 for (let i = 0; i < count; i++) {
-                    const repIndex = i + 1;
+                    const repIndex = startRepPremier + i;
                     const dateStr = customDate || now.toLocaleDateString('pt-BR').replace(/\//g, '-');
                     
                     const offsetMin = offsets[i];
