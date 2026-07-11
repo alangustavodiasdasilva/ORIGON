@@ -570,7 +570,10 @@ export default function Analysis() {
                             highlightedSampleId={null}
                             loteId={loteId || undefined}
                             tolerancias={tolerancias}
-                            configuracoesAnalise={lote?.configuracoes_analise}
+                            configuracoesAnalise={{ 
+                                ...(lote?.configuracoes_analise || {}), 
+                                manual_overrides: manualOverrides 
+                            }}
                         />
                     </div>
                 </div>
