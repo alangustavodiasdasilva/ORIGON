@@ -1099,7 +1099,7 @@ export class HVIFileGeneratorService {
                     }
                     
                     if (sample.lote_id === 'reanalise') {
-                        repFilename = `M${machineNum}_${repFilename}`;
+                        repFilename = `U${machineNum}_${repFilename}`;
                     }
 
                     files.push({ content: repContent, filename: repFilename });
