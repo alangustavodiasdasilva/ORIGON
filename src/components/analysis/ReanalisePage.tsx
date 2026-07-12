@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import { Cpu, Download, CheckCircle2, AlertCircle, Loader2, Eye, Plus, X } from "lucide-react";
+import { createPortal } from "react-dom";
+import { Cpu, Download, CheckCircle2, AlertCircle, Loader2, Eye, Plus, X, PictureInPicture2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MachineService, type Machine } from "@/entities/Machine";
 import { useAuth } from "@/contexts/AuthContext";
@@ -143,6 +144,7 @@ export default function ReanalisePage() {
     const [gridData, setGridData] = useState<Record<string, any[]> | null>(null);
     const [isAutoPreviewing, setIsAutoPreviewing] = useState(false);
     const [generationTrigger, setGenerationTrigger] = useState(0);
+    const [pipWindow, setPipWindow] = useState<Window | null>(null);
 
     const [etiquetas, setEtiquetas] = useState<string[]>(Array(6).fill(''));
     const [osInput, setOsInput] = useState('');
@@ -469,6 +471,178 @@ export default function ReanalisePage() {
 
 
 
+    const togglePiP = async () => {
+        if (pipWindow) {
+            pipWindow.close();
+            return;
+        }
+
+        if (!('documentPictureInPicture' in window)) {
+            alert('Picture-in-Picture não é suportado neste navegador. Use o Edge ou Chrome atualizado.');
+            return;
+        }
+
+        try {
+            const pip = await (window as any).documentPictureInPicture.requestWindow({
+                width: 1000,
+                height: 350,
+            });
+
+            // Copia todos os estilos da página principal
+            [...document.styleSheets].forEach((styleSheet) => {
+                try {
+                    const cssRules = [...styleSheet.cssRules].map((rule) => rule.cssText).join('');
+                    const style = document.createElement('style');
+                    style.textContent = cssRules;
+                    pip.document.head.appendChild(style);
+                } catch (e) {
+                    const link = document.createElement('link');
+                    if (styleSheet.href) {
+                        link.rel = 'stylesheet';
+                        link.href = styleSheet.href;
+                        pip.document.head.appendChild(link);
+                    }
+                }
+            });
+
+            // Fundo igual ao da página original
+            pip.document.body.className = "bg-neutral-50 p-6";
+
+            pip.addEventListener('pagehide', () => {
+                setPipWindow(null);
+            });
+
+            setPipWindow(pip);
+        } catch (error) {
+            console.error('Erro ao abrir PiP:', error);
+        }
+    };
+
+    const pipContent = (
+        <div className="space-y-3">
+            <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-neutral-500">
+                        1. Valores para Exportação
+                    </span>
+                    <div className="flex items-center gap-2">
+                        <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={() => setGenerationTrigger(prev => prev + 1)}
+                            className="h-6 text-[10px] uppercase font-bold tracking-wider text-blue-600 border-blue-200 hover:bg-blue-50"
+                        >
+                            <Cpu className="w-3 h-3 mr-1" />
+                            Gerar Nova Variação
+                        </Button>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={togglePiP}
+                            title={pipWindow ? "Retornar para a página original" : "Destacar em janela flutuante (PiP)"}
+                            className={`h-6 px-2 border-blue-200 transition-colors ${pipWindow ? 'bg-blue-600 text-white hover:bg-blue-700 border-transparent' : 'text-blue-600 hover:bg-blue-50'}`}
+                        >
+                            <PictureInPicture2 className="w-3.5 h-3.5" />
+                        </Button>
+                    </div>
+                </div>
+                <div className="flex items-center gap-2">
+                    <span className={`text-[10px] font-bold ${!isRangeMode ? 'text-black' : 'text-neutral-400'}`}>Média Exata</span>
+                    <button 
+                        onClick={() => setIsRangeMode(!isRangeMode)}
+                        title="Alternar Modo de Intervalo"
+                        aria-label="Alternar Modo de Intervalo"
+                        className={`w-10 h-5 rounded-full p-1 flex items-center transition-colors ${isRangeMode ? 'bg-blue-600' : 'bg-neutral-300'}`}
+                    >
+                        <div className={`w-3 h-3 rounded-full bg-white shadow-sm transition-transform ${isRangeMode ? 'translate-x-5' : 'translate-x-0'}`} />
+                    </button>
+                    <span className={`text-[10px] font-bold ${isRangeMode ? 'text-blue-600' : 'text-neutral-400'}`}>Intervalo (Mín/Máx)</span>
+                </div>
+            </div>
+            {/* Tabela de Inputs (Estilo Planilha) */}
+            <div className="border border-neutral-200 shadow-sm bg-white overflow-x-auto custom-scrollbar">
+                <table className="w-full border-collapse min-w-[900px]">
+                    <thead>
+                        <tr className="bg-neutral-100">
+                            <th className="border-r border-b border-neutral-200 py-2 px-2 text-left w-20">
+                                <span className="text-[10px] font-black uppercase text-neutral-500 tracking-widest pl-2">Tipo</span>
+                            </th>
+                            {DISPLAY_FIELDS.map(f => (
+                                <th key={f.key} className="border-r border-b border-neutral-200 last:border-r-0 py-2 px-2 text-center select-none">
+                                    <span className="text-[10px] font-black uppercase text-neutral-500 tracking-widest">{f.label}</span>
+                                </th>
+                            ))}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {!isRangeMode ? (
+                            <tr>
+                                <td className="border-r border-neutral-200 bg-neutral-50 text-[10px] font-bold uppercase text-neutral-500 pl-4 py-3">Média</td>
+                                {DISPLAY_FIELDS.map((f, index) => (
+                                    <td key={f.key} className="border-r border-neutral-200 last:border-r-0 p-0 relative">
+                                        <input
+                                            id={'avg-field-' + f.key}
+                                            type="text"
+                                            title={'Média — ' + f.label}
+                                            value={avgEdits[f.key] !== undefined ? avgEdits[f.key] : ''}
+                                            placeholder="0"
+                                            onChange={e => handleAvgEdit(f.key, e.target.value)}
+                                            onFocus={e => e.target.select()}
+                                            onBlur={e => handleBlur(f.key, e.target.value, f.decimals, 'avg')}
+                                            onKeyDown={e => handleKeyDown(e, index, 'avg')}
+                                            className="w-full h-12 text-center text-[14px] font-mono font-bold text-black border-none focus:bg-blue-50 focus:ring-inset focus:ring-2 focus:ring-blue-500 focus:relative focus:z-10 outline-none transition-colors"
+                                        />
+                                    </td>
+                                ))}
+                            </tr>
+                        ) : (
+                            <>
+                                <tr className="border-b border-neutral-200">
+                                    <td className="border-r border-neutral-200 bg-blue-50/50 text-[10px] font-bold uppercase text-blue-600 pl-4 py-3">Mínimo</td>
+                                    {DISPLAY_FIELDS.map((f, index) => (
+                                        <td key={f.key} className="border-r border-neutral-200 last:border-r-0 p-0 relative">
+                                            <input
+                                                id={'min-field-' + f.key}
+                                                type="text"
+                                                title={'Mínimo - ' + f.label}
+                                                value={minEdits[f.key] !== undefined ? minEdits[f.key] : ''}
+                                                placeholder="0"
+                                                onChange={e => handleMinEdit(f.key, e.target.value)}
+                                                onFocus={e => e.target.select()}
+                                                onBlur={e => handleBlur(f.key, e.target.value, f.decimals, 'min')}
+                                                onKeyDown={e => handleKeyDown(e, index, 'min')}
+                                                className="w-full h-12 text-center text-[14px] font-mono font-bold text-blue-700 border-none bg-transparent focus:bg-blue-100 focus:ring-inset focus:ring-2 focus:ring-blue-500 focus:relative focus:z-10 outline-none transition-colors"
+                                            />
+                                        </td>
+                                    ))}
+                                </tr>
+                                <tr>
+                                    <td className="border-r border-neutral-200 bg-emerald-50/50 text-[10px] font-bold uppercase text-emerald-600 pl-4 py-3">Máximo</td>
+                                    {DISPLAY_FIELDS.map((f, index) => (
+                                        <td key={f.key} className="border-r border-neutral-200 last:border-r-0 p-0 relative">
+                                            <input
+                                                id={'max-field-' + f.key}
+                                                type="text"
+                                                title={'Máximo - ' + f.label}
+                                                value={maxEdits[f.key] !== undefined ? maxEdits[f.key] : ''}
+                                                placeholder="0"
+                                                onChange={e => handleMaxEdit(f.key, e.target.value)}
+                                                onFocus={e => e.target.select()}
+                                                onBlur={e => handleBlur(f.key, e.target.value, f.decimals, 'max')}
+                                                onKeyDown={e => handleKeyDown(e, index, 'max')}
+                                                className="w-full h-12 text-center text-[14px] font-mono font-bold text-emerald-700 border-none bg-transparent focus:bg-emerald-100 focus:ring-inset focus:ring-2 focus:ring-emerald-500 focus:relative focus:z-10 outline-none transition-colors"
+                                            />
+                                        </td>
+                                    ))}
+                                </tr>
+                            </>
+                        )}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    );
+
     return (
         <div className="space-y-10 pt-6 pb-24 animate-fade-in w-full max-w-[1200px] mx-auto px-6">
             {/* Título */}
@@ -482,117 +656,17 @@ export default function ReanalisePage() {
             </div>
             <div className="space-y-8">
                 {/* ── Linha Superior: Valores (Full Width) ── */}
-                <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                            <span className="text-[10px] font-black uppercase tracking-widest text-neutral-500">
-                                1. Valores para Exportação
-                            </span>
-                            <Button 
-                                variant="outline" 
-                                size="sm" 
-                                onClick={() => setGenerationTrigger(prev => prev + 1)}
-                                className="h-6 text-[10px] uppercase font-bold tracking-wider text-blue-600 border-blue-200 hover:bg-blue-50"
-                            >
-                                <Cpu className="w-3 h-3 mr-1" />
-                                Gerar Nova Variação
-                            </Button>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <span className={`text-[10px] font-bold ${!isRangeMode ? 'text-black' : 'text-neutral-400'}`}>Média Exata</span>
-                            <button 
-                                onClick={() => setIsRangeMode(!isRangeMode)}
-                                title="Alternar Modo de Intervalo"
-                                aria-label="Alternar Modo de Intervalo"
-                                className={`w-10 h-5 rounded-full p-1 flex items-center transition-colors ${isRangeMode ? 'bg-blue-600' : 'bg-neutral-300'}`}
-                            >
-                                <div className={`w-3 h-3 rounded-full bg-white shadow-sm transition-transform ${isRangeMode ? 'translate-x-5' : 'translate-x-0'}`} />
-                            </button>
-                            <span className={`text-[10px] font-bold ${isRangeMode ? 'text-blue-600' : 'text-neutral-400'}`}>Intervalo (Mín/Máx)</span>
-                        </div>
+                {pipWindow ? createPortal(pipContent, pipWindow.document.body) : pipContent}
+
+                {pipWindow && (
+                    <div className="h-[200px] w-full border border-dashed border-blue-300 bg-blue-50/50 flex flex-col items-center justify-center text-blue-500 rounded-lg">
+                        <PictureInPicture2 className="w-8 h-8 mb-2 opacity-50" />
+                        <span className="text-[11px] font-bold uppercase tracking-widest">A tabela está aberta em uma janela flutuante</span>
+                        <Button variant="outline" size="sm" onClick={togglePiP} className="mt-4 h-7 text-[10px] uppercase font-bold text-blue-700 bg-white hover:bg-blue-50">
+                            Retornar Tabela
+                        </Button>
                     </div>
-                    {/* Tabela de Inputs (Estilo Planilha) */}
-                    <div className="border border-neutral-200 shadow-sm bg-white overflow-x-auto custom-scrollbar">
-                        <table className="w-full border-collapse min-w-[900px]">
-                            <thead>
-                                <tr className="bg-neutral-100">
-                                    <th className="border-r border-b border-neutral-200 py-2 px-2 text-left w-20">
-                                        <span className="text-[10px] font-black uppercase text-neutral-500 tracking-widest pl-2">Tipo</span>
-                                    </th>
-                                    {DISPLAY_FIELDS.map(f => (
-                                        <th key={f.key} className="border-r border-b border-neutral-200 last:border-r-0 py-2 px-2 text-center select-none">
-                                            <span className="text-[10px] font-black uppercase text-neutral-500 tracking-widest">{f.label}</span>
-                                        </th>
-                                    ))}
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {!isRangeMode ? (
-                                    <tr>
-                                        <td className="border-r border-neutral-200 bg-neutral-50 text-[10px] font-bold uppercase text-neutral-500 pl-4 py-3">Média</td>
-                                        {DISPLAY_FIELDS.map((f, index) => (
-                                            <td key={f.key} className="border-r border-neutral-200 last:border-r-0 p-0 relative">
-                                                <input
-                                                    id={'avg-field-' + f.key}
-                                                    type="text"
-                                                    title={'Média — ' + f.label}
-                                                    value={avgEdits[f.key] !== undefined ? avgEdits[f.key] : ''}
-                                                    placeholder="0"
-                                                    onChange={e => handleAvgEdit(f.key, e.target.value)}
-                                                    onFocus={e => e.target.select()}
-                                                    onBlur={e => handleBlur(f.key, e.target.value, f.decimals, 'avg')}
-                                                    onKeyDown={e => handleKeyDown(e, index, 'avg')}
-                                                    className="w-full h-12 text-center text-[14px] font-mono font-bold text-black border-none focus:bg-blue-50 focus:ring-inset focus:ring-2 focus:ring-blue-500 focus:relative focus:z-10 outline-none transition-colors"
-                                                />
-                                            </td>
-                                        ))}
-                                    </tr>
-                                ) : (
-                                    <>
-                                        <tr className="border-b border-neutral-200">
-                                            <td className="border-r border-neutral-200 bg-blue-50/50 text-[10px] font-bold uppercase text-blue-600 pl-4 py-3">Mínimo</td>
-                                            {DISPLAY_FIELDS.map((f, index) => (
-                                                <td key={f.key} className="border-r border-neutral-200 last:border-r-0 p-0 relative">
-                                                    <input
-                                                        id={'min-field-' + f.key}
-                                                        type="text"
-                                                        title={'Mínimo - ' + f.label}
-                                                        value={minEdits[f.key] !== undefined ? minEdits[f.key] : ''}
-                                                        placeholder="0"
-                                                        onChange={e => handleMinEdit(f.key, e.target.value)}
-                                                        onFocus={e => e.target.select()}
-                                                        onBlur={e => handleBlur(f.key, e.target.value, f.decimals, 'min')}
-                                                        onKeyDown={e => handleKeyDown(e, index, 'min')}
-                                                        className="w-full h-12 text-center text-[14px] font-mono font-bold text-blue-700 border-none bg-transparent focus:bg-blue-100 focus:ring-inset focus:ring-2 focus:ring-blue-500 focus:relative focus:z-10 outline-none transition-colors"
-                                                    />
-                                                </td>
-                                            ))}
-                                        </tr>
-                                        <tr>
-                                            <td className="border-r border-neutral-200 bg-emerald-50/50 text-[10px] font-bold uppercase text-emerald-600 pl-4 py-3">Máximo</td>
-                                            {DISPLAY_FIELDS.map((f, index) => (
-                                                <td key={f.key} className="border-r border-neutral-200 last:border-r-0 p-0 relative">
-                                                    <input
-                                                        id={'max-field-' + f.key}
-                                                        type="text"
-                                                        title={'Máximo - ' + f.label}
-                                                        value={maxEdits[f.key] !== undefined ? maxEdits[f.key] : ''}
-                                                        placeholder="0"
-                                                        onChange={e => handleMaxEdit(f.key, e.target.value)}
-                                                        onFocus={e => e.target.select()}
-                                                        onBlur={e => handleBlur(f.key, e.target.value, f.decimals, 'max')}
-                                                        onKeyDown={e => handleKeyDown(e, index, 'max')}
-                                                        className="w-full h-12 text-center text-[14px] font-mono font-bold text-emerald-700 border-none bg-transparent focus:bg-emerald-100 focus:ring-inset focus:ring-2 focus:ring-emerald-500 focus:relative focus:z-10 outline-none transition-colors"
-                                                    />
-                                                </td>
-                                            ))}
-                                        </tr>
-                                    </>
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
+                )}
 
                 <div className="flex flex-col lg:flex-row gap-8 items-start">
                     {/* ── Coluna Esquerda: Formulários ── */}
