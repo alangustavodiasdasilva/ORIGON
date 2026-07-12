@@ -834,7 +834,7 @@ export class HVIFileGeneratorService {
 
         const rdStr = safeRd.toFixed(1).padStart(4, ' ');
         const bStr = safePlusB.toFixed(1).padStart(4, ' ');
-        const areaNStr = Math.round(safeArea * 100).toString().padStart(3, ' ');
+        const areaNStr = Math.round(safeCount).toString().padStart(3, ' ');
         const areaStr = safeArea.toFixed(2);
         const leafStr = safeLeaf.toString();
 
@@ -1106,9 +1106,9 @@ export class HVIFileGeneratorService {
                         effectiveSample,
                         date,
                         repTime,
-                        seqStart,
-                        repIndex,
-                        lineName,          // <<< número real da máquina
+                        localRep,
+                        localRep,
+                        lineName,
                         micReadings[i],
                         lenReadings[i],
                         unfReadings[i],
@@ -1138,7 +1138,9 @@ export class HVIFileGeneratorService {
                     
                     if (sample.lote_id === 'reanalise') {
                         const mNum = isNaN(machineNum) ? 1 : machineNum;
-                        repFilename = `U${mNum}_${repFilename}`;
+                        const safeMala = (sample.mala || 'REANALISE').replace(/[^a-zA-Z0-9]/g, '_');
+                        // Apenas o nome do arquivo leva o prefixo U e a máquina.
+                        repFilename = `U${mNum}_${safeMala}_REP${localRep}.H1`;
                     }
 
                     files.push({ content: repContent, filename: repFilename });

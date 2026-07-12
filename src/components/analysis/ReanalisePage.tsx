@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Cpu, Download, CheckCircle2, AlertCircle, Loader2, Eye } from "lucide-react";
+import { Cpu, Download, CheckCircle2, AlertCircle, Loader2, Eye, Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MachineService, type Machine } from "@/entities/Machine";
 import { useAuth } from "@/contexts/AuthContext";
@@ -142,6 +142,7 @@ export default function ReanalisePage() {
     const [previewFiles, setPreviewFiles] = useState<{ name: string, content: string }[] | null>(null);
     const [gridData, setGridData] = useState<Record<string, any[]> | null>(null);
     const [isAutoPreviewing, setIsAutoPreviewing] = useState(false);
+    const [generationTrigger, setGenerationTrigger] = useState(0);
 
     const [etiquetas, setEtiquetas] = useState<string[]>(Array(6).fill(''));
     const [osInput, setOsInput] = useState('');
@@ -158,16 +159,10 @@ export default function ReanalisePage() {
         }).finally(() => setLoadingMachines(false));
     }, [user, currentLab]);
 
+    // Sincroniza repCount a partir de etiquetas.length (etiquetas é a fonte da verdade)
     useEffect(() => {
-        const count = typeof repCount === 'number' && repCount > 0 ? repCount : 1;
-        setEtiquetas(prev => {
-            if (prev.length === count) return prev;
-            const next = [...prev];
-            while (next.length < count) next.push('');
-            while (next.length > count) next.pop();
-            return next;
-        });
-    }, [repCount]);
+        setRepCount(etiquetas.length);
+    }, [etiquetas]);
 
     useEffect(() => {
         const timer = setTimeout(() => {
@@ -176,7 +171,7 @@ export default function ReanalisePage() {
             }
         }, 500); // 500ms debounce
         return () => clearTimeout(timer);
-    }, [avgEdits, minEdits, maxEdits, isRangeMode, selectedMachineId, repCount, etiquetas, customDate, customTime, osInput]);
+    }, [avgEdits, minEdits, maxEdits, isRangeMode, selectedMachineId, repCount, etiquetas, customDate, customTime, osInput, generationTrigger]);
 
     const generateAutoPreview = async () => {
         const machine = machines.find(m => m.id === selectedMachineId);
@@ -189,7 +184,7 @@ export default function ReanalisePage() {
 
             const fakeSample: any = {
                 id: `reanalise_${timestamp}`,
-                amostra_id: '1',
+                amostra_id: `1_${generationTrigger}`,
                 lote_id: 'reanalise',
                 mala: osInput || 'REANALISE',
                 etiqueta: label,
@@ -259,7 +254,7 @@ export default function ReanalisePage() {
 
         const fakeSample: any = {
             id: `reanalise_${timestamp}`,
-            amostra_id: '1',
+            amostra_id: `1_${generationTrigger}`,
             lote_id: 'reanalise',
             mala: osInput || 'REANALISE',
             etiqueta: label,
@@ -417,7 +412,7 @@ export default function ReanalisePage() {
 
             const fakeSample: any = {
                 id: `reanalise_${timestamp}`,
-                amostra_id: '1',
+                amostra_id: `1_${generationTrigger}`,
                 lote_id: 'reanalise',
                 mala: osInput || 'REANALISE',
                 etiqueta: label,
@@ -489,9 +484,20 @@ export default function ReanalisePage() {
                 {/* ── Linha Superior: Valores (Full Width) ── */}
                 <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-black uppercase tracking-widest text-neutral-500">
-                            1. Valores para Exportação
-                        </span>
+                        <div className="flex items-center gap-3">
+                            <span className="text-[10px] font-black uppercase tracking-widest text-neutral-500">
+                                1. Valores para Exportação
+                            </span>
+                            <Button 
+                                variant="outline" 
+                                size="sm" 
+                                onClick={() => setGenerationTrigger(prev => prev + 1)}
+                                className="h-6 text-[10px] uppercase font-bold tracking-wider text-blue-600 border-blue-200 hover:bg-blue-50"
+                            >
+                                <Cpu className="w-3 h-3 mr-1" />
+                                Gerar Nova Variação
+                            </Button>
+                        </div>
                         <div className="flex items-center gap-2">
                             <span className={`text-[10px] font-bold ${!isRangeMode ? 'text-black' : 'text-neutral-400'}`}>Média Exata</span>
                             <button 
@@ -638,24 +644,17 @@ export default function ReanalisePage() {
                                     )}
 
                                     <div className="space-y-4">
-                                        {/* Quantidade de arquivos */}
+                                        {/* Quantidade de arquivos (somente leitura, controlado pelas etiquetas) */}
                                         <div>
                                             <label htmlFor="reanalise-rep-count" className="text-[9px] font-black uppercase text-neutral-400 tracking-widest block mb-2">
-                                                Qtd. de Arquivos (1 a 100)
+                                                Qtd. de Arquivos
                                             </label>
-                                            <input
-                                                id="reanalise-rep-count"
-                                                type="number"
-                                                min={1}
-                                                max={100}
-                                                value={repCount}
-                                                onChange={e => setRepCount(e.target.value ? Number(e.target.value) : '')}
-                                                onFocus={e => e.target.select()}
-                                                onBlur={() => { if (!repCount || repCount < 1) setRepCount(1); }}
-                                                className="w-full h-10 border border-neutral-300 px-3 text-[14px] font-bold text-black bg-white focus:border-black outline-none rounded-none"
-                                            />
+                                            <div className="w-full h-10 border border-neutral-200 px-3 text-[14px] font-bold text-black bg-neutral-50 flex items-center rounded-none">
+                                                {etiquetas.length}
+                                            </div>
                                             <p className="text-[9px] text-neutral-400 mt-1 font-mono uppercase">
                                                 {selectedMachine?.model === 'USTER' ? `Extensão: .H1` : `Formato PREMIER`}
+                                                {' · '}Controlado pelas etiquetas abaixo
                                             </p>
                                         </div>
 
@@ -677,25 +676,49 @@ export default function ReanalisePage() {
 
                                         {/* Etiquetas */}
                                         <div className="col-span-1 sm:col-span-2">
-                                            <label className="text-[9px] font-black uppercase text-neutral-400 tracking-widest block mb-2">
-                                                Etiquetas Internas (1 por arquivo gerado)
-                                            </label>
-                                            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-4 xl:grid-cols-5 gap-2 max-h-[160px] overflow-y-auto p-2 border border-neutral-100 bg-neutral-50 custom-scrollbar">
+                                            <div className="flex items-center justify-between mb-2">
+                                                <label className="text-[9px] font-black uppercase text-neutral-400 tracking-widest">
+                                                    Etiquetas Internas ({etiquetas.length} arquivo{etiquetas.length !== 1 ? 's' : ''})
+                                                </label>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setEtiquetas(prev => [...prev, ''])}
+                                                    title="Adicionar etiqueta"
+                                                    className="flex items-center gap-1 h-6 px-2 text-[10px] font-black uppercase tracking-wider text-emerald-700 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 transition-colors"
+                                                >
+                                                    <Plus className="w-3 h-3" />
+                                                    Adicionar
+                                                </button>
+                                            </div>
+                                            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-4 xl:grid-cols-5 gap-2 max-h-[200px] overflow-y-auto p-2 border border-neutral-100 bg-neutral-50 custom-scrollbar">
                                                 {etiquetas.map((val, idx) => (
-                                                    <input
-                                                        key={idx}
-                                                        type="text"
-                                                        placeholder={`Arq ${idx + 1}`}
-                                                        title={`Etiqueta do arquivo ${idx + 1}`}
-                                                        value={val}
-                                                        onFocus={e => e.target.select()}
-                                                        onChange={e => {
-                                                            const next = [...etiquetas];
-                                                            next[idx] = e.target.value;
-                                                            setEtiquetas(next);
-                                                        }}
-                                                        className="w-full h-8 border border-neutral-300 px-2 text-[11px] font-bold text-black focus:border-black outline-none rounded-none text-center bg-white"
-                                                    />
+                                                    <div key={idx} className="relative group">
+                                                        <input
+                                                            type="text"
+                                                            placeholder={`Arq ${idx + 1}`}
+                                                            title={`Etiqueta do arquivo ${idx + 1}`}
+                                                            value={val}
+                                                            onFocus={e => e.target.select()}
+                                                            onChange={e => {
+                                                                const next = [...etiquetas];
+                                                                next[idx] = e.target.value;
+                                                                setEtiquetas(next);
+                                                            }}
+                                                            className="w-full h-8 border border-neutral-300 px-2 pr-6 text-[11px] font-bold text-black focus:border-black outline-none rounded-none text-center bg-white"
+                                                        />
+                                                        {etiquetas.length > 1 && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setEtiquetas(prev => prev.filter((_, i) => i !== idx));
+                                                                }}
+                                                                title={`Remover etiqueta ${idx + 1}`}
+                                                                className="absolute top-0 right-0 w-5 h-8 flex items-center justify-center text-neutral-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                            >
+                                                                <X className="w-3 h-3" />
+                                                            </button>
+                                                        )}
+                                                    </div>
                                                 ))}
                                             </div>
                                         </div>
