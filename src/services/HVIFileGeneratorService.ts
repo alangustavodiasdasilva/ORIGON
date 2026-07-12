@@ -420,6 +420,38 @@ export class HVIFileGeneratorService {
     //     return header.join('\n') + dataLine;
     // }
 
+    private static generatePremierDatFormatLine(
+        mala: string,
+        etiqueta: string,
+        uhml: number,
+        ui: number,
+        sfi: number,
+        str: number,
+        elg: number,
+        mic: number,
+        rd: number,
+        b: number,
+        cg: string,
+        sci: number,
+        leaf: number,
+        trashCount: number,
+        trashArea: number
+    ): string {
+        const padString = (str: string, len: number) => {
+            return str.padEnd(len, ' ');
+        };
+
+        const safeNum = (val: number | undefined, decimals: number) => {
+            if (val === undefined || isNaN(val)) return (0).toFixed(decimals);
+            return val.toFixed(decimals);
+        };
+
+        const malaPadded = padString(mala, 40);
+        const etiquetaPadded = padString(etiqueta, 40);
+
+        return `"${malaPadded}" "${etiquetaPadded}" "0.00" 28.00 ${safeNum(leaf, 2)} ${Math.round(trashCount || 0)} ${safeNum(trashArea, 2)} ${safeNum(uhml, 2)} ${safeNum(ui, 1)} ${safeNum(sfi, 1)} ${safeNum(str, 1)} ${safeNum(elg, 1)} ${safeNum(mic, 2)} ${safeNum(rd, 1)} ${safeNum(b, 1)} "${cg}" ${safeNum(sci, 1)} 0.00`;
+    }
+
     /**
      * Generate PREMIER format file with multiple readings using pre-calculated balanced values
      */
@@ -1146,74 +1178,108 @@ export class HVIFileGeneratorService {
                 startRepPremier = storedRepPremier && !isNaN(parseInt(storedRepPremier, 10)) ? parseInt(storedRepPremier, 10) + 1 : 1;
                 localStorage.setItem('hvi_global_rep_premier', (startRepPremier + count - 1).toString());
 
-                for (let i = 0; i < count; i++) {
-                    const repIndex = startRepPremier + i;
-                    const dateStr = customDate || now.toLocaleDateString('pt-BR').replace(/\//g, '-');
-                    
-                    const offsetMin = offsets[i];
-                    let baseHours = now.getHours();
-                    let baseMinutes = now.getMinutes();
-                    if (customTime) {
-                        const parts = customTime.split(':');
-                        if (parts.length >= 2) {
-                            baseHours = parseInt(parts[0], 10);
-                            baseMinutes = parseInt(parts[1], 10);
+                const isReanalise = sample.lote_id === 'reanalise';
+                
+                if (isReanalise) {
+                    const datLines: string[] = [];
+                    for (let i = 0; i < 10; i++) {
+                        datLines.push("");
+                    }
+                    for (let i = 0; i < count; i++) {
+                        let rawEtiqueta = (Array.isArray(customEtiqueta) ? customEtiqueta[i] : customEtiqueta) || sample.etiqueta;
+                        rawEtiqueta = rawEtiqueta?.replace(/\./g, '');
+                        const mala = sample.mala || 'REANALISE';
+                        const line = this.generatePremierDatFormatLine(
+                            mala,
+                            rawEtiqueta || '',
+                            lenReadings[i],
+                            unfReadings[i],
+                            sfiReadings[i],
+                            strReadings[i],
+                            elgReadings[i],
+                            micReadings[i],
+                            rdReadings[i],
+                            bReadings[i],
+                            averages.cg || "31-2",
+                            sciReadings[i],
+                            leafReadings[i],
+                            countReadings[i],
+                            areaReadings[i]
+                        );
+                        datLines.push(line);
+                    }
+                    const mNum = isNaN(machineNum) ? 1 : machineNum;
+                    const safeMala = (sample.mala || 'REANALISE').replace(/[^a-zA-Z0-9]/g, '_');
+                    const repFilename = `M${mNum}_${safeMala}.dat`;
+                    const fileContent = datLines.join('\n');
+                    files.push({ content: fileContent, filename: repFilename });
+                    content = fileContent;
+                    filename = repFilename;
+                } else {
+                    for (let i = 0; i < count; i++) {
+                        const repIndex = startRepPremier + i;
+                        const dateStr = customDate || now.toLocaleDateString('pt-BR').replace(/\//g, '-');
+                        
+                        const offsetMin = offsets[i];
+                        let baseHours = now.getHours();
+                        let baseMinutes = now.getMinutes();
+                        if (customTime) {
+                            const parts = customTime.split(':');
+                            if (parts.length >= 2) {
+                                baseHours = parseInt(parts[0], 10);
+                                baseMinutes = parseInt(parts[1], 10);
+                            }
                         }
-                    }
-                    const repMinutes = baseMinutes + offsetMin;
-                    const repHour = (baseHours + Math.floor(repMinutes / 60)) % 24;
-                    const repMin = repMinutes % 60;
-                    
-                    let repTime = "";
-                    if (customTime) {
-                         repTime = `${String(repHour).padStart(2, '0')}:${String(repMin).padStart(2, '0')}`;
-                    } else {
-                         const fakeDate = new Date();
-                         fakeDate.setHours(repHour, repMin, now.getSeconds());
-                         repTime = fakeDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true });
-                    }
+                        const repMinutes = baseMinutes + offsetMin;
+                        const repHour = (baseHours + Math.floor(repMinutes / 60)) % 24;
+                        const repMin = repMinutes % 60;
+                        
+                        let repTime = "";
+                        if (customTime) {
+                             repTime = `${String(repHour).padStart(2, '0')}:${String(repMin).padStart(2, '0')}`;
+                        } else {
+                             const fakeDate = new Date();
+                             fakeDate.setHours(repHour, repMin, now.getSeconds());
+                             repTime = fakeDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true });
+                        }
 
-                    // Only calculating repMl on the fly for PREMIER if needed, Uster uses real area and count
-                    const repCount = countReadings[i];
-                    const repArea = areaReadings[i];
-                    const repMl = parseFloat((lenReadings[i] * 0.75).toFixed(2));
+                        // Only calculating repMl on the fly for PREMIER if needed, Uster uses real area and count
+                        const repCount = countReadings[i];
+                        const repArea = areaReadings[i];
+                        const repMl = parseFloat((lenReadings[i] * 0.75).toFixed(2));
 
-                    const singleReadings = {
-                        mic:   [micReadings[i]],
-                        uhml:  [lenReadings[i]],
-                        ml:    [repMl],
-                        ui:    [unfReadings[i]],
-                        str:   [strReadings[i]],
-                        rd:    [rdReadings[i]],
-                        b:     [bReadings[i]],
-                        elg:   [elgReadings[i]],
-                        area:  [repArea],
-                        count: [repCount],
-                        mat:   [matReadings[i]],
-                        sfi:   [sfiReadings[i]],
-                        sci:   [sciReadings[i]],
-                        csp:   [cspReadings[i]],
-                    };
+                        const singleReadings = {
+                            mic:   [micReadings[i]],
+                            uhml:  [lenReadings[i]],
+                            ml:    [repMl],
+                            ui:    [unfReadings[i]],
+                            str:   [strReadings[i]],
+                            rd:    [rdReadings[i]],
+                            b:     [bReadings[i]],
+                            elg:   [elgReadings[i]],
+                            area:  [repArea],
+                            count: [repCount],
+                            mat:   [matReadings[i]],
+                            sfi:   [sfiReadings[i]],
+                            sci:   [sciReadings[i]],
+                            csp:   [cspReadings[i]],
+                        };
 
-                    let rawEtiqueta = (Array.isArray(customEtiqueta) ? customEtiqueta[i] : customEtiqueta) || sample.etiqueta;
-                    rawEtiqueta = rawEtiqueta?.replace(/\./g, '');
-                    const effectiveSample = { ...sample, etiqueta: rawEtiqueta };
+                        let rawEtiqueta = (Array.isArray(customEtiqueta) ? customEtiqueta[i] : customEtiqueta) || sample.etiqueta;
+                        rawEtiqueta = rawEtiqueta?.replace(/\./g, '');
+                        const effectiveSample = { ...sample, etiqueta: rawEtiqueta };
 
-                    const repContent = this.generatePremierFormatMultipleBalanced(effectiveSample, 1, averages, singleReadings, dateStr, repTime);
-                    const sampleLabelForName = rawEtiqueta?.replace(/[^a-zA-Z0-9]/g, '_') || sample.amostra_id;
-                    let repFilename = `HVI_PREMIER_${sampleLabelForName}_REP${repIndex}_${timestamp}.txt`;
-                    
-                    if (sample.lote_id === 'reanalise') {
-                        const mNum = isNaN(machineNum) ? 1 : machineNum;
-                        repFilename = `M${mNum}_${repFilename}`;
+                        const repContent = this.generatePremierFormatMultipleBalanced(effectiveSample, 1, averages, singleReadings, dateStr, repTime);
+                        const sampleLabelForName = rawEtiqueta?.replace(/[^a-zA-Z0-9]/g, '_') || sample.amostra_id;
+                        let repFilename = `HVI_PREMIER_${sampleLabelForName}_REP${repIndex}_${timestamp}.txt`;
+
+                        files.push({ content: repContent, filename: repFilename });
+                        repContents.push(`=== ARQUIVO: ${repFilename} ===\n${repContent}`);
                     }
 
-                    files.push({ content: repContent, filename: repFilename });
-                    repContents.push(`=== ARQUIVO: ${repFilename} ===\n${repContent}`);
+                    content = repContents.join('\n\n');
+                    filename = files[0].filename;
                 }
-
-                content = repContents.join('\n\n');
-                filename = files[0].filename;
             }
 
                 return {
