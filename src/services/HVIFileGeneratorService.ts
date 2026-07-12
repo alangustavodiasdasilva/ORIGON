@@ -1181,9 +1181,11 @@ export class HVIFileGeneratorService {
                 const isReanalise = sample.lote_id === 'reanalise';
                 
                 if (isReanalise) {
+                    const datLines: string[] = [];
+                    for (let i = 0; i < 10; i++) {
+                        datLines.push("");
+                    }
                     for (let i = 0; i < count; i++) {
-                        const repIndex = startRepPremier + i;
-                        
                         let rawEtiqueta = (Array.isArray(customEtiqueta) ? customEtiqueta[i] : customEtiqueta) || sample.etiqueta;
                         rawEtiqueta = rawEtiqueta?.replace(/\./g, '');
                         const mala = sample.mala || 'REANALISE';
@@ -1204,23 +1206,15 @@ export class HVIFileGeneratorService {
                             countReadings[i],
                             areaReadings[i]
                         );
-                        
-                        const datLines: string[] = [];
-                        for (let j = 0; j < 10; j++) {
-                            datLines.push("");
-                        }
                         datLines.push(line);
-                        
-                        const mNum = isNaN(machineNum) ? 1 : machineNum;
-                        const sampleLabelForName = rawEtiqueta?.replace(/[^a-zA-Z0-9]/g, '_') || sample.amostra_id;
-                        const repFilename = `M${mNum}_HVI_PREMIER_${sampleLabelForName}_REP${repIndex}_${timestamp}.dat`;
-                        
-                        const fileContent = datLines.join('\n');
-                        files.push({ content: fileContent, filename: repFilename });
-                        repContents.push(`=== ARQUIVO: ${repFilename} ===\n${fileContent}`);
                     }
-                    content = repContents.join('\n\n');
-                    filename = files[0].filename;
+                    const mNum = isNaN(machineNum) ? 1 : machineNum;
+                    const safeMala = (sample.mala || 'REANALISE').replace(/[^a-zA-Z0-9]/g, '_');
+                    const repFilename = `M${mNum}_HVI_PREMIER_${safeMala}_REP${startRepPremier}_${timestamp}.dat`;
+                    const fileContent = datLines.join('\n');
+                    files.push({ content: fileContent, filename: repFilename });
+                    content = fileContent;
+                    filename = repFilename;
                 } else {
                     for (let i = 0; i < count; i++) {
                         const repIndex = startRepPremier + i;
