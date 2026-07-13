@@ -85,7 +85,10 @@ export const AnalistaService = {
     async create(data: Omit<Analista, 'id' | 'created_at' | 'updated_at'>): Promise<Analista> {
         if (isSupabaseEnabled()) {
             const { data: newAnalista, error } = await supabase.from('analistas').insert([data]).select().single();
-            if (error) throw error;
+            if (error) {
+                console.error('Supabase create error for analista:', error);
+                throw new Error(error.message);
+            }
             AuditLogService.logAction('analistas', newAnalista.id, 'CREATE', null, newAnalista);
             return newAnalista;
         }
