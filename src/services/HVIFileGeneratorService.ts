@@ -60,47 +60,68 @@ export class HVIFileGeneratorService {
     /**
      * Get machine by HVI number
      */
-    private static async getMachineByHVI(hviNumber: string): Promise<Machine | null> {
+    private static async getMachineByHVI(hviNumber: string, explicitlyPassedLabId?: string): Promise<Machine | null> {
         try {
             let machines: Machine[] = [];
             const sessionData = localStorage.getItem("fibertech_session");
             const selectedLabData = localStorage.getItem("fibertech_selected_lab");
-            
-            let labId = null;
-            if (selectedLabData) {
-                try { 
-                    const parsed = JSON.parse(selectedLabData);
-                    labId = parsed?.id || parsed;
-                } catch (e) {
-                    labId = selectedLabData;
-                }
-            } else if (sessionData) {
-                try {
-                    const user = JSON.parse(sessionData);
-                    if (user.lab_id && user.acesso !== 'admin_global') {
-                        labId = user.lab_id;
+
+            let labId = explicitlyPassedLabId || null;
+            if (!labId) {
+                if (selectedLabData && selectedLabData !== "[object Object]" && selectedLabData !== "undefined") {
+                    try {
+                        const parsed = JSON.parse(selectedLabData);
+                        labId = parsed?.id || parsed;
+                    } catch (e) {
+                        labId = selectedLabData;
                     }
-                } catch (e) {}
+                }
+
+                if (!labId && sessionData) {
+                    try {
+                        const user = JSON.parse(sessionData);
+                        if (user.lab_id && user.acesso !== 'admin_global') {
+                            labId = user.lab_id;
+                        }
+                    } catch (e) {}
+                }
             }
 
-            if (labId) {
-                machines = await MachineService.listByLab(labId);
-            } else {
+            try {
+                if (labId) {
+                    machines = await MachineService.listByLab(labId);
+                } else {
+                    machines = await MachineService.list();
+                }
+            } catch (fetchError) {
+                console.warn("Failed to fetch lab specific machines, falling back to all:", fetchError);
                 machines = await MachineService.list();
             }
 
-            // Try exact match
-            const exactMatch = machines.find(m => m.machineId === hviNumber);
-            if (exactMatch) return exactMatch;
+            const findMachine = (machineList: Machine[], hvi: string) => {
+                const exactMatchId = machineList.find(m => String(m.id) === String(hvi));
+                if (exactMatchId) return exactMatchId;
 
-            // Try loose match (ignoring spaces, case, or matching just the number)
-            const targetNum = hviNumber.replace(/\D/g, '');
-            const looseMatch = machines.find(m => {
-                if (m.machineId.trim().toUpperCase() === hviNumber.trim().toUpperCase()) return true;
-                if (targetNum && m.machineId.replace(/\D/g, '') === targetNum) return true;
-                return false;
-            });
-            return looseMatch || null;
+                const exactMatch = machineList.find(m => m.machineId === hvi);
+                if (exactMatch) return exactMatch;
+
+                const targetNum = hvi.replace(/\D/g, '');
+                return machineList.find(m => {
+                    if (m.machineId.trim().toUpperCase() === hvi.trim().toUpperCase()) return true;
+                    if (targetNum && m.machineId.replace(/\D/g, '') === targetNum) return true;
+                    return false;
+                }) || null;
+            };
+
+            let found = findMachine(machines, hviNumber);
+
+            // Se não encontrou no laboratório específico, procura em TODAS as máquinas (fallback seguro para admins)
+            if (!found && labId) {
+                const allMachines = await MachineService.list();
+                found = findMachine(allMachines, hviNumber);
+            }
+
+            return found;
         } catch (error) {
             console.error('Error loading machines:', error);
             return null;
@@ -868,7 +889,8 @@ export class HVIFileGeneratorService {
         customTime?: string,
         customHvi?: string,
         configuracoesAnalise?: Record<string, any>,
-        repCount?: number
+        repCount?: number,
+        labId?: string
     ): Promise<{
         success: boolean; message?: string; data?: HVIPreviewData }> {
         try {
@@ -897,7 +919,7 @@ export class HVIFileGeneratorService {
             }
 
             // Get machine info
-            const machine = await this.getMachineByHVI(targetHvi);
+            const machine = await this.getMachineByHVI(targetHvi, labId);
             if (!machine) {
                 return {
                     success: false,

@@ -203,6 +203,7 @@ export default function ReanalisePage() {
 
             const reps = typeof repCount === 'number' ? repCount : 1;
             const overrides = isRangeMode ? getRandomRangeOverrides(reps) : undefined;
+            const labIdStr = currentLab?.id ? String(currentLab.id) : (user?.lab_id ? String(user.lab_id) : undefined);
 
             const result = await HVIFileGeneratorService.generatePreviewForSample(
                 fakeSample,
@@ -214,7 +215,8 @@ export default function ReanalisePage() {
                 customTime || undefined,
                 machine.machineId,
                 fakeConfig,
-                reps
+                reps,
+                labIdStr
             );
 
             if (result.success && result.data && result.data.files) {
@@ -271,6 +273,7 @@ export default function ReanalisePage() {
         };
 
         const reps = typeof repCount === 'number' ? repCount : 1;
+        const labIdStr = currentLab?.id ? String(currentLab.id) : (user?.lab_id ? String(user.lab_id) : undefined);
 
         const result = await HVIFileGeneratorService.generatePreviewForSample(
             fakeSample,
@@ -282,7 +285,8 @@ export default function ReanalisePage() {
             customTime || undefined,
             machine.machineId,
             fakeConfig,
-            reps
+            reps,
+            labIdStr
         );
 
         if (result.success && result.data && result.data.files) {
@@ -433,6 +437,7 @@ export default function ReanalisePage() {
 
             const reps = typeof repCount === 'number' ? repCount : 1;
             const overrides = isRangeMode ? getRandomRangeOverrides(reps) : undefined;
+            const labIdStr = currentLab?.id ? String(currentLab.id) : (user?.lab_id ? String(user.lab_id) : undefined);
 
             const result = await HVIFileGeneratorService.generatePreviewForSample(
                 fakeSample,
@@ -444,7 +449,8 @@ export default function ReanalisePage() {
                 customTime || undefined,
                 selectedMachine.machineId,
                 fakeConfig,
-                reps
+                reps,
+                labIdStr
             );
 
             if (!result.success || !result.data) {

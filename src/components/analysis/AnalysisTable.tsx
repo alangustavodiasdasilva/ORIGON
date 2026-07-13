@@ -399,7 +399,10 @@ export default function AnalysisTable({ samples, onUpdateSample, onColorChange, 
                                         ) : (
                                             <button
                                                 onClick={async () => {
-                                                    const result = await HVIFileGeneratorService.generatePreviewForSample(sample, samples, tolerancias, undefined, undefined, undefined, undefined, undefined, configuracoesAnalise);
+                                                    const labIdStr = currentLab?.id ? String(currentLab.id) : (user?.lab_id ? String(user.lab_id) : undefined);
+                                                    const result = await HVIFileGeneratorService.generatePreviewForSample(
+                                                        sample, samples, tolerancias, undefined, undefined, undefined, undefined, undefined, configuracoesAnalise, undefined, labIdStr
+                                                    );
                                                     if (!result.success) {
                                                         alert(result.message);
                                                     } else if (result.data) {
@@ -491,16 +494,19 @@ export default function AnalysisTable({ samples, onUpdateSample, onColorChange, 
                     balancedReadings={previewModal.data.balancedReadings}
                     onRegenerate={async (newReadings, config) => {
                         if (previewModal.sample) {
+                            const labIdStr = currentLab?.id ? String(currentLab.id) : (user?.lab_id ? String(user.lab_id) : undefined);
                             const result = await HVIFileGeneratorService.generatePreviewForSample(
-                                previewModal.sample, 
-                                samples, 
-                                tolerancias, 
+                                previewModal.sample,
+                                samples,
+                                tolerancias,
                                 newReadings,
                                 config?.customEtiqueta,
                                 config?.customDate,
                                 config?.customTime,
                                 (config as any)?.customHvi,
-                                configuracoesAnalise
+                                configuracoesAnalise,
+                                undefined,
+                                labIdStr
                             );
                             if (result.success && result.data) {
                                 setPreviewModal(prev => ({
