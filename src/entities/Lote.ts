@@ -1,6 +1,7 @@
 
 import { supabase } from "@/lib/supabase";
 import { AuditLogService } from "./AuditLog";
+import { safeSetItem } from "@/lib/safeStorage";
 
 export interface Lote {
     id: string;
@@ -49,7 +50,7 @@ const getStoredLotes = (): Lote[] => {
 
 const saveStoredLotes = (lotes: Lote[]) => {
     try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(lotes));
+        safeSetItem(STORAGE_KEY, JSON.stringify(lotes));
     } catch (error) {
         console.error("Error saving lotes to storage", error);
         throw error;

@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { StickyNote, Calculator, X, Trash2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { safeSetItem } from "@/lib/safeStorage";
 
 export default function ToolsWidget() {
     const [isOpen, setIsOpen] = useState(false);
@@ -19,7 +20,7 @@ export default function ToolsWidget() {
 
     const handleSaveNote = (text: string) => {
         setNote(text);
-        localStorage.setItem("fibertech_analyst_notes", text);
+        safeSetItem("fibertech_analyst_notes", text);
     };
 
     const handleCalc = () => {

@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { AnalistaService } from "@/entities/Analista";
 import type { Analista } from "@/entities/Analista";
 import { LabService, type Lab } from "@/entities/Lab";
+import { safeSetItem as safeSetLocalStorage } from "@/lib/safeStorage";
 
 interface AuthContextType {
     user: Analista | null;
@@ -30,18 +31,6 @@ async function hashPassword(password: string): Promise<string> {
     return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
-/**
- * Grava no localStorage sem derrubar o app se a quota estourar (ex: cache de
- * previews OCR/scanner acumulado com o tempo). Login/seleção de lab não podem
- * depender de espaço livre no localStorage.
- */
-function safeSetLocalStorage(key: string, value: string) {
-    try {
-        localStorage.setItem(key, value);
-    } catch (e) {
-        console.warn(`Falha ao gravar '${key}' no localStorage (provavelmente quota excedida):`, e);
-    }
-}
 
 
 

@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 import { X, Save, Palette, ImagePlus, Loader2, Cpu, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Tesseract from "tesseract.js";
+import { safeSetItem } from "@/lib/safeStorage";
 
 interface ColorTemplate {
     mic: number;
@@ -282,8 +283,8 @@ export default function ColorTemplatesModal({ isOpen, onClose, specificColor, co
 
     // Persiste dividers sempre que mudam
     useEffect(() => {
-        localStorage.setItem(`${STORAGE_PREFIX}print_cols_v2`, JSON.stringify(colDividers));
-        localStorage.setItem(`${STORAGE_PREFIX}print_rows_v2`, JSON.stringify(rowDividers));
+        safeSetItem(`${STORAGE_PREFIX}print_cols_v2`, JSON.stringify(colDividers));
+        safeSetItem(`${STORAGE_PREFIX}print_rows_v2`, JSON.stringify(rowDividers));
     }, [colDividers, rowDividers, STORAGE_PREFIX]);
 
     // ── Drag de splitters no modo mapeamento ──────────────────────────────────
@@ -333,7 +334,7 @@ export default function ColorTemplatesModal({ isOpen, onClose, specificColor, co
         e.preventDefault();
         const container = (e.currentTarget as HTMLElement).parentElement;
         if (!container) return;
-        localStorage.setItem(`${STORAGE_PREFIX}print_custom_map_active`, 'true');
+        safeSetItem(`${STORAGE_PREFIX}print_custom_map_active`, 'true');
         const rect = container.getBoundingClientRect();
         draggingSplitter.current = {
             type,
@@ -540,7 +541,7 @@ export default function ColorTemplatesModal({ isOpen, onClose, specificColor, co
 
             setScannedRows(finalResults);
             setScanProgress(100);
-            localStorage.setItem(`${STORAGE_PREFIX}custom_print_scanned_rows`, JSON.stringify(finalResults));
+            safeSetItem(`${STORAGE_PREFIX}custom_print_scanned_rows`, JSON.stringify(finalResults));
 
             // Auto-seleciona linha 0 para a cor ativa
             if (specificColor) {
@@ -583,8 +584,8 @@ export default function ColorTemplatesModal({ isOpen, onClose, specificColor, co
 
         const colorKey = specificColor ? `_${specificColor}` : '';
         // Keep localStorage as fallback
-        localStorage.setItem(`${STORAGE_PREFIX}custom_color_averages`, JSON.stringify(finalTemplates));
-        localStorage.setItem(`${STORAGE_PREFIX}custom_print_scanned_rows${colorKey}`, JSON.stringify(scannedRows));
+        safeSetItem(`${STORAGE_PREFIX}custom_color_averages`, JSON.stringify(finalTemplates));
+        safeSetItem(`${STORAGE_PREFIX}custom_print_scanned_rows${colorKey}`, JSON.stringify(scannedRows));
         safeSetPreviews(previews);
 
         // Save to Supabase
@@ -625,7 +626,7 @@ export default function ColorTemplatesModal({ isOpen, onClose, specificColor, co
             }
             next[rowIndex] = row;
             const colorKey = specificColor ? `_${specificColor}` : '';
-            localStorage.setItem(`${STORAGE_PREFIX}custom_print_scanned_rows${colorKey}`, JSON.stringify(next));
+            safeSetItem(`${STORAGE_PREFIX}custom_print_scanned_rows${colorKey}`, JSON.stringify(next));
             return next;
         });
     };

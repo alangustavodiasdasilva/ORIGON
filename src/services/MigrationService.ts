@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase";
+import { safeSetItem } from "@/lib/safeStorage";
 
 const STORAGE_KEYS = {
     LABS: 'fibertech_labs',
@@ -98,7 +99,7 @@ export const MigrationService = {
         localStorage.removeItem(STORAGE_KEYS.MACHINES);
 
         // ── Marcar migração como concluída — não voltará a rodar ─────────────
-        localStorage.setItem(MIGRATION_FLAG, 'true');
+        safeSetItem(MIGRATION_FLAG, 'true');
         console.log('[MigrationService] Migração concluída. Dados locais limpos.');
     }
 };

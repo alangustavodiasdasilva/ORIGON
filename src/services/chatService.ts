@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase";
+import { safeSetItem } from "@/lib/safeStorage";
 
 export interface ChatMessage {
     id: string;
@@ -60,7 +61,7 @@ export const ChatService = {
         messages.push(message);
         // Keep only last 50 messages for performance
         const lastMessages = messages.slice(-50);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(lastMessages));
+        safeSetItem(STORAGE_KEY, JSON.stringify(lastMessages));
     },
 
     async clearHistory(): Promise<void> {

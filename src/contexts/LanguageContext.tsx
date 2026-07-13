@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect } from "react";
 import type { ReactNode } from "react";
+import { safeSetItem } from "@/lib/safeStorage";
 
 type Language = 'en' | 'pt';
 
@@ -311,7 +312,7 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
 
     const setLanguage = (lang: Language) => {
         setLanguageState(lang);
-        localStorage.setItem('app_language', lang);
+        safeSetItem('app_language', lang);
     };
 
     const t = (key: string): string => {

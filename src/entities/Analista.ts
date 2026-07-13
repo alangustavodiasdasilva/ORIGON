@@ -1,6 +1,7 @@
 
 import { supabase } from "@/lib/supabase";
 import { AuditLogService } from "./AuditLog";
+import { safeSetItem } from "@/lib/safeStorage";
 
 export type AccessLevel = 'admin_global' | 'admin_lab' | 'user' | 'quality_admin';
 
@@ -38,7 +39,7 @@ const getStoredAnalistas = (): Analista[] => {
 };
 
 const saveStoredAnalistas = (analistas: Analista[]) => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(analistas));
+    safeSetItem(STORAGE_KEY, JSON.stringify(analistas));
 };
 
 export const AnalistaService = {

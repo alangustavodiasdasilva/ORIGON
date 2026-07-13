@@ -1,6 +1,7 @@
 
 import { supabase } from "@/lib/supabase";
 import { AuditLogService } from "./AuditLog";
+import { safeSetItem } from "@/lib/safeStorage";
 
 export interface Sample {
     id: string;
@@ -63,7 +64,7 @@ const getStoredSamples = (): Sample[] => {
 
 const saveStoredSamples = (samples: Sample[]) => {
     try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(samples));
+        safeSetItem(STORAGE_KEY, JSON.stringify(samples));
     } catch (error) {
         console.error("Error saving samples to storage", error);
         throw error;

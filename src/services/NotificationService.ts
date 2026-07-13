@@ -4,6 +4,7 @@
  */
 
 import { supabase } from "@/lib/supabase";
+import { safeSetItem } from "@/lib/safeStorage";
 
 export type NotificationType = 'info' | 'warning' | 'error' | 'success';
 export type NotificationPriority = 'low' | 'medium' | 'high' | 'critical';
@@ -277,7 +278,7 @@ export class NotificationService {
 
     // Private methods
     private static saveSync(notifications: Notification[]): void {
-        localStorage.setItem(this.STORAGE_KEY, JSON.stringify(notifications));
+        safeSetItem(this.STORAGE_KEY, JSON.stringify(notifications));
     }
 
     private static async notifyListeners(): Promise<void> {

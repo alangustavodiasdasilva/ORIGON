@@ -1,4 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
+import { safeSetItem } from "@/lib/safeStorage";
 
 interface Props {
     children: ReactNode;
@@ -31,7 +32,7 @@ export class ErrorBoundary extends Component<Props, State> {
             
             // Evita loop infinito de recarregamento (limite de 1 vez a cada 10 segundos)
             if (!lastReload || (now - parseInt(lastReload)) > 10000) {
-                localStorage.setItem('last-chunk-reload', now.toString());
+                safeSetItem('last-chunk-reload', now.toString());
                 window.location.reload();
             }
         }

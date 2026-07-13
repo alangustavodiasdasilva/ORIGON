@@ -8,6 +8,7 @@ import { SampleService } from '@/entities/Sample';
 import { AnalistaService } from '@/entities/Analista';
 import { LabService } from '@/entities/Lab';
 import { AuditService } from '@/entities/Audit';
+import { safeSetItem } from "@/lib/safeStorage";
 
 export interface BackupData {
     version: string;
@@ -106,13 +107,13 @@ export class BackupService {
             if (data.labs.length > 0) {
                 const existing = await LabService.list();
                 const merged = [...existing, ...data.labs.filter(l => !existing.find(e => e.id === l.id))];
-                localStorage.setItem('labs', JSON.stringify(merged));
+                safeSetItem('labs', JSON.stringify(merged));
             }
 
             if (data.analistas.length > 0) {
                 const existing = await AnalistaService.list();
                 const merged = [...existing, ...data.analistas.filter(a => !existing.find(e => e.id === a.id))];
-                localStorage.setItem('analistas', JSON.stringify(merged));
+                safeSetItem('analistas', JSON.stringify(merged));
             }
 
             return {
@@ -137,8 +138,8 @@ export class BackupService {
 
         setInterval(async () => {
             const backup = await this.exportAll();
-            localStorage.setItem('last-auto-backup', JSON.stringify(backup));
-            localStorage.setItem('last-backup-date', new Date().toISOString());
+            safeSetItem('last-auto-backup', JSON.stringify(backup));
+            safeSetItem('last-backup-date', new Date().toISOString());
         }, intervalMs);
     }
 

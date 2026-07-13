@@ -6,6 +6,7 @@
 
 import type { Sample } from '@/entities/Sample';
 import { MachineService, type Machine } from '@/entities/Machine';
+import { safeSetItem } from "@/lib/safeStorage";
 
 export interface HVITolerancias {
     mic: number;
@@ -1119,7 +1120,7 @@ export class HVIFileGeneratorService {
                 let startRep = 1;
                 const storedRep = localStorage.getItem('hvi_global_rep_uster');
                 startRep = storedRep && !isNaN(parseInt(storedRep, 10)) ? parseInt(storedRep, 10) + 1 : 1;
-                localStorage.setItem('hvi_global_rep_uster', (startRep + count - 1).toString());
+                safeSetItem('hvi_global_rep_uster', (startRep + count - 1).toString());
 
                 for (let i = 0; i < count; i++) {
                     const localRep = i + 1;
@@ -1222,7 +1223,7 @@ export class HVIFileGeneratorService {
                 let startRepPremier = 1;
                 const storedRepPremier = localStorage.getItem('hvi_global_rep_premier');
                 startRepPremier = storedRepPremier && !isNaN(parseInt(storedRepPremier, 10)) ? parseInt(storedRepPremier, 10) + 1 : 1;
-                localStorage.setItem('hvi_global_rep_premier', (startRepPremier + count - 1).toString());
+                safeSetItem('hvi_global_rep_premier', (startRepPremier + count - 1).toString());
 
                 const isReanalise = sample.lote_id === 'reanalise';
                 

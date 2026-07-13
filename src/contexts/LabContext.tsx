@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react";
+import { safeSetItem } from "@/lib/safeStorage";
 
 interface LabContextType {
     selectedLabId: string | null;
@@ -29,7 +30,7 @@ export function LabProvider({ children }: { children: ReactNode }) {
     const setSelectedLabId = (labId: string | null) => {
         setSelectedLabIdState(labId);
         if (labId) {
-            localStorage.setItem(STORAGE_KEY, labId);
+            safeSetItem(STORAGE_KEY, labId);
         } else {
             localStorage.removeItem(STORAGE_KEY);
         }

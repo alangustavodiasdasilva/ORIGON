@@ -5,6 +5,7 @@ import { AlertTriangle, Zap, Info, Pencil, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatDecimalBR } from "@/services/ocrExtraction";
 import { useState } from "react";
+import { safeSetItem } from "@/lib/safeStorage";
 
 interface StatisticsPanelProps {
     samples: Sample[];
@@ -89,7 +90,7 @@ export default function StatisticsPanel({ samples, selectedColor }: StatisticsPa
         };
 
         setCustomAverages(newCustomAverages);
-        localStorage.setItem(CUSTOM_AVERAGES_KEY, JSON.stringify(newCustomAverages));
+        safeSetItem(CUSTOM_AVERAGES_KEY, JSON.stringify(newCustomAverages));
         setEditingField(null);
         setEditValue('');
     };
@@ -108,7 +109,7 @@ export default function StatisticsPanel({ samples, selectedColor }: StatisticsPa
             }
         }
         setCustomAverages(newCustomAverages);
-        localStorage.setItem(CUSTOM_AVERAGES_KEY, JSON.stringify(newCustomAverages));
+        safeSetItem(CUSTOM_AVERAGES_KEY, JSON.stringify(newCustomAverages));
     };
 
     if (colorsToShow.length === 0) {

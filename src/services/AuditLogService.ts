@@ -1,3 +1,4 @@
+import { safeSetItem } from "@/lib/safeStorage";
 /**
  * Audit Log Service
  * Tracks all critical user actions for compliance and security
@@ -80,7 +81,7 @@ export class AuditLogService {
             logs.splice(this.MAX_LOGS);
         }
 
-        localStorage.setItem(this.STORAGE_KEY, JSON.stringify(logs));
+        safeSetItem(this.STORAGE_KEY, JSON.stringify(logs));
     }
 
     /**
@@ -165,7 +166,7 @@ export class AuditLogService {
         const filtered = logs.filter(log => new Date(log.timestamp) >= cutoffDate);
         const removed = logs.length - filtered.length;
 
-        localStorage.setItem(this.STORAGE_KEY, JSON.stringify(filtered));
+        safeSetItem(this.STORAGE_KEY, JSON.stringify(filtered));
         return removed;
     }
 }

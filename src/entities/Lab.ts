@@ -1,6 +1,7 @@
 
 import { supabase } from "@/lib/supabase";
 import { AuditLogService } from "./AuditLog";
+import { safeSetItem } from "@/lib/safeStorage";
 
 export interface Lab {
     id: string;
@@ -31,7 +32,7 @@ const getStoredLabs = (): Lab[] => {
 };
 
 const saveStoredLabs = (labs: Lab[]) => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(labs));
+    safeSetItem(STORAGE_KEY, JSON.stringify(labs));
 };
 
 export const LabService = {

@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { safeSetItem } from "@/lib/safeStorage";
 
 export interface VerificacaoState {
     amostras: any[];
@@ -39,7 +40,7 @@ export const verificacaoService = {
 
         // Always update local storage as well for immediate feedback and local persistence
         const storeKey = `fibertech_verificacao_${labId}`;
-        localStorage.setItem(storeKey, JSON.stringify(state));
+        safeSetItem(storeKey, JSON.stringify(state));
     },
 
     async get(labId: string, date: string): Promise<VerificacaoState | null> {
@@ -63,7 +64,7 @@ export const verificacaoService = {
 
                     // Sincroniza o cache local com os dados frescos da nuvem
                     const storeKey = `fibertech_verificacao_${labId}`;
-                    localStorage.setItem(storeKey, JSON.stringify(state));
+                    safeSetItem(storeKey, JSON.stringify(state));
 
                     return state;
                 }

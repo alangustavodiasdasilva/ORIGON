@@ -1,6 +1,7 @@
 
 import { supabase } from "@/lib/supabase";
 import { AuditLogService } from "./AuditLog";
+import { safeSetItem } from "@/lib/safeStorage";
 
 export interface Machine {
     id: string;
@@ -26,7 +27,7 @@ const getStoredMachines = (): Machine[] => {
 };
 
 const saveStoredMachines = (machines: Machine[]) => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(machines));
+    safeSetItem(STORAGE_KEY, JSON.stringify(machines));
 };
 
 export const MachineService = {

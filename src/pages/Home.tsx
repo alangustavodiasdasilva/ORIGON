@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { safeSetItem } from "@/lib/safeStorage";
 import {
     Plus as PlusIcon,
     Search as SearchIcon,
@@ -187,7 +188,7 @@ export default function Home() {
                 type: "success"
             });
             setNewLoteName("");
-            localStorage.setItem("last_lote_city", newLoteCidade);
+            safeSetItem("last_lote_city", newLoteCidade);
             setNewLoteName("");
             // Keep city for next time or rely on useEffect to reload it
             // setNewLoteCidade(""); // Don't clear it, or rely on useEffect. 

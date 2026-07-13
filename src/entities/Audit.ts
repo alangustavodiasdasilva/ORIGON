@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase";
+import { safeSetItem } from "@/lib/safeStorage";
 
 export interface AuditCategory {
     id: string;
@@ -64,7 +65,7 @@ export const AuditService = {
         }
         const data = localStorage.getItem(CATS_KEY);
         if (!data) {
-            localStorage.setItem(CATS_KEY, JSON.stringify(DEFAULT_CATEGORIES));
+            safeSetItem(CATS_KEY, JSON.stringify(DEFAULT_CATEGORIES));
             return DEFAULT_CATEGORIES;
         }
         return JSON.parse(data);
@@ -104,7 +105,7 @@ export const AuditService = {
         } else {
             cats.push({ ...cat, id: cat.id || crypto.randomUUID() });
         }
-        localStorage.setItem(CATS_KEY, JSON.stringify(cats));
+        safeSetItem(CATS_KEY, JSON.stringify(cats));
     },
 
     async deleteCategory(id: string): Promise<void> {
@@ -115,7 +116,7 @@ export const AuditService = {
         }
         const cats = await this.listCategories();
         const filtered = cats.filter(c => c.id !== id);
-        localStorage.setItem(CATS_KEY, JSON.stringify(filtered));
+        safeSetItem(CATS_KEY, JSON.stringify(filtered));
     },
 
     // --- DOCUMENTS ---
@@ -383,7 +384,7 @@ export const AuditService = {
         };
 
         allDocs.push(newDoc);
-        localStorage.setItem(DOCS_KEY, JSON.stringify(allDocs));
+        safeSetItem(DOCS_KEY, JSON.stringify(allDocs));
         return newDoc;
     },
 
@@ -501,7 +502,7 @@ export const AuditService = {
             observation: params.observation,
         };
         allDocs.push(newDoc);
-        localStorage.setItem(DOCS_KEY, JSON.stringify(allDocs));
+        safeSetItem(DOCS_KEY, JSON.stringify(allDocs));
         return newDoc;
     },
 
@@ -536,6 +537,6 @@ export const AuditService = {
         if (!raw) return;
         const docs = JSON.parse(raw);
         const filtered = docs.filter((d: AuditDocument) => d.id !== id);
-        localStorage.setItem(DOCS_KEY, JSON.stringify(filtered));
+        safeSetItem(DOCS_KEY, JSON.stringify(filtered));
     }
 };

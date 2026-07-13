@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
+import { safeSetItem } from "@/lib/safeStorage";
 
 type Theme = 'light' | 'dark';
 
@@ -34,7 +35,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         // Set data-theme just for good measure (some libraries use this)
         html.setAttribute('data-theme', theme);
 
-        localStorage.setItem('fibertech-theme', theme);
+        safeSetItem('fibertech-theme', theme);
 
         // Debugging (not visible to user but keeps context alive)
         console.log(`[FiberTech] Theme changed to: ${theme}`);

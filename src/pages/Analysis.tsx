@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
+import { safeSetItem } from "@/lib/safeStorage";
 import {
     ArrowLeft,
     Download,
@@ -88,7 +89,7 @@ export default function Analysis() {
         
         // Also keep localStorage as fallback
         if (loteId) {
-            localStorage.setItem(`lote_${loteId}_manual_overrides`, JSON.stringify(manualOverrides));
+            safeSetItem(`lote_${loteId}_manual_overrides`, JSON.stringify(manualOverrides));
         }
         saveOverridesToDB(manualOverrides);
     }, [manualOverrides, loteId, saveOverridesToDB]);

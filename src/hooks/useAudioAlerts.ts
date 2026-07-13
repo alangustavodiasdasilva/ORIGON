@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { realtimeService } from '@/services/RealtimeService';
+import { safeSetItem } from "@/lib/safeStorage";
 
 export interface AudioConfig {
   greenUrl: string;
@@ -20,7 +21,7 @@ export function useAudioAlerts(listen: boolean = false) {
   // Salvar config e avisar a rede (P2P Sync)
   const updateConfig = useCallback((newConfig: AudioConfig) => {
     setConfig(newConfig);
-    localStorage.setItem('fibertech_audio_config', JSON.stringify(newConfig));
+    safeSetItem('fibertech_audio_config', JSON.stringify(newConfig));
     realtimeService.broadcast('config_sync', newConfig);
     // Sincroniza localmente para outros componentes na mesma aba (ex: Layout.tsx)
     window.dispatchEvent(new CustomEvent('local_config_sync', { detail: newConfig }));
@@ -54,7 +55,7 @@ export function useAudioAlerts(listen: boolean = false) {
     const unsubsConfig = realtimeService.subscribeToBroadcast('config_sync', (payload: AudioConfig) => {
       console.log("Recebida nova configuração de áudio da rede");
       callbacksRef.current.setConfig(payload);
-      localStorage.setItem('fibertech_audio_config', JSON.stringify(payload));
+      safeSetItem('fibertech_audio_config', JSON.stringify(payload));
     });
 
     // 2. Escutar os botões apertados por qualquer laboratório
