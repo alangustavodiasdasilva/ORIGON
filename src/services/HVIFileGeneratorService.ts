@@ -832,8 +832,10 @@ export class HVIFileGeneratorService {
         const amostraPad = amostraBase.substring(0, 40).padEnd(40, ' ');
         const etiquetaPad = (sample.etiqueta || '').substring(0, 40).padEnd(40, ' ');
 
-        const seqStrStart = String(seq).padStart(2, '0');
-        const seqStrEnd = String(seq + 1).padStart(2, '0');
+        // Não usa padStart aqui — o protocolo HVI1000 real não zero-preenche esse contador
+        // (ex: "9", não "09"), diferente do repIndex usado na AMOSTRA logo abaixo.
+        const seqStrStart = String(seq);
+        const seqStrEnd = String(seq + 1);
 
         // ── Valores sem trava restrita (respeitando o que foi digitado no Preview) ─────────────
         const safeMic  = mic;
@@ -872,12 +874,16 @@ export class HVIFileGeneratorService {
         const matStr = safeMat.toFixed(2);
         const cspStr = safeCsp.toString();
 
+        // Os números fixos ao final de cada linha (18/43/41/27) são o identificador de
+        // registro do protocolo HVI1000 real — conferidos contra um arquivo de referência
+        // exportado por uma máquina de verdade. Valores errados aqui fazem sistemas que
+        // validam esse formato rejeitarem o arquivo na importação.
         const lines = [
             `HVI1000@@05@${lineName}@${date}@${time}@${seqStrStart}@`,
-            `HVI1000@L&S@02@${lineName}@${date}@${time}@${amostraPad}@${etiquetaPad}@${uhmlStr}@n@n@${uiStr}@n@n@${strStr}@n@n@${elgStr}@${sfiStr}@      @${lenStr}@${countStr}@25@`,
-            `HVI1000@MIC@02@${lineName}@${date}@${time}@${amostraPad}@${etiquetaPad}@${micStr}@n@40@`,
-            `HVI1000@SCI@02@${lineName}@${date}@${time}@${amostraPad}@${etiquetaPad}@${sciStr}@n@0000@@38@`,
-            `HVI1000@C&T@02@${lineName}@${date}@${time}@${amostraPad}@${etiquetaPad}@n@${rdStr}@n@${bStr}@n@${grau}@n@n@${areaNStr}@${areaStr}@n@${leafStr}@n@10@`,
+            `HVI1000@L&S@02@${lineName}@${date}@${time}@${amostraPad}@${etiquetaPad}@${uhmlStr}@n@n@${uiStr}@n@n@${strStr}@n@n@${elgStr}@${sfiStr}@      @${lenStr}@${countStr}@18@`,
+            `HVI1000@MIC@02@${lineName}@${date}@${time}@${amostraPad}@${etiquetaPad}@${micStr}@n@43@`,
+            `HVI1000@SCI@02@${lineName}@${date}@${time}@${amostraPad}@${etiquetaPad}@${sciStr}@n@0000@@41@`,
+            `HVI1000@C&T@02@${lineName}@${date}@${time}@${amostraPad}@${etiquetaPad}@n@${rdStr}@n@${bStr}@n@${grau}@n@n@${areaNStr}@${areaStr}@n@${leafStr}@n@27@`,
             `HVI1000@MAT@02@${lineName}@${date}@${time}@${amostraPad}@${etiquetaPad}@${matStr}@n@@@@${cspStr}@`,
             `HVI1000@@06@${lineName}@${date}@${time}@${seqStrEnd}@`
         ];
