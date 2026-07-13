@@ -767,6 +767,13 @@ export class HVIFileGeneratorService {
 
         const randInRange = () => (rand() * 2 - 1) * maxVar; // [-maxVar, +maxVar]
 
+        // Com count=1 não existe "média de várias leituras" — a lógica de fechar a soma
+        // forçaria essa única leitura a ser exatamente o alvo (zero desvio, sempre).
+        // Nesse caso a leitura em si é a amostra: aplica o desvio direto nela.
+        if (count === 1) {
+            return [parseFloat((target + randInRange()).toFixed(decimals))];
+        }
+
         // Gera count - 1 leituras aleatórias
         const r = Array(count - 1).fill(0).map(() => {
             const v = target + randInRange();
