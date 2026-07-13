@@ -91,7 +91,7 @@ function CellInput({
     rowIndex: number,
     col: typeof COLUMNS[0],
     onChange: (val: any) => void,
-    onMove: (dir: 'up' | 'down' | 'left' | 'right') => void
+    onMove: (dir: 'up' | 'down' | 'left' | 'right', ownerDoc: Document) => void
 }) {
     const [localVal, setLocalVal] = useState(value === undefined ? '' : String(value));
 
@@ -120,25 +120,26 @@ function CellInput({
     };
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        const ownerDoc = e.currentTarget.ownerDocument;
         if (e.key === 'Enter') {
             handleBlur();
-            onMove('down');
+            onMove('down', ownerDoc);
             e.preventDefault();
         } else if (e.key === 'ArrowUp') {
             handleBlur();
-            onMove('up');
+            onMove('up', ownerDoc);
             e.preventDefault();
         } else if (e.key === 'ArrowDown') {
             handleBlur();
-            onMove('down');
+            onMove('down', ownerDoc);
             e.preventDefault();
         } else if (e.key === 'ArrowLeft') {
             handleBlur();
-            onMove('left');
+            onMove('left', ownerDoc);
             e.preventDefault();
         } else if (e.key === 'ArrowRight') {
             handleBlur();
-            onMove('right');
+            onMove('right', ownerDoc);
             e.preventDefault();
         }
     };
@@ -165,7 +166,9 @@ export default function ReanaliseDataTable({ gridData, labels, machineName, onCh
 
     const rowCount = gridData.mic.length;
 
-    const handleMove = (rowIndex: number, colIndex: number, dir: 'up' | 'down' | 'left' | 'right') => {
+    // Usa o ownerDocument do campo de origem — dentro do PiP, os campos vivem no
+    // document da janela flutuante, não no document da página principal.
+    const handleMove = (rowIndex: number, colIndex: number, dir: 'up' | 'down' | 'left' | 'right', ownerDoc: Document) => {
         let nextRow = rowIndex;
         let nextCol = colIndex;
 
@@ -175,7 +178,7 @@ export default function ReanaliseDataTable({ gridData, labels, machineName, onCh
         if (dir === 'right') nextCol = colIndex + 1;
 
         if (nextRow >= 0 && nextRow < rowCount && nextCol >= 0 && nextCol < COLUMNS.length) {
-            const nextField = document.getElementById(`grid-cell-${nextRow}-${COLUMNS[nextCol].key}`);
+            const nextField = ownerDoc.getElementById(`grid-cell-${nextRow}-${COLUMNS[nextCol].key}`);
             if (nextField) {
                 (nextField as HTMLInputElement).focus();
             }
@@ -212,7 +215,7 @@ export default function ReanaliseDataTable({ gridData, labels, machineName, onCh
                                             rowIndex={rowIndex}
                                             col={col}
                                             onChange={(newVal) => onChange(rowIndex, col.key, newVal)}
-                                            onMove={(dir) => handleMove(rowIndex, colIndex, dir)}
+                                            onMove={(dir, ownerDoc) => handleMove(rowIndex, colIndex, dir, ownerDoc)}
                                         />
                                     </td>
                                 );

@@ -298,7 +298,7 @@ export default function ReanalisePage() {
     const handleMinEdit = (field: string, value: string) => setMinEdits(prev => ({ ...prev, [field]: value }));
     const handleMaxEdit = (field: string, value: string) => setMaxEdits(prev => ({ ...prev, [field]: value }));
 
-    const handleBlur = (field: string, value: string, decimals: number, editType: 'avg' | 'min' | 'max' = 'avg') => {
+    const handleBlur = (field: string, value: string, decimals: number, editType: 'avg' | 'min' | 'max' = 'avg', ownerDoc: Document = document) => {
         if (!value) return;
         const updater = editType === 'avg' ? handleAvgEdit : (editType === 'min' ? handleMinEdit : handleMaxEdit);
         if (field === 'cg') {
@@ -307,15 +307,15 @@ export default function ReanalisePage() {
             const num = parseNum(value);
             if (isNaN(num)) return;
             const sanitized = sanitize(num, field);
-            
+
             const errorMsg = validateBounds(field, sanitized);
             if (errorMsg) {
                 alert(`Valor Inválido no campo ${editType.toUpperCase()}!\n\n${errorMsg}\n\nVocê digitou: ${sanitized}`);
                 updater(field, ''); // clear the invalid value
-                
-                // Keep focus on the field
+
+                // Keep focus on the field (no documento correto — pode ser o da janela PiP)
                 setTimeout(() => {
-                    document.getElementById(`${editType}-field-${field}`)?.focus();
+                    ownerDoc.getElementById(`${editType}-field-${field}`)?.focus();
                 }, 10);
                 return;
             }
@@ -324,25 +324,28 @@ export default function ReanalisePage() {
         }
     };
 
+    // Navegação por seta/enter usa o ownerDocument do próprio input em foco, já que
+    // dentro do PiP os campos vivem no document da janela flutuante, não no principal.
     const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, index: number, editType: 'avg' | 'min' | 'max' = 'avg') => {
+        const ownerDoc = e.currentTarget.ownerDocument;
         if (e.key === 'Enter' || e.key === 'ArrowRight') {
             e.preventDefault();
-            const next = document.getElementById(`${editType}-field-${DISPLAY_FIELDS[index + 1]?.key}`);
+            const next = ownerDoc.getElementById(`${editType}-field-${DISPLAY_FIELDS[index + 1]?.key}`);
             if (next) (next as HTMLInputElement).focus();
         } else if (e.key === 'ArrowLeft') {
             e.preventDefault();
-            const prev = document.getElementById(`${editType}-field-${DISPLAY_FIELDS[index - 1]?.key}`);
+            const prev = ownerDoc.getElementById(`${editType}-field-${DISPLAY_FIELDS[index - 1]?.key}`);
             if (prev) (prev as HTMLInputElement).focus();
         } else if (e.key === 'ArrowDown') {
             if (editType === 'min') {
                 e.preventDefault();
-                const next = document.getElementById(`max-field-${DISPLAY_FIELDS[index]?.key}`);
+                const next = ownerDoc.getElementById(`max-field-${DISPLAY_FIELDS[index]?.key}`);
                 if (next) (next as HTMLInputElement).focus();
             }
         } else if (e.key === 'ArrowUp') {
             if (editType === 'max') {
                 e.preventDefault();
-                const prev = document.getElementById(`min-field-${DISPLAY_FIELDS[index]?.key}`);
+                const prev = ownerDoc.getElementById(`min-field-${DISPLAY_FIELDS[index]?.key}`);
                 if (prev) (prev as HTMLInputElement).focus();
             }
         }
@@ -598,7 +601,7 @@ export default function ReanalisePage() {
                                             placeholder="0"
                                             onChange={e => handleAvgEdit(f.key, e.target.value)}
                                             onFocus={e => e.target.select()}
-                                            onBlur={e => handleBlur(f.key, e.target.value, f.decimals, 'avg')}
+                                            onBlur={e => handleBlur(f.key, e.target.value, f.decimals, 'avg', e.target.ownerDocument)}
                                             onKeyDown={e => handleKeyDown(e, index, 'avg')}
                                             className="w-full h-12 text-center text-[14px] font-mono font-bold text-black border-none focus:bg-blue-50 focus:ring-inset focus:ring-2 focus:ring-blue-500 focus:relative focus:z-10 outline-none transition-colors"
                                         />
@@ -619,7 +622,7 @@ export default function ReanalisePage() {
                                                 placeholder="0"
                                                 onChange={e => handleMinEdit(f.key, e.target.value)}
                                                 onFocus={e => e.target.select()}
-                                                onBlur={e => handleBlur(f.key, e.target.value, f.decimals, 'min')}
+                                                onBlur={e => handleBlur(f.key, e.target.value, f.decimals, 'min', e.target.ownerDocument)}
                                                 onKeyDown={e => handleKeyDown(e, index, 'min')}
                                                 className="w-full h-12 text-center text-[14px] font-mono font-bold text-blue-700 border-none bg-transparent focus:bg-blue-100 focus:ring-inset focus:ring-2 focus:ring-blue-500 focus:relative focus:z-10 outline-none transition-colors"
                                             />
@@ -638,7 +641,7 @@ export default function ReanalisePage() {
                                                 placeholder="0"
                                                 onChange={e => handleMaxEdit(f.key, e.target.value)}
                                                 onFocus={e => e.target.select()}
-                                                onBlur={e => handleBlur(f.key, e.target.value, f.decimals, 'max')}
+                                                onBlur={e => handleBlur(f.key, e.target.value, f.decimals, 'max', e.target.ownerDocument)}
                                                 onKeyDown={e => handleKeyDown(e, index, 'max')}
                                                 className="w-full h-12 text-center text-[14px] font-mono font-bold text-emerald-700 border-none bg-transparent focus:bg-emerald-100 focus:ring-inset focus:ring-2 focus:ring-emerald-500 focus:relative focus:z-10 outline-none transition-colors"
                                             />
