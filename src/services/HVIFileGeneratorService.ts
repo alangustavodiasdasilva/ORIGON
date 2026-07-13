@@ -1028,8 +1028,10 @@ export class HVIFileGeneratorService {
             const sciReadings  = overrideReadings?.sci?.length ? overrideReadings.sci : getRawReading('sci', fallbackSci, 1.0, 0);
 
             const mat          = Math.max(0.75, Math.min(1.0, averages.mat ?? 0.85));
-            // Variação 0.04 = oscila entre ~0.81 e ~0.93 para alvo típico de 0.87
-            const fallbackMat  = this.getBalancedReadings(mat, 0.04, 2, seedMod, count, 'mat');
+            // Variação 0.015 = oscila entre ~0.855 e ~0.885 para alvo típico de 0.87.
+            // (0.04 anterior deixava o MAT oscilar até 0.83/0.91, fora do realista para
+            // repetições da mesma amostra — maturidade varia muito pouco entre leituras.)
+            const fallbackMat  = this.getBalancedReadings(mat, 0.015, 2, seedMod, count, 'mat');
             const matReadings  = overrideReadings?.mat?.length ? overrideReadings.mat : fallbackMat;
 
             const cspRaw       = (averages.csp && averages.csp > 10) ? averages.csp : 115;
