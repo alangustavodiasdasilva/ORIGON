@@ -491,7 +491,7 @@ export default function ReanalisePage() {
         try {
             const pip = await (window as any).documentPictureInPicture.requestWindow({
                 width: 1000,
-                height: 350,
+                height: 800,
             });
 
             // Copia todos os estilos da página principal
@@ -511,8 +511,12 @@ export default function ReanalisePage() {
                 }
             });
 
-            // Fundo igual ao da página original
-            pip.document.body.className = "bg-neutral-50 p-6";
+            // Fundo igual ao da página original, com scroll próprio (a janela tem menos altura que a página)
+            pip.document.documentElement.style.height = "100%";
+            pip.document.body.className = "bg-neutral-50 p-4";
+            pip.document.body.style.height = "100%";
+            pip.document.body.style.overflowY = "auto";
+            pip.document.body.style.margin = "0";
 
             pip.addEventListener('pagehide', () => {
                 setPipWindow(null);
@@ -524,7 +528,7 @@ export default function ReanalisePage() {
         }
     };
 
-    const pipContent = (
+    const section1Content = (
         <div className="space-y-3">
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -649,6 +653,240 @@ export default function ReanalisePage() {
         </div>
     );
 
+    const section2Content = (
+        <div className="space-y-3">
+            <span className="text-[10px] font-black uppercase tracking-widest text-neutral-500">
+                2. Configurações e Exportação
+            </span>
+            <div className="border border-neutral-200 bg-white shadow-sm flex flex-col">
+                <div className="p-5 space-y-5">
+                    {loadingMachines ? (
+                        <div className="flex items-center gap-2 text-neutral-400 text-[11px]">
+                            <Loader2 className="w-4 h-4 animate-spin" /> Carregando máquinas...
+                        </div>
+                    ) : machines.length === 0 ? (
+                        <div className="flex items-center gap-2 text-red-600 text-[11px]">
+                            <AlertCircle className="w-4 h-4" /> Nenhuma máquina cadastrada.
+                        </div>
+                    ) : (
+                        <div className="space-y-2">
+                            <label htmlFor="reanalise-machine-select" className="text-[9px] font-black uppercase text-neutral-400 tracking-widest">
+                                Máquina HVI
+                            </label>
+                            <select
+                                id="reanalise-machine-select"
+                                title="Selecionar máquina HVI"
+                                value={selectedMachineId}
+                                onChange={e => setSelectedMachineId(e.target.value)}
+                                className="w-full h-10 border border-neutral-300 px-3 text-[12px] font-bold text-black bg-white focus:border-black outline-none rounded-none"
+                            >
+                                {machines.map(m => (
+                                    <option key={m.id} value={m.id}>
+                                        {m.machineId} — {m.model} ({m.serialNumber})
+                                    </option>
+                                ))}
+                            </select>
+                            {selectedMachine && (
+                                <div className="flex items-center gap-2 mt-1">
+                                    <Cpu className="w-3.5 h-3.5 text-neutral-500" />
+                                    <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-0.5 ${selectedMachine.model === 'USTER' ? 'bg-blue-50 text-blue-700 border border-blue-200' : 'bg-purple-50 text-purple-700 border border-purple-200'
+                                        }`}>
+                                        {selectedMachine.model}
+                                    </span>
+                                    <span className="text-[9px] text-neutral-400 font-mono uppercase">
+                                        {selectedMachine.model === 'USTER' ? 'Extensão: .H1' : 'Formato PREMIER'}
+                                    </span>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    <div className="space-y-4">
+                        {/* Ordem de Serviço (OS) */}
+                        <div>
+                            <label htmlFor="reanalise-os" className="text-[9px] font-black uppercase text-neutral-400 tracking-widest block mb-2">
+                                Ordem de Serviço (OS)
+                            </label>
+                            <input
+                                id="reanalise-os"
+                                type="text"
+                                title="Ordem de Serviço"
+                                value={osInput}
+                                onChange={e => setOsInput(e.target.value)}
+                                onFocus={e => e.target.select()}
+                                className="w-full h-10 border border-neutral-300 px-3 text-[12px] font-bold text-black focus:border-black outline-none rounded-none bg-white"
+                            />
+                        </div>
+
+                        {/* Etiquetas */}
+                        <div className="col-span-1 sm:col-span-2">
+                            <div className="flex items-center justify-between mb-2">
+                                <label className="text-[9px] font-black uppercase text-neutral-400 tracking-widest">
+                                    Etiquetas Internas ({etiquetas.length} arquivo{etiquetas.length !== 1 ? 's' : ''})
+                                </label>
+                                <button
+                                    type="button"
+                                    onClick={() => setEtiquetas(prev => [...prev, ''])}
+                                    title="Adicionar etiqueta"
+                                    className="flex items-center gap-1 h-6 px-2 text-[10px] font-black uppercase tracking-wider text-emerald-700 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 transition-colors"
+                                >
+                                    <Plus className="w-3 h-3" />
+                                    Adicionar
+                                </button>
+                            </div>
+                            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-4 xl:grid-cols-5 gap-2 max-h-[200px] overflow-y-auto p-2 border border-neutral-100 bg-neutral-50 custom-scrollbar">
+                                {etiquetas.map((val, idx) => (
+                                    <div key={idx} className="relative group">
+                                        <input
+                                            type="text"
+                                            placeholder={`Arq ${idx + 1}`}
+                                            title={`Etiqueta do arquivo ${idx + 1}`}
+                                            value={val}
+                                            onFocus={e => e.target.select()}
+                                            onChange={e => {
+                                                const next = [...etiquetas];
+                                                next[idx] = e.target.value;
+                                                setEtiquetas(next);
+                                            }}
+                                            className="w-full h-8 border border-neutral-300 px-2 pr-6 text-[11px] font-bold text-black focus:border-black outline-none rounded-none text-center bg-white"
+                                        />
+                                        {etiquetas.length > 1 && (
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setEtiquetas(prev => prev.filter((_, i) => i !== idx));
+                                                }}
+                                                title={`Remover etiqueta ${idx + 1}`}
+                                                className="absolute top-0 right-0 w-5 h-8 flex items-center justify-center text-neutral-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                                            >
+                                                <X className="w-3 h-3" />
+                                            </button>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Dados extras (Data / Hora) */}
+                    <div className="pt-4 border-t border-neutral-100 grid grid-cols-2 gap-4">
+                        <div>
+                            <label htmlFor="reanalise-date" className="text-[9px] font-black uppercase text-neutral-400 tracking-widest block mb-1">
+                                Data de Geração
+                            </label>
+                            <input
+                                id="reanalise-date"
+                                type="date"
+                                title="Data de geração"
+                                value={customDate}
+                                onChange={e => setCustomDate(e.target.value)}
+                                className="w-full h-9 border border-neutral-200 px-2 text-[11px] font-bold text-black focus:border-black outline-none rounded-none"
+                            />
+                        </div>
+                        <div>
+                            <label htmlFor="reanalise-time" className="text-[9px] font-black uppercase text-neutral-400 tracking-widest block mb-1">
+                                Hora de Geração
+                            </label>
+                            <input
+                                id="reanalise-time"
+                                type="time"
+                                title="Hora de geração"
+                                value={customTime}
+                                onChange={e => setCustomTime(e.target.value)}
+                                className="w-full h-9 border border-neutral-200 px-2 text-[11px] font-bold text-black focus:border-black outline-none rounded-none"
+                            />
+                        </div>
+                    </div>
+
+                    {/* Exportar */}
+                    {selectedMachine && (
+                        <div className="p-5 border-t border-neutral-100 bg-neutral-50 flex flex-col gap-3">
+                            <Button
+                                size="lg"
+                                disabled={isExporting || (typeof repCount === 'number' && repCount < 1)}
+                                onClick={handleExport}
+                                className="w-full h-14 rounded-none bg-black text-white hover:bg-neutral-800 text-[12px] font-black uppercase tracking-widest transition-colors"
+                            >
+                                {isExporting
+                                    ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Exportando...</>
+                                    : <><Download className="w-4 h-4 mr-2" />Gerar {repCount || 0} arquivo(s)</>
+                                }
+                            </Button>
+
+                            {exportStatus && (
+                                <div className={`flex items-start gap-2 p-3 border ${exportStatus.ok ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-red-50 border-red-200 text-red-700'
+                                    }`}>
+                                    {exportStatus.ok ? <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0" /> : <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />}
+                                    <span className="text-[11px] font-bold">{exportStatus.msg}</span>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+
+    const previewPanelContent = (
+        <>
+            <div className="flex items-center justify-between mb-3">
+                <span className="text-[10px] font-black uppercase tracking-widest text-neutral-500">
+                    Exemplo dos Arquivos ({previewFiles?.length || 0})
+                </span>
+                {isAutoPreviewing && <Loader2 className="w-3.5 h-3.5 animate-spin text-neutral-400" />}
+            </div>
+            <div className="border border-neutral-200 bg-white flex flex-col h-[600px] overflow-hidden">
+                <div className="bg-neutral-100 border-b border-neutral-200 px-3 py-2 text-[10px] font-black uppercase text-neutral-500 tracking-widest flex items-center justify-between shrink-0">
+                    <div className="flex items-center gap-2">
+                        <Eye className="w-3.5 h-3.5" />
+                        {selectedMachine ? `Prévia — ${selectedMachine.model}` : 'Prévia'}
+                    </div>
+                </div>
+                <div className="flex-1 overflow-y-auto bg-neutral-50 p-2 space-y-4">
+                    {previewFiles && previewFiles.length > 0 ? (
+                        previewFiles.map((file, idx) => (
+                            <div key={idx} className="bg-white border border-neutral-200 shadow-sm">
+                                <div className="bg-blue-50 border-b border-blue-100 px-3 py-1.5 text-[9px] font-mono font-bold text-blue-700 flex justify-between items-center">
+                                    <span>{file.name}</span>
+                                    <span className="opacity-50">#{idx + 1}</span>
+                                </div>
+                                <pre className="p-3 text-[10px] sm:text-[11px] font-mono whitespace-pre overflow-x-auto text-neutral-800">
+                                    {file.content}
+                                </pre>
+                            </div>
+                        ))
+                    ) : (
+                        <div className="h-full flex flex-col items-center justify-center text-center text-neutral-400 gap-2 opacity-50 p-6">
+                            <Eye className="w-8 h-8" />
+                            <p>Preencha os valores para ver<br />a prévia dos arquivos aqui.</p>
+                        </div>
+                    )}
+                </div>
+            </div>
+        </>
+    );
+
+    const dataTableContent = (gridData && selectedMachineId) ? (
+        <div className="animate-fade-in-up">
+            <ReanaliseDataTable
+                gridData={gridData}
+                labels={etiquetas}
+                machineName={machines.find(m => m.id === selectedMachineId)?.machineId || ''}
+                onChange={handleGridChange}
+            />
+        </div>
+    ) : null;
+
+    // Conteúdo completo (Valores + Configurações + Dados Gerados) que se move
+    // inteiro para a janela PiP quando ela está aberta.
+    const pipContent = (
+        <div className="space-y-6 min-w-[900px] p-1">
+            {section1Content}
+            {section2Content}
+            {dataTableContent}
+        </div>
+    );
+
     return (
         <div className="space-y-10 pt-6 pb-24 animate-fade-in w-full max-w-[1200px] mx-auto px-6">
             {/* Título */}
@@ -661,255 +899,41 @@ export default function ReanalisePage() {
                 </p>
             </div>
             <div className="space-y-8">
-                {/* ── Linha Superior: Valores (Full Width) ── */}
-                {pipWindow ? createPortal(pipContent, pipWindow.document.body) : pipContent}
+                {pipWindow && createPortal(pipContent, pipWindow.document.body)}
 
-                {pipWindow && (
-                    <div className="h-[200px] w-full border border-dashed border-blue-300 bg-blue-50/50 flex flex-col items-center justify-center text-blue-500 rounded-lg">
+                {pipWindow ? (
+                    <div className="w-full border border-dashed border-blue-300 bg-blue-50/50 flex flex-col items-center justify-center text-blue-500 rounded-lg gap-1 py-10 px-6 text-center">
                         <PictureInPicture2 className="w-8 h-8 mb-2 opacity-50" />
-                        <span className="text-[11px] font-bold uppercase tracking-widest">A tabela está aberta em uma janela flutuante</span>
+                        <span className="text-[11px] font-bold uppercase tracking-widest">
+                            Valores, configurações e dados gerados estão abertos em uma janela flutuante
+                        </span>
                         <Button variant="outline" size="sm" onClick={togglePiP} className="mt-4 h-7 text-[10px] uppercase font-bold text-blue-700 bg-white hover:bg-blue-50">
-                            Retornar Tabela
+                            Retornar à Página
                         </Button>
                     </div>
+                ) : (
+                    <>
+                        {section1Content}
+                        <div className="flex flex-col lg:flex-row gap-8 items-start">
+                            {/* ── Coluna Esquerda: Formulários ── */}
+                            <div className="flex-1 space-y-6 w-full min-w-0">
+                                {section2Content}
+                            </div>
+
+                            {/* ── Coluna Direita: Pré-visualização Fixa ── */}
+                            <div className="w-full lg:w-[450px] shrink-0">
+                                {previewPanelContent}
+                            </div>
+                        </div>
+
+                        {dataTableContent}
+                    </>
                 )}
 
-                <div className="flex flex-col lg:flex-row gap-8 items-start">
-                    {/* ── Coluna Esquerda: Formulários ── */}
-                    <div className="flex-1 space-y-6 w-full min-w-0">
-
-                        {/* Máquina + Quantidade + Botão */}
-                        <div className="space-y-3">
-                            <span className="text-[10px] font-black uppercase tracking-widest text-neutral-500">
-                                2. Configurações e Exportação
-                            </span>
-                            <div className="border border-neutral-200 bg-white shadow-sm flex flex-col">
-                                <div className="p-5 space-y-5">
-                                    {loadingMachines ? (
-                                        <div className="flex items-center gap-2 text-neutral-400 text-[11px]">
-                                            <Loader2 className="w-4 h-4 animate-spin" /> Carregando máquinas...
-                                        </div>
-                                    ) : machines.length === 0 ? (
-                                        <div className="flex items-center gap-2 text-red-600 text-[11px]">
-                                            <AlertCircle className="w-4 h-4" /> Nenhuma máquina cadastrada.
-                                        </div>
-                                    ) : (
-                                        <div className="space-y-2">
-                                            <label htmlFor="reanalise-machine-select" className="text-[9px] font-black uppercase text-neutral-400 tracking-widest">
-                                                Máquina HVI
-                                            </label>
-                                            <select
-                                                id="reanalise-machine-select"
-                                                title="Selecionar máquina HVI"
-                                                value={selectedMachineId}
-                                                onChange={e => setSelectedMachineId(e.target.value)}
-                                                className="w-full h-10 border border-neutral-300 px-3 text-[12px] font-bold text-black bg-white focus:border-black outline-none rounded-none"
-                                            >
-                                                {machines.map(m => (
-                                                    <option key={m.id} value={m.id}>
-                                                        {m.machineId} — {m.model} ({m.serialNumber})
-                                                    </option>
-                                                ))}
-                                            </select>
-                                            {selectedMachine && (
-                                                <div className="flex items-center gap-2 mt-1">
-                                                    <Cpu className="w-3.5 h-3.5 text-neutral-500" />
-                                                    <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-0.5 ${selectedMachine.model === 'USTER' ? 'bg-blue-50 text-blue-700 border border-blue-200' : 'bg-purple-50 text-purple-700 border border-purple-200'
-                                                        }`}>
-                                                        {selectedMachine.model}
-                                                    </span>
-                                                </div>
-                                            )}
-                                        </div>
-                                    )}
-
-                                    <div className="space-y-4">
-                                        {/* Quantidade de arquivos (somente leitura, controlado pelas etiquetas) */}
-                                        <div>
-                                            <label htmlFor="reanalise-rep-count" className="text-[9px] font-black uppercase text-neutral-400 tracking-widest block mb-2">
-                                                Qtd. de Arquivos
-                                            </label>
-                                            <div className="w-full h-10 border border-neutral-200 px-3 text-[14px] font-bold text-black bg-neutral-50 flex items-center rounded-none">
-                                                {etiquetas.length}
-                                            </div>
-                                            <p className="text-[9px] text-neutral-400 mt-1 font-mono uppercase">
-                                                {selectedMachine?.model === 'USTER' ? `Extensão: .H1` : `Formato PREMIER`}
-                                                {' · '}Controlado pelas etiquetas abaixo
-                                            </p>
-                                        </div>
-
-                                        {/* Ordem de Serviço (OS) */}
-                                        <div>
-                                            <label htmlFor="reanalise-os" className="text-[9px] font-black uppercase text-neutral-400 tracking-widest block mb-2">
-                                                Ordem de Serviço (OS)
-                                            </label>
-                                            <input
-                                                id="reanalise-os"
-                                                type="text"
-                                                title="Ordem de Serviço"
-                                                value={osInput}
-                                                onChange={e => setOsInput(e.target.value)}
-                                                onFocus={e => e.target.select()}
-                                                className="w-full h-10 border border-neutral-300 px-3 text-[12px] font-bold text-black focus:border-black outline-none rounded-none bg-white"
-                                            />
-                                        </div>
-
-                                        {/* Etiquetas */}
-                                        <div className="col-span-1 sm:col-span-2">
-                                            <div className="flex items-center justify-between mb-2">
-                                                <label className="text-[9px] font-black uppercase text-neutral-400 tracking-widest">
-                                                    Etiquetas Internas ({etiquetas.length} arquivo{etiquetas.length !== 1 ? 's' : ''})
-                                                </label>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setEtiquetas(prev => [...prev, ''])}
-                                                    title="Adicionar etiqueta"
-                                                    className="flex items-center gap-1 h-6 px-2 text-[10px] font-black uppercase tracking-wider text-emerald-700 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 transition-colors"
-                                                >
-                                                    <Plus className="w-3 h-3" />
-                                                    Adicionar
-                                                </button>
-                                            </div>
-                                            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-4 xl:grid-cols-5 gap-2 max-h-[200px] overflow-y-auto p-2 border border-neutral-100 bg-neutral-50 custom-scrollbar">
-                                                {etiquetas.map((val, idx) => (
-                                                    <div key={idx} className="relative group">
-                                                        <input
-                                                            type="text"
-                                                            placeholder={`Arq ${idx + 1}`}
-                                                            title={`Etiqueta do arquivo ${idx + 1}`}
-                                                            value={val}
-                                                            onFocus={e => e.target.select()}
-                                                            onChange={e => {
-                                                                const next = [...etiquetas];
-                                                                next[idx] = e.target.value;
-                                                                setEtiquetas(next);
-                                                            }}
-                                                            className="w-full h-8 border border-neutral-300 px-2 pr-6 text-[11px] font-bold text-black focus:border-black outline-none rounded-none text-center bg-white"
-                                                        />
-                                                        {etiquetas.length > 1 && (
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => {
-                                                                    setEtiquetas(prev => prev.filter((_, i) => i !== idx));
-                                                                }}
-                                                                title={`Remover etiqueta ${idx + 1}`}
-                                                                className="absolute top-0 right-0 w-5 h-8 flex items-center justify-center text-neutral-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
-                                                            >
-                                                                <X className="w-3 h-3" />
-                                                            </button>
-                                                        )}
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {/* Dados extras (Data / Hora) */}
-                                    <div className="pt-4 border-t border-neutral-100 grid grid-cols-2 gap-4">
-                                        <div>
-                                            <label htmlFor="reanalise-date" className="text-[9px] font-black uppercase text-neutral-400 tracking-widest block mb-1">
-                                                Data de Geração
-                                            </label>
-                                            <input
-                                                id="reanalise-date"
-                                                type="date"
-                                                title="Data de geração"
-                                                value={customDate}
-                                                onChange={e => setCustomDate(e.target.value)}
-                                                className="w-full h-9 border border-neutral-200 px-2 text-[11px] font-bold text-black focus:border-black outline-none rounded-none"
-                                            />
-                                        </div>
-                                        <div>
-                                            <label htmlFor="reanalise-time" className="text-[9px] font-black uppercase text-neutral-400 tracking-widest block mb-1">
-                                                Hora de Geração
-                                            </label>
-                                            <input
-                                                id="reanalise-time"
-                                                type="time"
-                                                title="Hora de geração"
-                                                value={customTime}
-                                                onChange={e => setCustomTime(e.target.value)}
-                                                className="w-full h-9 border border-neutral-200 px-2 text-[11px] font-bold text-black focus:border-black outline-none rounded-none"
-                                            />
-                                        </div>
-                                    </div>
-
-                                    {/* Exportar */}
-                                    {selectedMachine && (
-                                        <div className="p-5 border-t border-neutral-100 bg-neutral-50 flex flex-col gap-3">
-                                            <Button
-                                                size="lg"
-                                                disabled={isExporting || (typeof repCount === 'number' && repCount < 1)}
-                                                onClick={handleExport}
-                                                className="w-full h-14 rounded-none bg-black text-white hover:bg-neutral-800 text-[12px] font-black uppercase tracking-widest transition-colors"
-                                            >
-                                                {isExporting
-                                                    ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Exportando...</>
-                                                    : <><Download className="w-4 h-4 mr-2" />Gerar {repCount || 0} arquivo(s)</>
-                                                }
-                                            </Button>
-
-                                            {exportStatus && (
-                                                <div className={`flex items-start gap-2 p-3 border ${exportStatus.ok ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-red-50 border-red-200 text-red-700'
-                                                    }`}>
-                                                    {exportStatus.ok ? <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0" /> : <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />}
-                                                    <span className="text-[11px] font-bold">{exportStatus.msg}</span>
-                                                </div>
-                                            )}
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* ── Coluna Direita: Pré-visualização Fixa ── */}
-                    <div className="w-full lg:w-[450px] shrink-0">
-                        <div className="flex items-center justify-between mb-3">
-                            <span className="text-[10px] font-black uppercase tracking-widest text-neutral-500">
-                                Exemplo dos Arquivos ({previewFiles?.length || 0})
-                            </span>
-                            {isAutoPreviewing && <Loader2 className="w-3.5 h-3.5 animate-spin text-neutral-400" />}
-                        </div>
-                        <div className="border border-neutral-200 bg-white flex flex-col h-[600px] overflow-hidden">
-                            <div className="bg-neutral-100 border-b border-neutral-200 px-3 py-2 text-[10px] font-black uppercase text-neutral-500 tracking-widest flex items-center justify-between shrink-0">
-                                <div className="flex items-center gap-2">
-                                    <Eye className="w-3.5 h-3.5" />
-                                    {selectedMachine ? `Prévia — ${selectedMachine.model}` : 'Prévia'}
-                                </div>
-                            </div>
-                            <div className="flex-1 overflow-y-auto bg-neutral-50 p-2 space-y-4">
-                                {previewFiles && previewFiles.length > 0 ? (
-                                    previewFiles.map((file, idx) => (
-                                        <div key={idx} className="bg-white border border-neutral-200 shadow-sm">
-                                            <div className="bg-blue-50 border-b border-blue-100 px-3 py-1.5 text-[9px] font-mono font-bold text-blue-700 flex justify-between items-center">
-                                                <span>{file.name}</span>
-                                                <span className="opacity-50">#{idx + 1}</span>
-                                            </div>
-                                            <pre className="p-3 text-[10px] sm:text-[11px] font-mono whitespace-pre overflow-x-auto text-neutral-800">
-                                                {file.content}
-                                            </pre>
-                                        </div>
-                                    ))
-                                ) : (
-                                    <div className="h-full flex flex-col items-center justify-center text-center text-neutral-400 gap-2 opacity-50 p-6">
-                                        <Eye className="w-8 h-8" />
-                                        <p>Preencha os valores para ver<br />a prévia dos arquivos aqui.</p>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                
-                {gridData && selectedMachineId && (
-                    <div className="mt-8 animate-fade-in-up">
-                        <ReanaliseDataTable 
-                            gridData={gridData} 
-                            labels={etiquetas} 
-                            machineName={machines.find(m => m.id === selectedMachineId)?.machineId || ''} 
-                            onChange={handleGridChange} 
-                        />
+                {/* A prévia dos arquivos continua visível na página mesmo com a janela flutuante aberta */}
+                {pipWindow && (
+                    <div className="w-full lg:w-[450px] lg:ml-auto">
+                        {previewPanelContent}
                     </div>
                 )}
             </div>
