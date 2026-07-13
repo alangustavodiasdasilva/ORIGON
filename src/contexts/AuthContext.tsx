@@ -30,6 +30,19 @@ async function hashPassword(password: string): Promise<string> {
     return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
+/**
+ * Grava no localStorage sem derrubar o app se a quota estourar (ex: cache de
+ * previews OCR/scanner acumulado com o tempo). Login/seleção de lab não podem
+ * depender de espaço livre no localStorage.
+ */
+function safeSetLocalStorage(key: string, value: string) {
+    try {
+        localStorage.setItem(key, value);
+    } catch (e) {
+        console.warn(`Falha ao gravar '${key}' no localStorage (provavelmente quota excedida):`, e);
+    }
+}
+
 
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -79,7 +92,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (isLoading) return; // Don't touch storage while loading initial state
 
         if (currentLab) {
-            localStorage.setItem("fibertech_selected_lab", JSON.stringify(currentLab));
+            safeSetLocalStorage("fibertech_selected_lab", JSON.stringify(currentLab));
         } else {
             localStorage.removeItem("fibertech_selected_lab");
         }
@@ -106,7 +119,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             const updated = await AnalistaService.get(user.id);
             if (updated) {
                 setUser(updated);
-                localStorage.setItem("fibertech_session", JSON.stringify(updated));
+                safeSetLocalStorage("fibertech_session", JSON.stringify(updated));
             }
         } catch (e) {
             console.error("Failed to refresh user:", e);
@@ -133,7 +146,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 }
 
                 setUser(found);
-                localStorage.setItem("fibertech_session", JSON.stringify(userSession));
+                safeSetLocalStorage("fibertech_session", JSON.stringify(userSession));
 
                 // Load Lab Context
                 if (found.acesso === 'admin_global') {
@@ -148,7 +161,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     }
                     if (lab) {
                         setCurrentLab(lab);
-                        localStorage.setItem("fibertech_selected_lab", JSON.stringify(lab));
+                        safeSetLocalStorage("fibertech_selected_lab", JSON.stringify(lab));
                     }
                 } else {
                     setCurrentLab(null);
@@ -170,7 +183,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (labId === 'all') {
             const allLab = { id: 'all', nome: 'Todos os Laboratórios' };
             setCurrentLab(allLab as any);
-            localStorage.setItem("fibertech_selected_lab", JSON.stringify(allLab));
+            safeSetLocalStorage("fibertech_selected_lab", JSON.stringify(allLab));
             return;
         }
 
@@ -183,7 +196,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         if (lab) {
             setCurrentLab(lab);
-            localStorage.setItem("fibertech_selected_lab", JSON.stringify(lab));
+            safeSetLocalStorage("fibertech_selected_lab", JSON.stringify(lab));
         }
     };
 
