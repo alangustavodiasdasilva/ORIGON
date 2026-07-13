@@ -1075,7 +1075,11 @@ export class HVIFileGeneratorService {
 
             // ── lineName derivado do número real da máquina ─────────────────────
             // machineId ex: 'HVI 01', 'HVI 5', 'HVI05' → extrai o número → 'Line5       '
-            const machineNum = parseInt(customHvi || machine.machineId.replace(/\D/g, ''), 10);
+            // Precisa remover não-dígitos de QUALQUER fonte usada (customHvi também pode
+            // vir com prefixo tipo "HVI 12") — se não, parseInt("HVI 12",10) dá NaN e o
+            // arquivo sempre cai no fallback "Line5", errando o número da máquina.
+            const machineIdSource = (customHvi || machine.machineId || '').replace(/\D/g, '');
+            const machineNum = parseInt(machineIdSource, 10);
             const lineName = `Line${isNaN(machineNum) ? '5' : machineNum}`.padEnd(12, ' ');
 
             console.log(`[HVI] Amostra ${sample.amostra_id} cor=${sample.cor} modelo=${machine.model} linha=${lineName.trim()}`);
