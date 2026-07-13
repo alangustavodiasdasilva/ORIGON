@@ -146,7 +146,7 @@ export default function ReanalisePage() {
     const [generationTrigger, setGenerationTrigger] = useState(0);
     const [pipWindow, setPipWindow] = useState<Window | null>(null);
 
-    const [etiquetas, setEtiquetas] = useState<string[]>(Array(6).fill(''));
+    const [etiquetas, setEtiquetas] = useState<string[]>(Array(1).fill(''));
     const [osInput, setOsInput] = useState('');
     const [customDate, setCustomDate] = useState('');
     const [customTime, setCustomTime] = useState('');
@@ -838,7 +838,7 @@ export default function ReanalisePage() {
                 </span>
                 {isAutoPreviewing && <Loader2 className="w-3.5 h-3.5 animate-spin text-neutral-400" />}
             </div>
-            <div className="border border-neutral-200 bg-white flex flex-col h-[600px] overflow-hidden">
+            <div className="border border-neutral-200 bg-white flex flex-col flex-1 min-h-[400px] overflow-hidden">
                 <div className="bg-neutral-100 border-b border-neutral-200 px-3 py-2 text-[10px] font-black uppercase text-neutral-500 tracking-widest flex items-center justify-between shrink-0">
                     <div className="flex items-center gap-2">
                         <Eye className="w-3.5 h-3.5" />
@@ -917,14 +917,14 @@ export default function ReanalisePage() {
                 ) : (
                     <>
                         {section1Content}
-                        <div className="flex flex-col lg:flex-row gap-8 items-start">
+                        <div className="flex flex-col lg:flex-row gap-8 lg:items-stretch">
                             {/* ── Coluna Esquerda: Formulários ── */}
                             <div className="flex-1 space-y-6 w-full min-w-0">
                                 {section2Content}
                             </div>
 
-                            {/* ── Coluna Direita: Pré-visualização Fixa ── */}
-                            <div className="w-full lg:w-[450px] shrink-0">
+                            {/* ── Coluna Direita: Pré-visualização (acompanha a altura da coluna esquerda) ── */}
+                            <div className="w-full lg:w-[450px] shrink-0 flex flex-col">
                                 {previewPanelContent}
                             </div>
                         </div>
@@ -935,7 +935,7 @@ export default function ReanalisePage() {
 
                 {/* A prévia dos arquivos continua visível na página mesmo com a janela flutuante aberta */}
                 {pipWindow && (
-                    <div className="w-full lg:w-[450px] lg:ml-auto">
+                    <div className="w-full lg:w-[450px] lg:ml-auto flex flex-col">
                         {previewPanelContent}
                     </div>
                 )}
