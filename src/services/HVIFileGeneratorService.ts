@@ -827,9 +827,11 @@ export class HVIFileGeneratorService {
         mat: number,
         csp: number
     ): string {
-        // AMOSTRA: formato '{mala}#{repIndex}' — ex: '89801#01'
+        // AMOSTRA: formato '{mala}#01' — o sufixo é sempre "01", não o índice real
+        // da repetição (repIndex segue um contador global entre gerações e não deve
+        // aparecer aqui, senão o arquivo sai com "#03", "#04"... em vez de sempre "#01").
         const safeMala = (sample.mala || '').replace(/\./g, '');
-        const amostraBase = `${safeMala}#${String(repIndex).padStart(2, '0')}`;
+        const amostraBase = `${safeMala}#01`;
         const amostraPad = amostraBase.substring(0, 40).padEnd(40, ' ');
         const etiquetaPad = (sample.etiqueta || '').substring(0, 40).padEnd(40, ' ');
 
