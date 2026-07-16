@@ -80,6 +80,20 @@ const COLUMNS = [
     { key: 'sfi', label: 'SFI' }
 ];
 
+const DECIMALS: Record<string, number> = {
+    mic: 2, len: 2, unf: 1, str: 1, elg: 1, rd: 1, b: 1, leaf: 0, area: 2, count: 0, mat: 2, sfi: 1
+};
+
+/** Média e desvio padrão amostral (n-1) dos valores numéricos de uma coluna gerada. */
+function computeStats(values: any[]): { mean: number; std: number } {
+    const nums = (values || []).map(Number).filter(v => !isNaN(v));
+    if (nums.length === 0) return { mean: 0, std: 0 };
+    const mean = nums.reduce((a, b) => a + b, 0) / nums.length;
+    if (nums.length < 2) return { mean, std: 0 };
+    const variance = nums.reduce((acc, v) => acc + (v - mean) ** 2, 0) / (nums.length - 1);
+    return { mean, std: Math.sqrt(variance) };
+}
+
 function CellInput({
     value,
     rowIndex,
@@ -224,6 +238,26 @@ export default function ReanaliseDataTable({ gridData, labels, machineName, onCh
                         </tr>
                     ))}
                 </tbody>
+                <tfoot className="bg-slate-50 border-t-2 border-slate-300 font-semibold">
+                    <tr>
+                        <td className="p-2 border-r border-slate-200 text-slate-600" colSpan={2}>Média</td>
+                        {COLUMNS.map(col => (
+                            <td key={col.key} className="p-2 border-r border-slate-200 text-center font-mono text-slate-700">
+                                {col.isText ? '—' : computeStats(gridData[col.key]).mean.toFixed(DECIMALS[col.key] ?? 2)}
+                            </td>
+                        ))}
+                        <td className="p-2 border-r border-slate-200"></td>
+                    </tr>
+                    <tr>
+                        <td className="p-2 border-r border-slate-200 text-slate-600" colSpan={2}>Desvio Padrão</td>
+                        {COLUMNS.map(col => (
+                            <td key={col.key} className="p-2 border-r border-slate-200 text-center font-mono text-blue-700">
+                                {col.isText ? '—' : computeStats(gridData[col.key]).std.toFixed(DECIMALS[col.key] ?? 2)}
+                            </td>
+                        ))}
+                        <td className="p-2 border-r border-slate-200"></td>
+                    </tr>
+                </tfoot>
             </table>
         </div>
     );

@@ -126,6 +126,15 @@ function formatCG(raw: string): string {
     return t;
 }
 
+/** Amostra de uma normal(mean, sigma) via transformada de Box-Muller. */
+function randomNormal(mean: number, sigma: number): number {
+    if (sigma <= 0) return mean;
+    const u1 = Math.max(Math.random(), 1e-9);
+    const u2 = Math.random();
+    const z = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+    return mean + z * sigma;
+}
+
 export default function ReanalisePage() {
     const { user, currentLab } = useAuth();
 
@@ -136,6 +145,7 @@ export default function ReanalisePage() {
     const [avgEdits, setAvgEdits] = useState<Record<string, string>>({});
     const [minEdits, setMinEdits] = useState<Record<string, string>>({});
     const [maxEdits, setMaxEdits] = useState<Record<string, string>>({});
+    const [stdEdits, setStdEdits] = useState<Record<string, string>>({});
     const [isRangeMode, setIsRangeMode] = useState(false);
     const [repCount, setRepCount] = useState<number | ''>(6);
     const [isExporting, setIsExporting] = useState(false);
@@ -173,7 +183,7 @@ export default function ReanalisePage() {
             }
         }, 500); // 500ms debounce
         return () => clearTimeout(timer);
-    }, [avgEdits, minEdits, maxEdits, isRangeMode, selectedMachineId, repCount, etiquetas, customDate, customTime, osInput, generationTrigger]);
+    }, [avgEdits, minEdits, maxEdits, stdEdits, isRangeMode, selectedMachineId, repCount, etiquetas, customDate, customTime, osInput, generationTrigger]);
 
     const generateAutoPreview = async () => {
         const machine = machines.find(m => m.id === selectedMachineId);
@@ -297,9 +307,23 @@ export default function ReanalisePage() {
     const handleAvgEdit = (field: string, value: string) => setAvgEdits(prev => ({ ...prev, [field]: value }));
     const handleMinEdit = (field: string, value: string) => setMinEdits(prev => ({ ...prev, [field]: value }));
     const handleMaxEdit = (field: string, value: string) => setMaxEdits(prev => ({ ...prev, [field]: value }));
+    const handleStdEdit = (field: string, value: string) => setStdEdits(prev => ({ ...prev, [field]: value }));
 
-    const handleBlur = (field: string, value: string, decimals: number, editType: 'avg' | 'min' | 'max' = 'avg', ownerDoc: Document = document) => {
+    const handleBlur = (field: string, value: string, decimals: number, editType: 'avg' | 'min' | 'max' | 'std' = 'avg', ownerDoc: Document = document) => {
         if (!value) return;
+
+        // Desvio Padrão não é um valor físico do campo (não tem faixa/unidade própria como
+        // MIC ou RD) — só arredonda, sem sanitize()/validateBounds() que assumiriam escala errada.
+        if (editType === 'std') {
+            const num = parseNum(value);
+            if (isNaN(num) || num < 0) {
+                handleStdEdit(field, '');
+                return;
+            }
+            handleStdEdit(field, decimals > 0 ? num.toFixed(decimals) : String(num));
+            return;
+        }
+
         const updater = editType === 'avg' ? handleAvgEdit : (editType === 'min' ? handleMinEdit : handleMaxEdit);
         if (field === 'cg') {
             updater(field, formatCG(value));
@@ -326,7 +350,7 @@ export default function ReanalisePage() {
 
     // Navegação por seta/enter usa o ownerDocument do próprio input em foco, já que
     // dentro do PiP os campos vivem no document da janela flutuante, não no principal.
-    const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, index: number, editType: 'avg' | 'min' | 'max' = 'avg') => {
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, index: number, editType: 'avg' | 'min' | 'max' | 'std' = 'avg') => {
         const ownerDoc = e.currentTarget.ownerDocument;
         if (e.key === 'Enter' || e.key === 'ArrowRight') {
             e.preventDefault();
@@ -341,11 +365,19 @@ export default function ReanalisePage() {
                 e.preventDefault();
                 const next = ownerDoc.getElementById(`max-field-${DISPLAY_FIELDS[index]?.key}`);
                 if (next) (next as HTMLInputElement).focus();
+            } else if (editType === 'max') {
+                e.preventDefault();
+                const next = ownerDoc.getElementById(`std-field-${DISPLAY_FIELDS[index]?.key}`);
+                if (next) (next as HTMLInputElement).focus();
             }
         } else if (e.key === 'ArrowUp') {
             if (editType === 'max') {
                 e.preventDefault();
                 const prev = ownerDoc.getElementById(`min-field-${DISPLAY_FIELDS[index]?.key}`);
+                if (prev) (prev as HTMLInputElement).focus();
+            } else if (editType === 'std') {
+                e.preventDefault();
+                const prev = ownerDoc.getElementById(`max-field-${DISPLAY_FIELDS[index]?.key}`);
                 if (prev) (prev as HTMLInputElement).focus();
             }
         }
@@ -376,6 +408,7 @@ export default function ReanalisePage() {
                 const minRaw = minEdits[f.key]?.trim();
                 const maxRaw = maxEdits[f.key]?.trim();
                 const avgRaw = avgEdits[f.key]?.trim();
+                const stdRaw = stdEdits[f.key]?.trim();
 
                 // Se o usuário não preencheu NENHUM campo (min, max ou média) para esta propriedade,
                 // não geramos override para ela, assim ela usará a variação aleatória balanceada normal.
@@ -385,10 +418,18 @@ export default function ReanalisePage() {
 
                 const minVal = parseFloat(minRaw?.replace(',', '.') || '0');
                 const maxVal = parseFloat(maxRaw?.replace(',', '.') || '0');
-                
+                const stdVal = parseFloat(stdRaw?.replace(',', '.') || '');
+
                 let rnd = minVal;
                 if (!isNaN(minVal) && !isNaN(maxVal) && maxVal > minVal) {
-                    rnd = minVal + Math.random() * (maxVal - minVal);
+                    // Distribuição normal centrada no meio do intervalo em vez de uniforme —
+                    // sorteio uniforme espalhava demais (qualquer ponto entre min/max com a
+                    // mesma chance), dando um desvio padrão bem maior que o de leituras reais.
+                    // Sem Desvio Padrão informado, assume (max-min)/6 — regra prática de que
+                    // ±3 desvios cobrem ~99.7% da faixa.
+                    const center = (minVal + maxVal) / 2;
+                    const sigma = (!isNaN(stdVal) && stdVal > 0) ? stdVal : (maxVal - minVal) / 6;
+                    rnd = Math.min(maxVal, Math.max(minVal, randomNormal(center, sigma)));
                 } else if (!isNaN(minVal) && minVal !== 0) {
                     rnd = minVal;
                 } else if (!isNaN(maxVal) && maxVal !== 0) {
@@ -629,7 +670,7 @@ export default function ReanalisePage() {
                                         </td>
                                     ))}
                                 </tr>
-                                <tr>
+                                <tr className="border-b border-neutral-200">
                                     <td className="border-r border-neutral-200 bg-emerald-50/50 text-[10px] font-bold uppercase text-emerald-600 pl-4 py-3">Máximo</td>
                                     {DISPLAY_FIELDS.map((f, index) => (
                                         <td key={f.key} className="border-r border-neutral-200 last:border-r-0 p-0 relative">
@@ -644,6 +685,25 @@ export default function ReanalisePage() {
                                                 onBlur={e => handleBlur(f.key, e.target.value, f.decimals, 'max', e.target.ownerDocument)}
                                                 onKeyDown={e => handleKeyDown(e, index, 'max')}
                                                 className="w-full h-12 text-center text-[14px] font-mono font-bold text-emerald-700 border-none bg-transparent focus:bg-emerald-100 focus:ring-inset focus:ring-2 focus:ring-emerald-500 focus:relative focus:z-10 outline-none transition-colors"
+                                            />
+                                        </td>
+                                    ))}
+                                </tr>
+                                <tr>
+                                    <td className="border-r border-neutral-200 bg-purple-50/50 text-[10px] font-bold uppercase text-purple-600 pl-4 py-3">Desvio Padrão</td>
+                                    {DISPLAY_FIELDS.map((f, index) => (
+                                        <td key={f.key} className="border-r border-neutral-200 last:border-r-0 p-0 relative">
+                                            <input
+                                                id={'std-field-' + f.key}
+                                                type="text"
+                                                title={'Desvio Padrão - ' + f.label}
+                                                value={stdEdits[f.key] !== undefined ? stdEdits[f.key] : ''}
+                                                placeholder="auto"
+                                                onChange={e => handleStdEdit(f.key, e.target.value)}
+                                                onFocus={e => e.target.select()}
+                                                onBlur={e => handleBlur(f.key, e.target.value, f.decimals, 'std', e.target.ownerDocument)}
+                                                onKeyDown={e => handleKeyDown(e, index, 'std')}
+                                                className="w-full h-12 text-center text-[14px] font-mono font-bold text-purple-700 border-none bg-transparent focus:bg-purple-100 focus:ring-inset focus:ring-2 focus:ring-purple-500 focus:relative focus:z-10 outline-none transition-colors"
                                             />
                                         </td>
                                     ))}
