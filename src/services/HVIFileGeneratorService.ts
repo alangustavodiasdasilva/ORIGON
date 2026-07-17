@@ -1227,44 +1227,10 @@ export class HVIFileGeneratorService {
                 startRepPremier = storedRepPremier && !isNaN(parseInt(storedRepPremier, 10)) ? parseInt(storedRepPremier, 10) + 1 : 1;
                 safeSetItem('hvi_global_rep_premier', (startRepPremier + count - 1).toString());
 
-                const isReanalise = sample.lote_id === 'reanalise';
-                
-                if (isReanalise) {
-                    const datLines: string[] = [];
-                    for (let i = 0; i < 10; i++) {
-                        datLines.push("");
-                    }
-                    for (let i = 0; i < count; i++) {
-                        let rawEtiqueta = (Array.isArray(customEtiqueta) ? customEtiqueta[i] : customEtiqueta) || sample.etiqueta;
-                        rawEtiqueta = rawEtiqueta?.replace(/\./g, '');
-                        const mala = sample.mala || 'REANALISE';
-                        const line = this.generatePremierDatFormatLine(
-                            mala,
-                            rawEtiqueta || '',
-                            lenReadings[i],
-                            unfReadings[i],
-                            sfiReadings[i],
-                            strReadings[i],
-                            elgReadings[i],
-                            micReadings[i],
-                            rdReadings[i],
-                            bReadings[i],
-                            averages.cg || "31-2",
-                            sciReadings[i],
-                            leafReadings[i],
-                            countReadings[i],
-                            areaReadings[i]
-                        );
-                        datLines.push(line);
-                    }
-                    const mNum = isNaN(machineNum) ? 1 : machineNum;
-                    const safeMala = (sample.mala || 'REANALISE').replace(/[^a-zA-Z0-9]/g, '_');
-                    const repFilename = `M${mNum}_HVI_PREMIER_${safeMala}_REP${startRepPremier}_${timestamp}.dat`;
-                    const fileContent = datLines.join('\n');
-                    files.push({ content: fileContent, filename: repFilename });
-                    content = fileContent;
-                    filename = repFilename;
-                } else {
+                // Antes a Reanálise gerava um .dat próprio (formato simplificado com aspas)
+                // enquanto Lotes/Amostras geravam o .txt "System Test Report" oficial —
+                // agora os dois sempre usam o mesmo gerador, pra sair arquivo idêntico.
+                {
                     for (let i = 0; i < count; i++) {
                         const repIndex = startRepPremier + i;
                         const dateStr = customDate || now.toLocaleDateString('pt-BR').replace(/\//g, '-');

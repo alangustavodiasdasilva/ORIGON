@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { Cpu, Download, CheckCircle2, AlertCircle, Loader2, Eye, Plus, X, PictureInPicture2 } from "lucide-react";
+import { Cpu, Download, CheckCircle2, AlertCircle, Loader2, Eye, Plus, X, PictureInPicture2, Eraser } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MachineService, type Machine } from "@/entities/Machine";
 import { useAuth } from "@/contexts/AuthContext";
@@ -832,15 +832,29 @@ export default function ReanalisePage() {
                                 <label className="text-[9px] font-black uppercase text-neutral-400 tracking-widest">
                                     Etiquetas Internas ({etiquetas.length} arquivo{etiquetas.length !== 1 ? 's' : ''})
                                 </label>
-                                <button
-                                    type="button"
-                                    onClick={() => setEtiquetas(prev => [...prev, ''])}
-                                    title="Adicionar etiqueta"
-                                    className="flex items-center gap-1 h-6 px-2 text-[10px] font-black uppercase tracking-wider text-emerald-700 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 transition-colors"
-                                >
-                                    <Plus className="w-3 h-3" />
-                                    Adicionar
-                                </button>
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            if (etiquetas.some(v => v.trim()) && !confirm('Remover todas as etiquetas preenchidas?')) return;
+                                            setEtiquetas(['']);
+                                        }}
+                                        title="Remover todas as etiquetas e voltar a 1 campo vazio"
+                                        className="flex items-center gap-1 h-6 px-2 text-[10px] font-black uppercase tracking-wider text-red-700 bg-red-50 border border-red-200 hover:bg-red-100 transition-colors"
+                                    >
+                                        <Eraser className="w-3 h-3" />
+                                        Limpar
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setEtiquetas(prev => [...prev, ''])}
+                                        title="Adicionar etiqueta"
+                                        className="flex items-center gap-1 h-6 px-2 text-[10px] font-black uppercase tracking-wider text-emerald-700 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 transition-colors"
+                                    >
+                                        <Plus className="w-3 h-3" />
+                                        Adicionar
+                                    </button>
+                                </div>
                             </div>
                             <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-4 xl:grid-cols-5 gap-2 max-h-[200px] overflow-y-auto p-2 border border-neutral-100 bg-neutral-50 custom-scrollbar">
                                 {etiquetas.map((val, idx) => (
