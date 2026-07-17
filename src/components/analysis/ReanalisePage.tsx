@@ -496,6 +496,18 @@ export default function ReanalisePage() {
 
     const selectedMachine = machines.find(m => m.id === selectedMachineId);
 
+    // Etiquetas cujo valor (sem espaços nas pontas) aparece em mais de um campo —
+    // usado pra pintar de vermelho todas as ocorrências repetidas.
+    const duplicateEtiquetaValues = (() => {
+        const counts: Record<string, number> = {};
+        for (const val of etiquetas) {
+            const trimmed = val.trim();
+            if (!trimmed) continue;
+            counts[trimmed] = (counts[trimmed] || 0) + 1;
+        }
+        return new Set(Object.keys(counts).filter(k => counts[k] > 1));
+    })();
+
     const handleExport = async () => {
         if (!selectedMachine) return;
         setIsExporting(true);
@@ -854,13 +866,15 @@ export default function ReanalisePage() {
                                 </div>
                             </div>
                             <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-4 xl:grid-cols-5 gap-2 max-h-[200px] overflow-y-auto p-2 border border-neutral-100 bg-neutral-50 custom-scrollbar">
-                                {etiquetas.map((val, idx) => (
+                                {etiquetas.map((val, idx) => {
+                                    const isDuplicate = duplicateEtiquetaValues.has(val.trim());
+                                    return (
                                     <div key={idx} className="relative group">
                                         <input
                                             id={`etiqueta-field-${idx}`}
                                             type="text"
                                             placeholder={`Arq ${idx + 1}`}
-                                            title={`Etiqueta do arquivo ${idx + 1} — cole ou pressione Enter pra pular pro próximo`}
+                                            title={isDuplicate ? `Etiqueta repetida — outro campo já usa "${val.trim()}"` : `Etiqueta do arquivo ${idx + 1} — cole ou pressione Enter pra pular pro próximo`}
                                             value={val}
                                             onFocus={e => e.target.select()}
                                             onChange={e => {
@@ -870,7 +884,11 @@ export default function ReanalisePage() {
                                             }}
                                             onPaste={e => handleEtiquetaPaste(e, idx)}
                                             onKeyDown={e => handleEtiquetaKeyDown(e, idx)}
-                                            className="w-full h-8 border border-neutral-300 px-2 pr-6 text-[11px] font-bold text-black focus:border-black outline-none rounded-none text-center bg-white"
+                                            className={`w-full h-8 border px-2 pr-6 text-[11px] font-bold outline-none rounded-none text-center transition-colors ${
+                                                isDuplicate
+                                                    ? 'border-red-400 bg-red-50 text-red-700 focus:border-red-500'
+                                                    : 'border-neutral-300 bg-white text-black focus:border-black'
+                                            }`}
                                         />
                                         {etiquetas.length > 1 && (
                                             <button
@@ -885,7 +903,8 @@ export default function ReanalisePage() {
                                             </button>
                                         )}
                                     </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         </div>
                     </div>
