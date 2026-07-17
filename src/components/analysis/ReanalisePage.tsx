@@ -309,6 +309,56 @@ export default function ReanalisePage() {
     const handleMaxEdit = (field: string, value: string) => setMaxEdits(prev => ({ ...prev, [field]: value }));
     const handleStdEdit = (field: string, value: string) => setStdEdits(prev => ({ ...prev, [field]: value }));
 
+    // Foca (e seleciona) o campo de etiqueta no índice pedido, criando um novo campo
+    // vazio no fim da lista se ainda não existir. Usa um pequeno atraso pra dar tempo
+    // do React re-renderizar o input recém-criado antes de tentar focar nele.
+    const focusEtiquetaField = (ownerDoc: Document, index: number) => {
+        setTimeout(() => {
+            const target = ownerDoc.getElementById(`etiqueta-field-${index}`) as HTMLInputElement | null;
+            target?.focus();
+            target?.select();
+        }, 30);
+    };
+
+    // Colar um valor único preenche o campo atual e pula pro próximo (criando se
+    // preciso). Colar vários valores de uma vez (coluna do Excel, várias leituras de
+    // código de barras) distribui um em cada campo a partir do atual.
+    const handleEtiquetaPaste = (e: React.ClipboardEvent<HTMLInputElement>, idx: number) => {
+        const text = e.clipboardData.getData('text');
+        if (!text) return;
+        const parts = text.split(/\r\n|\n|\r/).map(s => s.trim()).filter(s => s.length > 0);
+        if (parts.length === 0) return;
+        e.preventDefault();
+
+        const nextIdx = idx + parts.length;
+        setEtiquetas(prev => {
+            const next = [...prev];
+            parts.forEach((part, i) => {
+                const targetIdx = idx + i;
+                if (targetIdx < next.length) next[targetIdx] = part;
+                else next.push(part);
+            });
+            // Garante um campo vazio logo depois do que acabou de ser preenchido,
+            // pronto pra próxima colagem/leitura de código de barras.
+            if (nextIdx >= next.length) next.push('');
+            return next;
+        });
+
+        focusEtiquetaField(e.currentTarget.ownerDocument, nextIdx);
+    };
+
+    // Enter (inclusive o Enter automático que leitores de código de barras mandam
+    // depois de cada leitura) pula pro próximo campo, criando um novo se for o último.
+    const handleEtiquetaKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, idx: number) => {
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+        const nextIdx = idx + 1;
+        if (nextIdx >= etiquetas.length) {
+            setEtiquetas(prev => [...prev, '']);
+        }
+        focusEtiquetaField(e.currentTarget.ownerDocument, nextIdx);
+    };
+
     const handleBlur = (field: string, value: string, decimals: number, editType: 'avg' | 'min' | 'max' | 'std' = 'avg', ownerDoc: Document = document) => {
         if (!value) return;
 
@@ -801,9 +851,10 @@ export default function ReanalisePage() {
                                 {etiquetas.map((val, idx) => (
                                     <div key={idx} className="relative group">
                                         <input
+                                            id={`etiqueta-field-${idx}`}
                                             type="text"
                                             placeholder={`Arq ${idx + 1}`}
-                                            title={`Etiqueta do arquivo ${idx + 1}`}
+                                            title={`Etiqueta do arquivo ${idx + 1} — cole ou pressione Enter pra pular pro próximo`}
                                             value={val}
                                             onFocus={e => e.target.select()}
                                             onChange={e => {
@@ -811,6 +862,8 @@ export default function ReanalisePage() {
                                                 next[idx] = e.target.value;
                                                 setEtiquetas(next);
                                             }}
+                                            onPaste={e => handleEtiquetaPaste(e, idx)}
+                                            onKeyDown={e => handleEtiquetaKeyDown(e, idx)}
                                             className="w-full h-8 border border-neutral-300 px-2 pr-6 text-[11px] font-bold text-black focus:border-black outline-none rounded-none text-center bg-white"
                                         />
                                         {etiquetas.length > 1 && (
