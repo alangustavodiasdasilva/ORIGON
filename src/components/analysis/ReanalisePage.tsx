@@ -835,10 +835,7 @@ export default function ReanalisePage() {
                                 <div className="flex items-center gap-2">
                                     <button
                                         type="button"
-                                        onClick={() => {
-                                            if (etiquetas.some(v => v.trim()) && !confirm('Remover todas as etiquetas preenchidas?')) return;
-                                            setEtiquetas(['']);
-                                        }}
+                                        onClick={() => setEtiquetas([''])}
                                         title="Remover todas as etiquetas e voltar a 1 campo vazio"
                                         className="flex items-center gap-1 h-6 px-2 text-[10px] font-black uppercase tracking-wider text-red-700 bg-red-50 border border-red-200 hover:bg-red-100 transition-colors"
                                     >
