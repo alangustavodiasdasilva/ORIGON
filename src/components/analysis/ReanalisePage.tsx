@@ -309,10 +309,11 @@ export default function ReanalisePage() {
     const handleMaxEdit = (field: string, value: string) => setMaxEdits(prev => ({ ...prev, [field]: value }));
     const handleStdEdit = (field: string, value: string) => setStdEdits(prev => ({ ...prev, [field]: value }));
 
-    // Foca (e seleciona) o campo de etiqueta no índice pedido, criando um novo campo
-    // vazio no fim da lista se ainda não existir. Usa um pequeno atraso pra dar tempo
-    // do React re-renderizar o input recém-criado antes de tentar focar nele.
+    // Foca (e seleciona) o campo de etiqueta no índice pedido. NUNCA cria campo novo —
+    // só navega entre os que já existem (o analista controla a quantidade pelo botão
+    // "+ Adicionar"). Pequeno atraso só pra garantir que o campo já esteja renderizado.
     const focusEtiquetaField = (ownerDoc: Document, index: number) => {
+        if (index < 0 || index >= etiquetas.length) return;
         setTimeout(() => {
             const target = ownerDoc.getElementById(`etiqueta-field-${index}`) as HTMLInputElement | null;
             target?.focus();
@@ -320,9 +321,11 @@ export default function ReanalisePage() {
         }, 30);
     };
 
-    // Colar um valor único preenche o campo atual e pula pro próximo (criando se
-    // preciso). Colar vários valores de uma vez (coluna do Excel, várias leituras de
-    // código de barras) distribui um em cada campo a partir do atual.
+    // Colar um valor único preenche o campo atual e pula pro próximo campo que já
+    // existe. Colar várias linhas de uma vez (coluna do Excel, várias leituras de
+    // código de barras) distribui um valor em cada campo existente a partir do atual —
+    // sem criar nenhum campo novo (isso deixaria uma etiqueta em branco sobrando e
+    // geraria um arquivo a mais sem querer).
     const handleEtiquetaPaste = (e: React.ClipboardEvent<HTMLInputElement>, idx: number) => {
         const text = e.clipboardData.getData('text');
         if (!text) return;
@@ -330,33 +333,25 @@ export default function ReanalisePage() {
         if (parts.length === 0) return;
         e.preventDefault();
 
-        const nextIdx = idx + parts.length;
         setEtiquetas(prev => {
             const next = [...prev];
             parts.forEach((part, i) => {
                 const targetIdx = idx + i;
                 if (targetIdx < next.length) next[targetIdx] = part;
-                else next.push(part);
             });
-            // Garante um campo vazio logo depois do que acabou de ser preenchido,
-            // pronto pra próxima colagem/leitura de código de barras.
-            if (nextIdx >= next.length) next.push('');
             return next;
         });
 
-        focusEtiquetaField(e.currentTarget.ownerDocument, nextIdx);
+        focusEtiquetaField(e.currentTarget.ownerDocument, idx + parts.length);
     };
 
     // Enter (inclusive o Enter automático que leitores de código de barras mandam
-    // depois de cada leitura) pula pro próximo campo, criando um novo se for o último.
+    // depois de cada leitura) pula pro próximo campo já existente. No último campo,
+    // não faz nada — não cria um novo sozinho.
     const handleEtiquetaKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, idx: number) => {
         if (e.key !== 'Enter') return;
         e.preventDefault();
-        const nextIdx = idx + 1;
-        if (nextIdx >= etiquetas.length) {
-            setEtiquetas(prev => [...prev, '']);
-        }
-        focusEtiquetaField(e.currentTarget.ownerDocument, nextIdx);
+        focusEtiquetaField(e.currentTarget.ownerDocument, idx + 1);
     };
 
     const handleBlur = (field: string, value: string, decimals: number, editType: 'avg' | 'min' | 'max' | 'std' = 'avg', ownerDoc: Document = document) => {
