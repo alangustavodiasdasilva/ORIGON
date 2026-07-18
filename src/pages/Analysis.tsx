@@ -36,7 +36,6 @@ export default function Analysis() {
     const [samples, setSamples] = useState<Sample[]>([]);
     const [isProcessing, setIsProcessing] = useState(false);
     const [filterColor, setFilterColor] = useState<string | null>(null);
-    const [searchQuery, setSearchQuery] = useState("");
     const [filterStatus, setFilterStatus] = useState<'all' | 'generated' | 'pending'>('all');
     void setFilterStatus; // setter disponível para uso futuro
     const [isTemplatesModalOpen, setIsTemplatesModalOpen] = useState(false);
@@ -98,22 +97,16 @@ export default function Analysis() {
     const filteredSamples = useMemo(() => {
         return samples.filter(s => {
             if (filterColor && s.cor !== filterColor) return false;
-            
+
             if (filterStatus === 'generated') {
                 if (!s.locked) return false;
             } else if (filterStatus === 'pending') {
                 if (s.locked) return false;
             }
 
-            if (searchQuery) {
-                const search = searchQuery.toLowerCase();
-                const tagMatch = s.etiqueta?.toLowerCase().includes(search);
-                const idMatch = s.amostra_id?.toLowerCase().includes(search);
-                if (!tagMatch && !idMatch) return false;
-            }
             return true;
         });
-    }, [samples, filterColor, searchQuery, filterStatus]);
+    }, [samples, filterColor, filterStatus]);
 
     const metricsByColor = useMemo(() => {
         const categories = {
@@ -469,26 +462,6 @@ export default function Analysis() {
                         </div>
 
                         <div className="flex flex-wrap items-center gap-2">
-                            <div className="relative mr-4">
-                                <input
-                                    type="text"
-                                    placeholder="Pesquisar etiqueta..."
-                                    value={searchQuery}
-                                    onChange={(e) => setSearchQuery(e.target.value)}
-                                    className="h-8 w-48 pl-3 pr-8 text-[11px] font-bold text-black border border-neutral-300 rounded bg-white focus:outline-none focus:border-black focus:ring-1 focus:ring-black placeholder:text-neutral-400 placeholder:font-normal uppercase transition-all"
-                                />
-                                {searchQuery && (
-                                    <button 
-                                        onClick={() => setSearchQuery("")}
-                                        title="Limpar pesquisa"
-                                        aria-label="Limpar pesquisa"
-                                        className="absolute right-2 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-black"
-                                    >
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
-                                    </button>
-                                )}
-                            </div>
-
                             {(['#10b981', '#f59e0b', '#ef4444', '#3b82f6'] as const).map(c => (
                                 <button
                                     key={c}
