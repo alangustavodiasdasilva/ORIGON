@@ -401,7 +401,10 @@ export default function AnalysisTable({ samples, onUpdateSample, onColorChange, 
                                                 onClick={async () => {
                                                     const labIdStr = currentLab?.id ? String(currentLab.id) : (user?.lab_id ? String(user.lab_id) : undefined);
                                                     const result = await HVIFileGeneratorService.generatePreviewForSample(
-                                                        sample, samples, tolerancias, undefined, undefined, undefined, undefined, undefined, configuracoesAnalise, undefined, labIdStr
+                                                        sample, samples, tolerancias, undefined, undefined,
+                                                        sample.data_analise || undefined,
+                                                        sample.hora_analise ? sample.hora_analise.substring(0, 5) : undefined,
+                                                        undefined, configuracoesAnalise, undefined, labIdStr
                                                     );
                                                     if (!result.success) {
                                                         alert(result.message);
