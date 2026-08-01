@@ -1093,7 +1093,6 @@ export class HVIFileGeneratorService {
             const isUster = machine.model?.toUpperCase() === 'USTER';
 
             if (isUster) {
-                const baseNum = parseInt(sample.amostra_id);
                 const repContents: string[] = [];
 
                 // ── Horários aleatórios por repetição (máx 5 min de diferença) ───
@@ -1119,10 +1118,15 @@ export class HVIFileGeneratorService {
                     offsets.push(currentOffset);
                 }
 
+                // Contador sequencial próprio de cada máquina (imita o contador interno
+                // do instrumento USTER real: R_X<máquina><contador 5 dígitos>.H1),
+                // por isso a chave do localStorage é por número de máquina.
+                const mNum = isNaN(machineNum) ? 1 : machineNum;
                 let startRep = 1;
-                const storedRep = localStorage.getItem('hvi_global_rep_uster');
+                const repCounterKey = `hvi_rep_uster_m${mNum}`;
+                const storedRep = localStorage.getItem(repCounterKey);
                 startRep = storedRep && !isNaN(parseInt(storedRep, 10)) ? parseInt(storedRep, 10) + 1 : 1;
-                safeSetItem('hvi_global_rep_uster', (startRep + count - 1).toString());
+                safeSetItem(repCounterKey, (startRep + count - 1).toString());
 
                 for (let i = 0; i < count; i++) {
                     const localRep = i + 1;
@@ -1174,21 +1178,9 @@ export class HVIFileGeneratorService {
                         cspReadings[i]
                     );
 
-                    let repFilename = "";
-                    if (!isNaN(baseNum)) {
-                        const fileNum = baseNum * count - count + localRep;
-                        repFilename = `RAX${String(fileNum).padStart(6, '0')}.H1`;
-                    } else {
-                        const sampleLabelForName = rawEtiqueta?.replace(/[^a-zA-Z0-9]/g, '_') || sample.amostra_id;
-                        repFilename = `RAX${sampleLabelForName}_REP${repIndex}.H1`;
-                    }
-                    
-                    if (sample.lote_id === 'reanalise') {
-                        const mNum = isNaN(machineNum) ? 1 : machineNum;
-                        const safeMala = (sample.mala || 'REANALISE').replace(/[^a-zA-Z0-9]/g, '_');
-                        // Apenas o nome do arquivo leva o prefixo U e a máquina.
-                        repFilename = `U${mNum}_${safeMala}_REP${localRep}.H1`;
-                    }
+                    // Mesmo padrão de nome do arquivo nativo da USTER, pra Lotes e Reanálise:
+                    // R_X<máquina><contador 5 dígitos>.H1
+                    const repFilename = `R_X${mNum}${String(repIndex).padStart(5, '0')}.H1`;
 
                     files.push({ content: repContent, filename: repFilename });
                     repContents.push(`=== ARQUIVO: ${repFilename} ===\n${repContent}`);
