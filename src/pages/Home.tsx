@@ -137,11 +137,7 @@ export default function Home() {
 
             setLotes(data);
 
-            const counts: Record<string, number> = {};
-            for (const lote of data) {
-                const samples = await SampleService.listByLote(lote.id);
-                counts[lote.id] = samples.length;
-            }
+            const counts = await SampleService.countsByLotes(data.map(l => l.id));
             setSampleCounts(counts);
         } catch (error) {
             console.error(error);

@@ -102,6 +102,28 @@ export const SampleService = {
             .sort((a, b) => a.amostra_id.localeCompare(b.amostra_id));
     },
 
+    /** Quantidade de amostras por lote, numa única consulta leve (só id/lote_id) — evita N+1 ao listar lotes. */
+    async countsByLotes(loteIds: string[]): Promise<Record<string, number>> {
+        const counts: Record<string, number> = {};
+        if (loteIds.length === 0) return counts;
+
+        if (isSupabaseEnabled()) {
+            const { data, error } = await supabase.from('amostras').select('lote_id').in('lote_id', loteIds);
+            if (error) throw error;
+            for (const row of data || []) {
+                counts[row.lote_id] = (counts[row.lote_id] || 0) + 1;
+            }
+            return counts;
+        }
+
+        for (const s of getStoredSamples()) {
+            if (loteIds.includes(s.lote_id)) {
+                counts[s.lote_id] = (counts[s.lote_id] || 0) + 1;
+            }
+        }
+        return counts;
+    },
+
     async create(data: Omit<Sample, 'id'>): Promise<Sample> {
         if (isSupabaseEnabled()) {
             const { data: newSample, error } = await supabase.from('amostras').insert([data]).select().single();
