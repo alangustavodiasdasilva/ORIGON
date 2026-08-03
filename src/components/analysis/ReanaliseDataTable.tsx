@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 
 function sanitize(val: number, type: string): number {
     if (isNaN(val) || val === 0) return 0;
@@ -174,25 +174,60 @@ function CellInput({
 }
 
 export default function ReanaliseDataTable({ gridData, labels, machineName, onChange }: ReanaliseDataTableProps) {
+    const [sortCol, setSortCol] = useState<string | null>(null);
+    const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+
+    const rowCount = gridData?.mic?.length ?? 0;
+
+    // Ordem de exibição das linhas: por padrão a original, ou reordenada pelo
+    // parâmetro clicado (menor pro maior, e vice-versa clicando de novo).
+    // Guarda os ÍNDICES originais — os dados em si (gridData) não são tocados.
+    const order = useMemo(() => {
+        const indices = Array.from({ length: rowCount }, (_, i) => i);
+        if (!sortCol || !gridData) return indices;
+        const values = gridData[sortCol] || [];
+        return indices.slice().sort((a, b) => {
+            const va = Number(values[a]);
+            const vb = Number(values[b]);
+            const aInvalid = isNaN(va);
+            const bInvalid = isNaN(vb);
+            if (aInvalid && bInvalid) return 0;
+            if (aInvalid) return 1;
+            if (bInvalid) return -1;
+            return sortDir === 'asc' ? va - vb : vb - va;
+        });
+    }, [gridData, sortCol, sortDir, rowCount]);
+
     if (!gridData || !gridData.mic || gridData.mic.length === 0) {
         return null;
     }
 
-    const rowCount = gridData.mic.length;
+    const toggleSort = (col: typeof COLUMNS[0]) => {
+        if (col.isText) return;
+        if (sortCol === col.key) {
+            setSortDir(prev => (prev === 'asc' ? 'desc' : 'asc'));
+        } else {
+            setSortCol(col.key);
+            setSortDir('asc');
+        }
+    };
 
     // Usa o ownerDocument do campo de origem — dentro do PiP, os campos vivem no
     // document da janela flutuante, não no document da página principal.
-    const handleMove = (rowIndex: number, colIndex: number, dir: 'up' | 'down' | 'left' | 'right', ownerDoc: Document) => {
-        let nextRow = rowIndex;
+    // Navega pela ORDEM EXIBIDA (que pode estar ordenada por algum parâmetro),
+    // não pelo índice original dos dados.
+    const handleMove = (displayPos: number, colIndex: number, dir: 'up' | 'down' | 'left' | 'right', ownerDoc: Document) => {
+        let nextDisplayPos = displayPos;
         let nextCol = colIndex;
 
-        if (dir === 'up') nextRow = rowIndex - 1;
-        if (dir === 'down') nextRow = rowIndex + 1;
+        if (dir === 'up') nextDisplayPos = displayPos - 1;
+        if (dir === 'down') nextDisplayPos = displayPos + 1;
         if (dir === 'left') nextCol = colIndex - 1;
         if (dir === 'right') nextCol = colIndex + 1;
 
-        if (nextRow >= 0 && nextRow < rowCount && nextCol >= 0 && nextCol < COLUMNS.length) {
-            const nextField = ownerDoc.getElementById(`grid-cell-${nextRow}-${COLUMNS[nextCol].key}`);
+        if (nextDisplayPos >= 0 && nextDisplayPos < order.length && nextCol >= 0 && nextCol < COLUMNS.length) {
+            const nextRowIndex = order[nextDisplayPos];
+            const nextField = ownerDoc.getElementById(`grid-cell-${nextRowIndex}-${COLUMNS[nextCol].key}`);
             if (nextField) {
                 (nextField as HTMLInputElement).focus();
             }
@@ -201,24 +236,42 @@ export default function ReanaliseDataTable({ gridData, labels, machineName, onCh
 
     return (
         <div className="mt-8 overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm pb-1">
-            <h3 className="p-3 bg-slate-50 font-bold text-slate-700 border-b border-slate-200">
-                Visualização de Dados Gerados (Editável)
-            </h3>
+            <div className="p-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+                <h3 className="font-bold text-slate-700">
+                    Visualização de Dados Gerados (Editável)
+                </h3>
+                <span className="text-[10px] text-slate-400 font-medium uppercase tracking-wider">
+                    Clique num parâmetro pra ordenar (menor → maior)
+                </span>
+            </div>
             <table className="w-full text-sm text-left border-collapse min-w-[1000px]">
                 <thead className="bg-slate-100 border-b border-slate-200 text-slate-700 font-semibold">
                     <tr>
                         <th className="p-2 border-r border-slate-200 w-12 text-center">Nº</th>
                         <th className="p-2 border-r border-slate-200 min-w-[150px]">Fardo</th>
                         {COLUMNS.map(col => (
-                            <th key={col.key} className="p-2 border-r border-slate-200 text-center">{col.label}</th>
+                            <th key={col.key} className="p-0 border-r border-slate-200 text-center">
+                                <button
+                                    type="button"
+                                    disabled={col.isText}
+                                    onClick={() => toggleSort(col)}
+                                    title={col.isText ? undefined : `Ordenar por ${col.label}`}
+                                    className={`w-full h-full p-2 transition-colors flex items-center justify-center gap-1 ${col.isText ? 'cursor-default' : 'cursor-pointer hover:bg-blue-100'} ${
+                                        sortCol === col.key ? 'bg-blue-200 text-blue-900' : ''
+                                    }`}
+                                >
+                                    {col.label}
+                                    {sortCol === col.key && <span>{sortDir === 'asc' ? '▲' : '▼'}</span>}
+                                </button>
+                            </th>
                         ))}
                         <th className="p-2 border-r border-slate-200 text-center">Maq</th>
                     </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                    {Array.from({ length: rowCount }).map((_, rowIndex) => (
+                    {order.map((rowIndex, displayPos) => (
                         <tr key={rowIndex} className="hover:bg-blue-50/50 transition-colors">
-                            <td className="p-2 border-r border-slate-100 text-center text-slate-500 font-mono">{rowIndex + 1}</td>
+                            <td className="p-2 border-r border-slate-100 text-center text-slate-500 font-mono">{displayPos + 1}</td>
                             <td className="p-2 border-r border-slate-100 font-mono text-blue-700">{labels[rowIndex]}</td>
                             {COLUMNS.map((col, colIndex) => {
                                 const val = gridData[col.key] ? gridData[col.key][rowIndex] : '';
@@ -229,7 +282,7 @@ export default function ReanaliseDataTable({ gridData, labels, machineName, onCh
                                             rowIndex={rowIndex}
                                             col={col}
                                             onChange={(newVal) => onChange(rowIndex, col.key, newVal)}
-                                            onMove={(dir, ownerDoc) => handleMove(rowIndex, colIndex, dir, ownerDoc)}
+                                            onMove={(dir, ownerDoc) => handleMove(displayPos, colIndex, dir, ownerDoc)}
                                         />
                                     </td>
                                 );
