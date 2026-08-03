@@ -446,51 +446,72 @@ export default function ReanalisePage() {
         const overrides: Record<string, number[]> = {
             mic: [], len: [], unf: [], str: [], elg: [], rd: [], b: [], sfi: [], mat: [], area: [], count: [], sci: [], csp: [], leaf: []
         };
-        for (let i = 0; i < count; i++) {
-            for (const f of DISPLAY_FIELDS) {
-                if (f.key === 'cg') continue; // CG is not randomizable nicely in range yet, keep empty so it falls back
-                
-                const minRaw = minEdits[f.key]?.trim();
-                const maxRaw = maxEdits[f.key]?.trim();
-                const avgRaw = avgEdits[f.key]?.trim();
-                const stdRaw = stdEdits[f.key]?.trim();
 
-                // Se o usuário não preencheu NENHUM campo (min, max ou média) para esta propriedade,
-                // não geramos override para ela, assim ela usará a variação aleatória balanceada normal.
-                if (!minRaw && !maxRaw && !avgRaw) {
-                    continue;
-                }
+        for (const f of DISPLAY_FIELDS) {
+            if (f.key === 'cg') continue; // CG is not randomizable nicely in range yet, keep empty so it falls back
 
-                const minVal = parseFloat(minRaw?.replace(',', '.') || '0');
-                const maxVal = parseFloat(maxRaw?.replace(',', '.') || '0');
-                const stdVal = parseFloat(stdRaw?.replace(',', '.') || '');
+            const minRaw = minEdits[f.key]?.trim();
+            const maxRaw = maxEdits[f.key]?.trim();
+            const avgRaw = avgEdits[f.key]?.trim();
+            const stdRaw = stdEdits[f.key]?.trim();
 
-                let rnd = minVal;
-                if (!isNaN(minVal) && !isNaN(maxVal) && maxVal > minVal) {
-                    // Distribuição normal centrada no meio do intervalo em vez de uniforme —
-                    // sorteio uniforme espalhava demais (qualquer ponto entre min/max com a
-                    // mesma chance), dando um desvio padrão bem maior que o de leituras reais.
-                    // Sem Desvio Padrão informado, assume (max-min)/6 — regra prática de que
-                    // ±3 desvios cobrem ~99.7% da faixa.
-                    const center = (minVal + maxVal) / 2;
-                    const sigma = (!isNaN(stdVal) && stdVal > 0) ? stdVal : (maxVal - minVal) / 6;
-                    rnd = Math.min(maxVal, Math.max(minVal, randomNormal(center, sigma)));
-                } else if (!isNaN(minVal) && minVal !== 0) {
-                    rnd = minVal;
-                } else if (!isNaN(maxVal) && maxVal !== 0) {
-                    rnd = maxVal;
+            // Se o usuário não preencheu NENHUM campo (min, max ou média) para esta propriedade,
+            // não geramos override para ela, assim ela usará a variação aleatória balanceada normal.
+            if (!minRaw && !maxRaw && !avgRaw) {
+                continue;
+            }
+
+            const minVal = parseFloat(minRaw?.replace(',', '.') || '0');
+            const maxVal = parseFloat(maxRaw?.replace(',', '.') || '0');
+            const stdVal = parseFloat(stdRaw?.replace(',', '.') || '');
+
+            let values: number[];
+
+            if (!isNaN(minVal) && !isNaN(maxVal) && maxVal > minVal) {
+                // Distribuição normal centrada no meio do intervalo em vez de uniforme —
+                // sorteio uniforme espalhava demais (qualquer ponto entre min/max com a
+                // mesma chance), dando um desvio padrão bem maior que o de leituras reais.
+                // Sem Desvio Padrão informado, assume (max-min)/6 — regra prática de que
+                // ±3 desvios cobrem ~99.7% da faixa.
+                const center = (minVal + maxVal) / 2;
+                const sigma = (!isNaN(stdVal) && stdVal > 0) ? stdVal : (maxVal - minVal) / 6;
+
+                const raw = Array.from({ length: count }, () => randomNormal(center, sigma));
+
+                // Sortear cada leitura isoladamente com esse sigma NÃO garante que o desvio
+                // padrão amostral do lote gerado bata com o valor configurado — com poucas
+                // repetições o desvio real de uma amostra pequena varia muito em torno do
+                // sigma usado no sorteio. Por isso reescalamos o lote inteiro (mantendo o
+                // "formato" do sorteio) pra que média e desvio padrão calculados fiquem
+                // exatamente iguais ao que foi configurado.
+                if (count >= 2) {
+                    const rawMean = raw.reduce((a, b) => a + b, 0) / count;
+                    const rawVar = raw.reduce((a, v) => a + (v - rawMean) ** 2, 0) / (count - 1);
+                    const rawStd = Math.sqrt(rawVar);
+                    values = rawStd > 1e-9
+                        ? raw.map(v => center + (v - rawMean) * (sigma / rawStd))
+                        : raw.map(() => center);
                 } else {
-                    // Fallback se não preencheu min/max, pega da média
-                    const avgVal = parseFloat(avgRaw?.replace(',', '.') || '0');
-                    rnd = !isNaN(avgVal) && avgVal !== 0 ? avgVal : DEFAULT_AVG[f.key as keyof AvgValues] as number;
+                    values = raw;
                 }
 
-                if (overrides[f.key]) {
-                    const fixedRnd = parseFloat(rnd.toFixed(f.decimals));
-                    overrides[f.key].push(fixedRnd);
-                }
+                values = values.map(v => Math.min(maxVal, Math.max(minVal, v)));
+            } else if (!isNaN(minVal) && minVal !== 0) {
+                values = Array(count).fill(minVal);
+            } else if (!isNaN(maxVal) && maxVal !== 0) {
+                values = Array(count).fill(maxVal);
+            } else {
+                // Fallback se não preencheu min/max, pega da média
+                const avgVal = parseFloat(avgRaw?.replace(',', '.') || '0');
+                const fallback = !isNaN(avgVal) && avgVal !== 0 ? avgVal : DEFAULT_AVG[f.key as keyof AvgValues] as number;
+                values = Array(count).fill(fallback);
+            }
+
+            if (overrides[f.key]) {
+                overrides[f.key] = values.map(v => parseFloat(v.toFixed(f.decimals)));
             }
         }
+
         return overrides;
     };
 
