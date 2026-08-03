@@ -197,6 +197,8 @@ export default function ReanalisePage() {
     const [isExporting, setIsExporting] = useState(false);
     const [exportStatus, setExportStatus] = useState<{ ok: boolean; msg: string } | null>(null);
     const [previewFiles, setPreviewFiles] = useState<{ name: string, content: string }[] | null>(null);
+    const [previewShowAll, setPreviewShowAll] = useState(true);
+    const [previewIndex, setPreviewIndex] = useState(0);
     const [gridData, setGridData] = useState<Record<string, any[]> | null>(null);
     const [isAutoPreviewing, setIsAutoPreviewing] = useState(false);
     const [generationTrigger, setGenerationTrigger] = useState(0);
@@ -1129,28 +1131,68 @@ export default function ReanalisePage() {
         </div>
     );
 
+    const clampedPreviewIndex = previewFiles && previewFiles.length > 0
+        ? Math.min(previewIndex, previewFiles.length - 1)
+        : 0;
+    const filesToShow = previewFiles
+        ? (previewShowAll ? previewFiles : [previewFiles[clampedPreviewIndex]])
+        : [];
+
     const previewPanelContent = (
         <>
             <div className="flex items-center justify-between mb-3">
                 <span className="text-[10px] font-black uppercase tracking-widest text-neutral-500">
                     Exemplo dos Arquivos ({previewFiles?.length || 0})
                 </span>
-                {isAutoPreviewing && <Loader2 className="w-3.5 h-3.5 animate-spin text-neutral-400" />}
+                <div className="flex items-center gap-2">
+                    {isAutoPreviewing && <Loader2 className="w-3.5 h-3.5 animate-spin text-neutral-400" />}
+                    {previewFiles && previewFiles.length > 1 && (
+                        <button
+                            type="button"
+                            onClick={() => setPreviewShowAll(v => !v)}
+                            title={previewShowAll ? 'Mostrar só 1 arquivo por vez' : 'Mostrar todos os arquivos'}
+                            className="h-6 px-2 text-[10px] font-black uppercase tracking-wider text-neutral-500 bg-white border border-neutral-200 hover:bg-neutral-100 transition-colors"
+                        >
+                            {previewShowAll ? 'Ver 1 por vez' : 'Ver Todos'}
+                        </button>
+                    )}
+                </div>
             </div>
-            <div className="border border-neutral-200 bg-white flex flex-col flex-1 min-h-[400px] overflow-hidden">
+            <div className="border border-neutral-200 bg-white flex flex-col flex-1 min-h-[400px] max-h-[70vh] overflow-hidden">
                 <div className="bg-neutral-100 border-b border-neutral-200 px-3 py-2 text-[10px] font-black uppercase text-neutral-500 tracking-widest flex items-center justify-between shrink-0">
                     <div className="flex items-center gap-2">
                         <Eye className="w-3.5 h-3.5" />
                         {selectedMachine ? `Prévia — ${selectedMachine.model}` : 'Prévia'}
                     </div>
+                    {!previewShowAll && previewFiles && previewFiles.length > 1 && (
+                        <div className="flex items-center gap-2 normal-case tracking-normal">
+                            <button
+                                type="button"
+                                onClick={() => setPreviewIndex(i => Math.max(0, i - 1))}
+                                disabled={clampedPreviewIndex === 0}
+                                className="px-1.5 disabled:opacity-30 hover:text-blue-600"
+                            >
+                                ‹
+                            </button>
+                            <span className="font-mono">{clampedPreviewIndex + 1} / {previewFiles.length}</span>
+                            <button
+                                type="button"
+                                onClick={() => setPreviewIndex(i => Math.min(previewFiles.length - 1, i + 1))}
+                                disabled={clampedPreviewIndex === previewFiles.length - 1}
+                                className="px-1.5 disabled:opacity-30 hover:text-blue-600"
+                            >
+                                ›
+                            </button>
+                        </div>
+                    )}
                 </div>
                 <div className="flex-1 overflow-y-auto bg-neutral-50 p-2 space-y-4">
-                    {previewFiles && previewFiles.length > 0 ? (
-                        previewFiles.map((file, idx) => (
-                            <div key={idx} className="bg-white border border-neutral-200 shadow-sm">
+                    {filesToShow.length > 0 ? (
+                        filesToShow.map((file, idx) => (
+                            <div key={previewShowAll ? idx : clampedPreviewIndex} className="bg-white border border-neutral-200 shadow-sm">
                                 <div className="bg-blue-50 border-b border-blue-100 px-3 py-1.5 text-[9px] font-mono font-bold text-blue-700 flex justify-between items-center">
                                     <span>{file.name}</span>
-                                    <span className="opacity-50">#{idx + 1}</span>
+                                    <span className="opacity-50">#{previewShowAll ? idx + 1 : clampedPreviewIndex + 1}</span>
                                 </div>
                                 <pre className="p-3 text-[10px] sm:text-[11px] font-mono whitespace-pre overflow-x-auto text-neutral-800">
                                     {file.content}
