@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { Cpu, Download, CheckCircle2, AlertCircle, Loader2, Eye, Plus, X, PictureInPicture2, Eraser } from "lucide-react";
+import { Cpu, Download, CheckCircle2, AlertCircle, Loader2, Eye, Plus, X, PictureInPicture2, Eraser, ListPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MachineService, type Machine } from "@/entities/Machine";
 import { useAuth } from "@/contexts/AuthContext";
@@ -135,6 +135,52 @@ function randomNormal(mean: number, sigma: number): number {
     return mean + z * sigma;
 }
 
+/** Dígito verificador das etiquetas do ORIGO (ex: 00.7.789853745.2.787001.0 —
+ * o "0" final): soma ponderada de todos os dígitos antes dele, pesos 3/1
+ * alternados a partir do dígito mais à direita, depois (10 - soma % 10) % 10.
+ * Confirmado batendo 50/50 contra uma lista real de etiquetas da máquina. */
+function computeEtiquetaChecksum(digitsNoChecksum: string): number {
+    let sum = 0;
+    for (let i = 0; i < digitsNoChecksum.length; i++) {
+        const posFromRight = digitsNoChecksum.length - 1 - i;
+        const weight = posFromRight % 2 === 0 ? 3 : 1;
+        sum += Number(digitsNoChecksum[i]) * weight;
+    }
+    return (10 - (sum % 10)) % 10;
+}
+
+interface EtiquetaTemplate {
+    prefixSegments: string[];
+    numberStr: string;
+}
+
+/** Quebra uma etiqueta pontilhada em prefixo fixo + número que incrementa +
+ * dígito verificador (último segmento). Retorna null se não tiver esse formato. */
+function parseEtiquetaTemplate(value: string): EtiquetaTemplate | null {
+    const segments = value.trim().split('.');
+    if (segments.length < 2) return null;
+    const checksumSeg = segments[segments.length - 1];
+    const numberSeg = segments[segments.length - 2];
+    if (!/^\d$/.test(checksumSeg) || !/^\d+$/.test(numberSeg)) return null;
+    return { prefixSegments: segments.slice(0, -2), numberStr: numberSeg };
+}
+
+/** Gera a lista de etiquetas entre inicial e final (inclusive), recalculando o
+ * dígito verificador de cada uma. */
+function generateEtiquetaRange(startTemplate: EtiquetaTemplate, endNumberStr: string): string[] {
+    const startNum = parseInt(startTemplate.numberStr, 10);
+    const endNum = parseInt(endNumberStr, 10);
+    const width = startTemplate.numberStr.length;
+    const result: string[] = [];
+    for (let n = startNum; n <= endNum; n++) {
+        const numStr = String(n).padStart(width, '0');
+        const fullDigits = startTemplate.prefixSegments.join('') + numStr;
+        const checksum = computeEtiquetaChecksum(fullDigits);
+        result.push([...startTemplate.prefixSegments, numStr, String(checksum)].join('.'));
+    }
+    return result;
+}
+
 export default function ReanalisePage() {
     const { user, currentLab } = useAuth();
 
@@ -157,6 +203,10 @@ export default function ReanalisePage() {
     const [pipWindow, setPipWindow] = useState<Window | null>(null);
 
     const [etiquetas, setEtiquetas] = useState<string[]>(Array(1).fill(''));
+    const [showRangeGen, setShowRangeGen] = useState(false);
+    const [rangeStart, setRangeStart] = useState('');
+    const [rangeEnd, setRangeEnd] = useState('');
+    const [rangeError, setRangeError] = useState<string | null>(null);
     const [osInput, setOsInput] = useState('');
     const [customDate, setCustomDate] = useState('');
     const [customTime, setCustomTime] = useState('');
@@ -352,6 +402,54 @@ export default function ReanalisePage() {
         if (e.key !== 'Enter') return;
         e.preventDefault();
         focusEtiquetaField(e.currentTarget.ownerDocument, idx + 1);
+    };
+
+    // Gera todas as etiquetas entre a inicial e a final digitadas, recalculando o
+    // dígito verificador de cada uma (ver computeEtiquetaChecksum). Antes de gerar,
+    // confere se o checksum das duas etiquetas digitadas bate com o esperado — se
+    // não bater, é sinal de erro de digitação/cópia, e gerar o lote inteiro a partir
+    // daí propagaria o erro pra todas as etiquetas.
+    const handleGenerateRange = () => {
+        setRangeError(null);
+
+        const startTpl = parseEtiquetaTemplate(rangeStart);
+        const endTpl = parseEtiquetaTemplate(rangeEnd);
+        if (!startTpl || !endTpl) {
+            setRangeError('Formato inválido — precisa ter pontos e terminar com o dígito verificador, igual ao da máquina (ex: 00.7.789853745.2.787001.0).');
+            return;
+        }
+
+        if (startTpl.prefixSegments.join('.') !== endTpl.prefixSegments.join('.')) {
+            setRangeError('A etiqueta inicial e a final precisam ter o mesmo prefixo — só o número do meio muda.');
+            return;
+        }
+
+        const expectedStartChecksum = computeEtiquetaChecksum(startTpl.prefixSegments.join('') + startTpl.numberStr);
+        const expectedEndChecksum = computeEtiquetaChecksum(endTpl.prefixSegments.join('') + endTpl.numberStr);
+        if (String(expectedStartChecksum) !== rangeStart.trim().split('.').pop()) {
+            setRangeError('O dígito verificador da etiqueta inicial não bate — confere se copiou certinho.');
+            return;
+        }
+        if (String(expectedEndChecksum) !== rangeEnd.trim().split('.').pop()) {
+            setRangeError('O dígito verificador da etiqueta final não bate — confere se copiou certinho.');
+            return;
+        }
+
+        const startNum = parseInt(startTpl.numberStr, 10);
+        const endNum = parseInt(endTpl.numberStr, 10);
+        if (endNum < startNum) {
+            setRangeError('A etiqueta final precisa ser maior ou igual à inicial.');
+            return;
+        }
+        if (endNum - startNum + 1 > 500) {
+            setRangeError('Intervalo muito grande (máximo 500 etiquetas de cada vez).');
+            return;
+        }
+
+        setEtiquetas(generateEtiquetaRange(startTpl, endTpl.numberStr));
+        setShowRangeGen(false);
+        setRangeStart('');
+        setRangeEnd('');
     };
 
     const handleBlur = (field: string, value: string, decimals: number, editType: 'avg' | 'min' | 'max' | 'std' = 'avg', ownerDoc: Document = document) => {
@@ -868,6 +966,15 @@ export default function ReanalisePage() {
                                 <div className="flex items-center gap-2">
                                     <button
                                         type="button"
+                                        onClick={() => { setShowRangeGen(v => !v); setRangeError(null); }}
+                                        title="Gerar etiquetas de uma inicial até uma final"
+                                        className="flex items-center gap-1 h-6 px-2 text-[10px] font-black uppercase tracking-wider text-blue-700 bg-blue-50 border border-blue-200 hover:bg-blue-100 transition-colors"
+                                    >
+                                        <ListPlus className="w-3 h-3" />
+                                        Gerar Intervalo
+                                    </button>
+                                    <button
+                                        type="button"
                                         onClick={() => setEtiquetas([''])}
                                         title="Remover todas as etiquetas e voltar a 1 campo vazio"
                                         className="flex items-center gap-1 h-6 px-2 text-[10px] font-black uppercase tracking-wider text-red-700 bg-red-50 border border-red-200 hover:bg-red-100 transition-colors"
@@ -886,6 +993,39 @@ export default function ReanalisePage() {
                                     </button>
                                 </div>
                             </div>
+
+                            {showRangeGen && (
+                                <div className="mb-2 p-2 border border-blue-200 bg-blue-50 space-y-2">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                        <input
+                                            type="text"
+                                            placeholder="Etiqueta inicial (ex: 00.7.789853745.2.787001.0)"
+                                            value={rangeStart}
+                                            onChange={e => setRangeStart(e.target.value)}
+                                            className="w-full h-8 border border-neutral-300 px-2 text-[11px] font-mono outline-none rounded-none bg-white focus:border-blue-500"
+                                        />
+                                        <input
+                                            type="text"
+                                            placeholder="Etiqueta final (ex: 00.7.789853745.2.787050.8)"
+                                            value={rangeEnd}
+                                            onChange={e => setRangeEnd(e.target.value)}
+                                            className="w-full h-8 border border-neutral-300 px-2 text-[11px] font-mono outline-none rounded-none bg-white focus:border-blue-500"
+                                        />
+                                    </div>
+                                    {rangeError && (
+                                        <p className="text-[10px] font-bold text-red-600">{rangeError}</p>
+                                    )}
+                                    <div className="flex justify-end">
+                                        <button
+                                            type="button"
+                                            onClick={handleGenerateRange}
+                                            className="h-7 px-3 text-[10px] font-black uppercase tracking-wider text-white bg-blue-600 hover:bg-blue-700 transition-colors"
+                                        >
+                                            Gerar
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
                             <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-4 xl:grid-cols-5 gap-2 max-h-[200px] overflow-y-auto p-2 border border-neutral-100 bg-neutral-50 custom-scrollbar">
                                 {etiquetas.map((val, idx) => {
                                     const isDuplicate = duplicateEtiquetaValues.has(val.trim());
