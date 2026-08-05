@@ -20,6 +20,7 @@ const Export = lazy(() => import("@/pages/Export"));
 const Admin = lazy(() => import("@/pages/Admin"));
 const Login = lazy(() => import("@/pages/Login"));
 const Reanalise = lazy(() => import("@/pages/Reanalise"));
+const Verificacao = lazy(() => import("@/pages/Verificacao"));
 
 
 function AppRoutes() {
@@ -62,6 +63,7 @@ function AppRoutes() {
 
                     <Route path="export" element={<Export />} />
                     <Route path="reanalise" element={<Reanalise />} />
+                    <Route path="verificacao" element={<Verificacao />} />
                     <Route path="admin" element={<Admin />} />
                 </Route>
             </Routes>

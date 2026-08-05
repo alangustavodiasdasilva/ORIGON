@@ -68,6 +68,7 @@ export default function Layout() {
         // { href: "/icac", label: t('nav.icac'), icon: Microscope, public: true, prefetch: () => import("@/pages/Icac") },
         // { href: "/interlaboratorial", label: t('nav.interlab'), icon: Network, public: true, prefetch: () => import("@/pages/Interlaboratorial") },
         { href: "/reanalise", label: "Reanálise", icon: ScanLine, public: true, prefetch: () => import("@/pages/Reanalise") },
+        { href: "/verificacao", label: "Verificação", icon: CheckCircle2, allowedRoles: ['admin_global', 'admin_lab', 'quality_admin'], prefetch: () => import("@/pages/Verificacao") },
 
         { href: "/admin", label: t('nav.config'), icon: ShieldCheck, allowedRoles: ['admin_global', 'admin_lab'], prefetch: () => import("@/pages/Admin") },
     ];
