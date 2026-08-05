@@ -44,6 +44,12 @@ function MaintenanceScreen({ updatedBy }: { updatedBy: string | null }) {
     );
 }
 
+// Trava de segurança: além de checar o "acesso" (que depende de dados carregados
+// via rede/localStorage e já causou um bloqueio indevido uma vez), o dono da conta
+// nunca pode ficar preso atrás da própria tela de manutenção — checagem que não
+// depende de nenhuma consulta, só do que já veio no login.
+const NUNCA_BLOQUEAR_EMAILS = ["alangds03@gmail.com"];
+
 function AppRoutes() {
     const { user, isAuthenticated, isLoading: authLoading } = useAuth();
     const [maintenanceMode, setMaintenanceMode] = useState(false);
@@ -105,7 +111,9 @@ function AppRoutes() {
         );
     }
 
-    if (maintenanceMode) {
+    const isNeverBlocked = !!user?.email && NUNCA_BLOQUEAR_EMAILS.includes(user.email.toLowerCase());
+
+    if (maintenanceMode && !isNeverBlocked) {
         // Enquanto a confirmação ainda não voltou, usa o valor já conhecido da sessão
         // como palpite (evita reter a tela por causa da latência da consulta).
         const effectiveAcesso = confirmedAcesso ?? user?.acesso;
