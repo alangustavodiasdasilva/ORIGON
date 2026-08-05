@@ -133,15 +133,24 @@ export default function Verificacao() {
         setDataFim("");
     };
 
+    // Descarta respostas de loadData() que chegam fora de ordem — sem isso, um
+    // loadData() disparado no mount (lento, sem nada pra achar ainda) podia
+    // terminar DEPOIS de um upload rápido do usuário e sobrescrever os dados
+    // recém-importados de volta pra vazio.
+    const loadSeqRef = useRef(0);
+
     // Load do Supabase com Fallback Local (Padrão Operação)
     const loadData = async () => {
         if (!labId || labId === 'all') return;
 
+        const seq = ++loadSeqRef.current;
         setIsLoading(true);
         const today = new Date().toDateString();
 
         try {
             const cloudState = await verificacaoService.get(labId, today);
+            if (seq !== loadSeqRef.current) return; // uma chamada mais recente já respondeu
+
             if (cloudState) {
                 setAmostras(cloudState.amostras);
                 setAnalises(cloudState.analises);
@@ -153,6 +162,7 @@ export default function Verificacao() {
             }
         } catch (e) {
             console.error("Erro ao carregar dados da nuvem:", e);
+            if (seq !== loadSeqRef.current) return;
         }
 
         // Caso não tenha na nuvem ou falhe, as amostras ficam vazias (padrão dia novo)
@@ -357,6 +367,9 @@ export default function Verificacao() {
                 }
 
                 if (parsedAmostras.length > 0) {
+                    // Invalida qualquer loadData() ainda em andamento (ex: o do mount da
+                    // página) — sem isso ele pode responder depois e apagar esse upload.
+                    loadSeqRef.current++;
                     setAmostras(parsedAmostras);
                     setAnalises(parsedAnalises);
                     setAmostraSelecionada(parsedAmostras[0].id);
