@@ -8,7 +8,9 @@ import {
     Wand2,
     Activity,
     ImagePlus,
-    Lock
+    Lock,
+    Search,
+    X
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { Sample } from "@/entities/Sample";
@@ -37,6 +39,7 @@ export default function Analysis() {
     const [isProcessing, setIsProcessing] = useState(false);
     const [filterColor, setFilterColor] = useState<string | null>(null);
     const [filterStatus, setFilterStatus] = useState<'all' | 'generated' | 'pending'>('all');
+    const [searchQuery, setSearchQuery] = useState("");
     void setFilterStatus; // setter disponível para uso futuro
     const [isTemplatesModalOpen, setIsTemplatesModalOpen] = useState(false);
     const [activeColorForTemplate, setActiveColorForTemplate] = useState<string | null>(null);
@@ -107,6 +110,15 @@ export default function Analysis() {
             return true;
         });
     }, [samples, filterColor, filterStatus]);
+
+    // Filtro de etiqueta é só pra ACHAR uma amostra na tabela — nunca deve mudar
+    // a base de cálculo da média por cor. Por isso metricsByColor (abaixo) continua
+    // usando filteredSamples, e só a tabela usa displayedSamples.
+    const displayedSamples = useMemo(() => {
+        const q = searchQuery.trim().toLowerCase();
+        if (!q) return filteredSamples;
+        return filteredSamples.filter(s => (s.etiqueta || '').toLowerCase().includes(q));
+    }, [filteredSamples, searchQuery]);
 
     const metricsByColor = useMemo(() => {
         const categories = {
@@ -483,8 +495,30 @@ export default function Analysis() {
                                 </Button>
                             )}
                             <div className="h-8 w-[1px] bg-neutral-300 mx-4 hidden md:block" />
+                            <div className="relative">
+                                <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-neutral-400" />
+                                <input
+                                    type="text"
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    placeholder="Pesquisar etiqueta..."
+                                    title="Pesquisar por etiqueta — só filtra a tabela, não muda a média"
+                                    className="h-8 w-48 pl-7 pr-7 text-[11px] font-mono border border-neutral-300 rounded-none focus:border-black outline-none"
+                                />
+                                {searchQuery && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setSearchQuery("")}
+                                        title="Limpar pesquisa"
+                                        className="absolute right-1.5 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-black"
+                                    >
+                                        <X className="h-3.5 w-3.5" />
+                                    </button>
+                                )}
+                            </div>
+                            <div className="h-8 w-[1px] bg-neutral-300 mx-4 hidden md:block" />
                             <span className="text-xs font-mono font-bold">
-                                {filteredSamples.length} RECORDS
+                                {displayedSamples.length} RECORDS
                             </span>
                         </div>
                     </div>
@@ -536,7 +570,7 @@ export default function Analysis() {
                     <div className="overflow-x-auto">
                         <AnalysisTable
                             key={`analysis-table-${refreshTrigger}`}
-                            samples={filteredSamples}
+                            samples={displayedSamples}
                             onUpdateSample={handleUpdateSample}
                             onColorChange={handleColorChange}
                             onDeleteSample={handleDeleteSample}
