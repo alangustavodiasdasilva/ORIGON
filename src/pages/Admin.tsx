@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
-import { Activity, Database, Server, ShieldCheck, Users, Trash2, Edit, LogOut, Upload } from "lucide-react";
+import { Activity, Database, Server, ShieldCheck, Users, Trash2, Edit, LogOut, Upload, Lock, LockOpen } from "lucide-react";
 import { Navigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { AnalistaService, type Analista } from "@/entities/Analista";
@@ -15,6 +15,7 @@ import { Loader2 } from "lucide-react";
 import { usePresence } from "@/hooks/usePresence";
 import { useAudioAlerts } from "@/hooks/useAudioAlerts";
 import AuditLogsTab from "@/components/admin/AuditLogsTab";
+import { systemStatusService, type SystemStatus } from "@/services/systemStatus.service";
 
 const isSupabaseEnabled = () => {
     const url = import.meta.env.VITE_SUPABASE_URL;
@@ -108,13 +109,14 @@ export default function Admin() {
         { id: "labs", label: "Laboratórios", icon: Database },
         { id: "analysts", label: "Access Control", icon: Users },
         { id: "machines", label: "Máquinas", icon: Server },
-        { id: "audit", label: "Auditoria", icon: ShieldCheck }
+        { id: "audit", label: "Auditoria", icon: ShieldCheck },
+        { id: "maintenance", label: "Manutenção", icon: Lock }
     ];
 
-    // Se não for admin_global, removemos as abas de labs e auditoria
+    // Se não for admin_global, removemos as abas de labs, auditoria e manutenção
     const filteredTabs = user?.acesso === 'admin_global'
         ? tabs
-        : tabs.filter(t => t.id !== 'labs' && t.id !== 'audit');
+        : tabs.filter(t => t.id !== 'labs' && t.id !== 'audit' && t.id !== 'maintenance');
 
     return (
         <div className="max-w-7xl mx-auto space-y-16 animate-fade-in text-black pb-24">
@@ -202,6 +204,7 @@ export default function Admin() {
                 {activeTab === "analysts" && <AnalystsTab />}
                 {activeTab === "machines" && <SystemConfigTab />}
                 {activeTab === "audit" && <AuditLogsTab />}
+                {activeTab === "maintenance" && <MaintenanceTab />}
             </div>
         </div>
     );
@@ -305,6 +308,97 @@ function DashboardTab({ onlineAnalysts, labs }: { onlineAnalysts: Analista[], la
             </div>
         </div>
     )
+}
+
+// Modo de manutenção: só o admin_global vê essa aba e consegue travar o
+// sistema pros outros usuários enquanto atualiza algo. Enquanto ativo, o
+// admin_global continua usando tudo normalmente — só os outros são bloqueados.
+function MaintenanceTab() {
+    const { user } = useAuth();
+    const { addToast } = useToast();
+    const [status, setStatus] = useState<SystemStatus | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
+    const [isToggling, setIsToggling] = useState(false);
+
+    useEffect(() => {
+        systemStatusService.get().then(s => {
+            setStatus(s);
+            setIsLoading(false);
+        }).catch(() => setIsLoading(false));
+
+        const unsubscribe = systemStatusService.subscribe(s => setStatus(s));
+        return unsubscribe;
+    }, []);
+
+    const handleToggle = async () => {
+        if (!status) return;
+        setIsToggling(true);
+        try {
+            const next = !status.maintenanceMode;
+            await systemStatusService.setMaintenanceMode(next, user?.nome || "Administrador");
+            addToast({
+                title: next ? "Sistema Travado" : "Sistema Liberado",
+                description: next
+                    ? "Os outros usuários agora veem a tela de manutenção. Você continua com acesso normal."
+                    : "O sistema voltou a funcionar normalmente para todo mundo.",
+                type: next ? "warning" : "success"
+            });
+        } catch (error: any) {
+            addToast({ title: "Erro ao Alterar Status", description: error.message, type: "error" });
+        } finally {
+            setIsToggling(false);
+        }
+    };
+
+    if (isLoading || !status) {
+        return <div className="flex justify-center py-24"><Loader2 className="h-6 w-6 animate-spin text-neutral-400" /></div>;
+    }
+
+    return (
+        <div className="max-w-2xl">
+            <div className={cn(
+                "border p-8 flex flex-col items-center text-center gap-6",
+                status.maintenanceMode ? "border-red-300 bg-red-50" : "border-emerald-300 bg-emerald-50"
+            )}>
+                {status.maintenanceMode ? (
+                    <Lock className="h-12 w-12 text-red-600" />
+                ) : (
+                    <LockOpen className="h-12 w-12 text-emerald-600" />
+                )}
+
+                <div>
+                    <h2 className={cn("text-2xl font-serif", status.maintenanceMode ? "text-red-700" : "text-emerald-700")}>
+                        {status.maintenanceMode ? "Sistema em Manutenção" : "Sistema Ativo"}
+                    </h2>
+                    <p className="text-sm text-neutral-500 mt-2 max-w-md">
+                        {status.maintenanceMode
+                            ? "Os outros usuários estão vendo uma tela de bloqueio. Só você (admin_global) continua com acesso normal enquanto atualiza o sistema."
+                            : "Todo mundo está usando o sistema normalmente. Ative a manutenção antes de fazer uma atualização que exige que ninguém mais mexa."}
+                    </p>
+                    {status.updatedBy && (
+                        <p className="text-[10px] uppercase tracking-widest text-neutral-400 mt-3">
+                            Última alteração por {status.updatedBy}
+                            {status.updatedAt ? ` em ${new Date(status.updatedAt).toLocaleString('pt-BR')}` : ''}
+                        </p>
+                    )}
+                </div>
+
+                <Button
+                    onClick={handleToggle}
+                    disabled={isToggling}
+                    className={cn(
+                        "h-14 px-10 rounded-none font-black text-[11px] uppercase tracking-widest transition-colors flex items-center gap-2",
+                        status.maintenanceMode
+                            ? "bg-emerald-600 hover:bg-emerald-700 text-white"
+                            : "bg-red-600 hover:bg-red-700 text-white"
+                    )}
+                >
+                    {isToggling ? <Loader2 className="h-4 w-4 animate-spin" /> : (status.maintenanceMode ? <LockOpen className="h-4 w-4" /> : <Lock className="h-4 w-4" />)}
+                    {status.maintenanceMode ? "Liberar Sistema" : "Travar Sistema"}
+                </Button>
+            </div>
+        </div>
+    );
 }
 
 // Interfaces
