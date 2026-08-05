@@ -12,6 +12,7 @@ import { LanguageProvider } from "@/contexts/LanguageContext";
 import { ErrorBoundary } from "@/components/shared/ErrorBoundary";
 import { realtimeService } from "@/services/RealtimeService";
 import { systemStatusService } from "@/services/systemStatus.service";
+import { AnalistaService } from "@/entities/Analista";
 
 // Lazy imports — cada página só é carregada quando o usuário navegar até ela
 const Inicio = lazy(() => import("@/pages/Inicio"));
@@ -47,6 +48,10 @@ function AppRoutes() {
     const { user, isAuthenticated, isLoading: authLoading } = useAuth();
     const [maintenanceMode, setMaintenanceMode] = useState(false);
     const [maintenanceBy, setMaintenanceBy] = useState<string | null>(null);
+    // Confirmação fresca (direto do banco) do acesso do usuário, só buscada quando
+    // a manutenção está ativa — evita travar um admin_global por causa de um
+    // "acesso" desatualizado que ficou salvo no localStorage da sessão.
+    const [confirmedAcesso, setConfirmedAcesso] = useState<string | null>(null);
 
     // Injeta realtime presence
     useEffect(() => {
@@ -73,6 +78,19 @@ function AppRoutes() {
         return unsubscribe;
     }, [isAuthenticated]);
 
+    // Assim que a manutenção liga, confirma o "acesso" direto no banco antes de
+    // decidir bloquear — se o localStorage estiver com um valor desatualizado,
+    // isso evita trancar um admin_global fora do próprio painel de manutenção.
+    useEffect(() => {
+        if (!maintenanceMode || !user?.id) {
+            setConfirmedAcesso(null);
+            return;
+        }
+        AnalistaService.get(user.id)
+            .then(a => setConfirmedAcesso(a?.acesso ?? user.acesso ?? null))
+            .catch(() => setConfirmedAcesso(user.acesso ?? null));
+    }, [maintenanceMode, user?.id]);
+
     if (authLoading) {
         return <LoadingScreen />;
     }
@@ -87,8 +105,13 @@ function AppRoutes() {
         );
     }
 
-    if (maintenanceMode && user?.acesso !== 'admin_global') {
-        return <MaintenanceScreen updatedBy={maintenanceBy} />;
+    if (maintenanceMode) {
+        // Enquanto a confirmação ainda não voltou, usa o valor já conhecido da sessão
+        // como palpite (evita reter a tela por causa da latência da consulta).
+        const effectiveAcesso = confirmedAcesso ?? user?.acesso;
+        if (effectiveAcesso !== 'admin_global') {
+            return <MaintenanceScreen updatedBy={maintenanceBy} />;
+        }
     }
 
     return (
