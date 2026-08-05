@@ -137,8 +137,20 @@ export default function Home() {
 
             setLotes(data);
 
-            const counts = await SampleService.countsByLotes(data.map(l => l.id));
-            setSampleCounts(counts);
+            // Contagem tratada à parte: se ela falhar (ex: instabilidade de rede),
+            // os cards continuam mostrando nome/data normalmente, e tentamos de
+            // novo uma vez em vez de deixar tudo "00" até o próximo F5 manual.
+            const loteIds = data.map(l => l.id);
+            try {
+                setSampleCounts(await SampleService.countsByLotes(loteIds));
+            } catch (countError) {
+                console.error("Falha ao buscar contagem de amostras, tentando novamente:", countError);
+                try {
+                    setSampleCounts(await SampleService.countsByLotes(loteIds));
+                } catch (retryError) {
+                    console.error("Segunda tentativa de contagem também falhou:", retryError);
+                }
+            }
         } catch (error) {
             console.error(error);
         } finally {

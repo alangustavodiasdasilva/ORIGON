@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import { lazy, Suspense, useEffect, useState } from "react";
 import { Lock } from "lucide-react";
 import Layout from "@/components/shared/Layout";
@@ -52,6 +52,7 @@ const NUNCA_BLOQUEAR_EMAILS = ["alangds03@gmail.com"];
 
 function AppRoutes() {
     const { user, isAuthenticated, isLoading: authLoading } = useAuth();
+    const location = useLocation();
     const [maintenanceMode, setMaintenanceMode] = useState(false);
     const [maintenanceBy, setMaintenanceBy] = useState<string | null>(null);
     // Confirmação fresca (direto do banco) do acesso do usuário, só buscada quando
@@ -112,8 +113,13 @@ function AppRoutes() {
     }
 
     const isNeverBlocked = !!user?.email && NUNCA_BLOQUEAR_EMAILS.includes(user.email.toLowerCase());
+    // A rota /admin NUNCA é bloqueada pela manutenção — é lá que fica o botão pra
+    // desativar. Bloqueá-la também trancaria o próprio dono fora do interruptor.
+    // Quem não tem permissão de admin é redirecionado pra "/" pelo Admin.tsx, e
+    // aí sim cai no bloqueio normalmente.
+    const isAdminRoute = location.pathname === '/admin' || location.pathname.endsWith('/admin');
 
-    if (maintenanceMode && !isNeverBlocked) {
+    if (maintenanceMode && !isNeverBlocked && !isAdminRoute) {
         // Enquanto a confirmação ainda não voltou, usa o valor já conhecido da sessão
         // como palpite (evita reter a tela por causa da latência da consulta).
         const effectiveAcesso = confirmedAcesso ?? user?.acesso;
