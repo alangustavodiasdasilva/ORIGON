@@ -12,6 +12,12 @@ export interface LabLockInfo {
     updatedAt: string | null;
 }
 
+export interface UserLockInfo {
+    userId: string;
+    updatedBy: string | null;
+    updatedAt: string | null;
+}
+
 const isSupabaseEnabled = () => !!import.meta.env.VITE_SUPABASE_URL && !!import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 export const systemStatusService = {
@@ -88,6 +94,46 @@ export const systemStatusService = {
                     // Qualquer mudança (insert/update/delete) — busca a lista inteira de novo,
                     // é a forma mais simples de manter tudo consistente com poucas linhas.
                     callback(await systemStatusService.getLockedLabs());
+                }
+            )
+            .subscribe();
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    },
+
+    // ── Travamento por usuário individual ───────────────────────────────────
+    // Mesmo padrão do lab_lockdown: um usuário "travado" é simplesmente uma
+    // linha presente nessa tabela. Trava = insere a linha; destrava = apaga.
+
+    async getLockedUsers(): Promise<UserLockInfo[]> {
+        if (!isSupabaseEnabled()) return [];
+        const { data, error } = await supabase.from("user_lockdown").select("*");
+        if (error || !data) return [];
+        return data.map((row: any) => ({ userId: row.user_id, updatedBy: row.updated_by, updatedAt: row.updated_at }));
+    },
+
+    async lockUser(userId: string, updatedBy: string): Promise<void> {
+        const { error } = await supabase
+            .from("user_lockdown")
+            .upsert({ user_id: userId, updated_by: updatedBy, updated_at: new Date().toISOString() }, { onConflict: "user_id" });
+        if (error) throw error;
+    },
+
+    async unlockUser(userId: string): Promise<void> {
+        const { error } = await supabase.from("user_lockdown").delete().eq("user_id", userId);
+        if (error) throw error;
+    },
+
+    subscribeUserLockdown(callback: (locked: UserLockInfo[]) => void): () => void {
+        if (!isSupabaseEnabled()) return () => {};
+        const channel = supabase
+            .channel("user-lockdown-realtime")
+            .on(
+                "postgres_changes",
+                { event: "*", schema: "public", table: "user_lockdown" },
+                async () => {
+                    callback(await systemStatusService.getLockedUsers());
                 }
             )
             .subscribe();

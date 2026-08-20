@@ -15,7 +15,7 @@ import { Loader2 } from "lucide-react";
 import { usePresence } from "@/hooks/usePresence";
 import { useAudioAlerts } from "@/hooks/useAudioAlerts";
 import AuditLogsTab from "@/components/admin/AuditLogsTab";
-import { systemStatusService, type SystemStatus, type LabLockInfo } from "@/services/systemStatus.service";
+import { systemStatusService, type SystemStatus, type LabLockInfo, type UserLockInfo } from "@/services/systemStatus.service";
 
 const isSupabaseEnabled = () => {
     const url = import.meta.env.VITE_SUPABASE_URL;
@@ -314,14 +314,15 @@ function DashboardTab({ onlineAnalysts, labs }: { onlineAnalysts: Analista[], la
 // sistema pros outros usuários enquanto atualiza algo. Enquanto ativo, o
 // admin_global continua usando tudo normalmente — só os outros são bloqueados.
 function MaintenanceTab() {
-    const [subTab, setSubTab] = useState<'global' | 'labs'>('global');
+    const [subTab, setSubTab] = useState<'global' | 'labs' | 'users'>('global');
 
     return (
         <div className="max-w-3xl space-y-6">
             <div className="flex gap-6 border-b border-neutral-200 pb-px">
                 {[
                     { id: 'global' as const, label: 'Global' },
-                    { id: 'labs' as const, label: 'Por Laboratório' }
+                    { id: 'labs' as const, label: 'Por Laboratório' },
+                    { id: 'users' as const, label: 'Por Usuário' }
                 ].map(t => (
                     <button
                         key={t.id}
@@ -338,7 +339,7 @@ function MaintenanceTab() {
                 ))}
             </div>
 
-            {subTab === 'global' ? <GlobalMaintenanceTab /> : <LabMaintenanceTab />}
+            {subTab === 'global' ? <GlobalMaintenanceTab /> : subTab === 'labs' ? <LabMaintenanceTab /> : <UserMaintenanceTab />}
         </div>
     );
 }
@@ -519,6 +520,108 @@ function LabMaintenanceTab() {
                 })}
                 {labs.length === 0 && (
                     <p className="p-4 text-xs text-neutral-400 text-center">Nenhum laboratório cadastrado.</p>
+                )}
+            </div>
+        </div>
+    );
+}
+
+function UserMaintenanceTab() {
+    const { user } = useAuth();
+    const { addToast } = useToast();
+    const [analysts, setAnalysts] = useState<Analista[]>([]);
+    const [labs, setLabs] = useState<Lab[]>([]);
+    const [lockedUsers, setLockedUsers] = useState<UserLockInfo[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [togglingUserId, setTogglingUserId] = useState<string | null>(null);
+
+    useEffect(() => {
+        Promise.all([AnalistaService.list(), LabService.list(), systemStatusService.getLockedUsers()])
+            .then(([analystsList, labsList, locked]) => {
+                // admin_global nunca aparece na lista — nunca pode ser travado, nem por engano.
+                setAnalysts(analystsList.filter(a => a.acesso !== 'admin_global'));
+                setLabs(labsList);
+                setLockedUsers(locked);
+                setIsLoading(false);
+            })
+            .catch(() => setIsLoading(false));
+
+        const unsubscribe = systemStatusService.subscribeUserLockdown(setLockedUsers);
+        return unsubscribe;
+    }, []);
+
+    const handleToggleUser = async (userId: string, isLocked: boolean) => {
+        setTogglingUserId(userId);
+        try {
+            if (isLocked) {
+                await systemStatusService.unlockUser(userId);
+                addToast({ title: "Usuário Liberado", type: "success" });
+            } else {
+                await systemStatusService.lockUser(userId, user?.nome || "Administrador");
+                addToast({
+                    title: "Usuário Travado",
+                    description: "Esse usuário agora vê a tela de bloqueio, independente do laboratório dele.",
+                    type: "warning"
+                });
+            }
+        } catch (error: any) {
+            addToast({ title: "Erro ao Alterar Usuário", description: error.message, type: "error" });
+        } finally {
+            setTogglingUserId(null);
+        }
+    };
+
+    const getLabName = (labId?: string | null) => labs.find(l => l.id === labId)?.nome || "Sem laboratório";
+
+    if (isLoading) {
+        return <div className="flex justify-center py-24"><Loader2 className="h-6 w-6 animate-spin text-neutral-400" /></div>;
+    }
+
+    return (
+        <div className="space-y-3">
+            <p className="text-xs text-neutral-500 max-w-xl">
+                Trava só o(s) usuário(s) selecionado(s) — independente do laboratório dele, os demais
+                usuários (inclusive do mesmo laboratório) continuam funcionando normalmente. Contas
+                admin_global nem aparecem nessa lista.
+            </p>
+            <div className="border border-neutral-200 divide-y divide-neutral-200 max-h-[520px] overflow-y-auto">
+                {analysts.map(analyst => {
+                    const lockInfo = lockedUsers.find(u => u.userId === analyst.id);
+                    const isLocked = !!lockInfo;
+                    return (
+                        <div key={analyst.id} className="flex items-center justify-between p-4">
+                            <div>
+                                <p className="font-bold text-sm text-black">{analyst.nome}</p>
+                                <p className="text-[10px] uppercase tracking-widest text-neutral-400 mt-0.5">
+                                    {getLabName(analyst.lab_id)} · {analyst.acesso?.replace('_', ' ')}
+                                </p>
+                                {isLocked && lockInfo?.updatedBy && (
+                                    <p className="text-[10px] uppercase tracking-widest text-red-500 mt-1">
+                                        Travado por {lockInfo.updatedBy}
+                                        {lockInfo.updatedAt ? ` em ${new Date(lockInfo.updatedAt).toLocaleString('pt-BR')}` : ''}
+                                    </p>
+                                )}
+                            </div>
+                            <Button
+                                onClick={() => handleToggleUser(analyst.id, isLocked)}
+                                disabled={togglingUserId === analyst.id}
+                                className={cn(
+                                    "h-9 px-4 rounded-none font-black text-[10px] uppercase tracking-widest transition-colors flex items-center gap-2",
+                                    isLocked
+                                        ? "bg-emerald-600 hover:bg-emerald-700 text-white"
+                                        : "bg-red-600 hover:bg-red-700 text-white"
+                                )}
+                            >
+                                {togglingUserId === analyst.id
+                                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                    : (isLocked ? <LockOpen className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5" />)}
+                                {isLocked ? "Liberar" : "Travar"}
+                            </Button>
+                        </div>
+                    );
+                })}
+                {analysts.length === 0 && (
+                    <p className="p-4 text-xs text-neutral-400 text-center">Nenhum usuário cadastrado.</p>
                 )}
             </div>
         </div>

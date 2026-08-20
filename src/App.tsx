@@ -100,6 +100,7 @@ function AppRoutes() {
     const location = useLocation();
     const [maintenanceMode, setMaintenanceMode] = useState(false);
     const [lockedLabIds, setLockedLabIds] = useState<string[]>([]);
+    const [lockedUserIds, setLockedUserIds] = useState<string[]>([]);
     // Confirmação fresca (direto do banco) do acesso do usuário, só buscada quando
     // algum bloqueio está ativo — evita travar um admin_global por causa de um
     // "acesso" desatualizado que ficou salvo no localStorage da sessão.
@@ -126,15 +127,20 @@ function AppRoutes() {
         systemStatusService.getLockedLabs().then(labs => setLockedLabIds(labs.map(l => l.labId))).catch(console.error);
         const unsubLabs = systemStatusService.subscribeLabLockdown(labs => setLockedLabIds(labs.map(l => l.labId)));
 
+        systemStatusService.getLockedUsers().then(users => setLockedUserIds(users.map(u => u.userId))).catch(console.error);
+        const unsubUsers = systemStatusService.subscribeUserLockdown(users => setLockedUserIds(users.map(u => u.userId)));
+
         return () => {
             unsubGlobal();
             unsubLabs();
+            unsubUsers();
         };
     }, [isAuthenticated]);
 
     const homeLabId = currentLab?.id || user?.lab_id || null;
     const isLabBlocked = !!homeLabId && lockedLabIds.includes(homeLabId);
-    const anyBlockActive = maintenanceMode || isLabBlocked;
+    const isUserBlocked = !!user?.id && lockedUserIds.includes(user.id);
+    const anyBlockActive = maintenanceMode || isLabBlocked || isUserBlocked;
 
     // Assim que algum bloqueio liga, confirma o "acesso" direto no banco antes de
     // decidir bloquear — se o localStorage estiver com um valor desatualizado,
