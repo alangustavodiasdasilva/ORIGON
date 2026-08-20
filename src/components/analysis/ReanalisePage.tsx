@@ -212,6 +212,7 @@ export default function ReanalisePage() {
     const [osInput, setOsInput] = useState('');
     const [customDate, setCustomDate] = useState('');
     const [customTime, setCustomTime] = useState('');
+    const [codigoOperador, setCodigoOperador] = useState('');
 
     useEffect(() => {
         const labId = currentLab?.id || user?.lab_id;
@@ -235,7 +236,7 @@ export default function ReanalisePage() {
             }
         }, 500); // 500ms debounce
         return () => clearTimeout(timer);
-    }, [avgEdits, minEdits, maxEdits, stdEdits, isRangeMode, selectedMachineId, repCount, etiquetas, customDate, customTime, osInput, generationTrigger]);
+    }, [avgEdits, minEdits, maxEdits, stdEdits, isRangeMode, selectedMachineId, repCount, etiquetas, customDate, customTime, osInput, codigoOperador, generationTrigger]);
 
     const generateAutoPreview = async () => {
         const machine = machines.find(m => m.id === selectedMachineId);
@@ -278,7 +279,8 @@ export default function ReanalisePage() {
                 machine.machineId,
                 fakeConfig,
                 reps,
-                labIdStr
+                labIdStr,
+                codigoOperador || undefined
             );
 
             if (result.success && result.data && result.data.files) {
@@ -348,7 +350,8 @@ export default function ReanalisePage() {
             machine.machineId,
             fakeConfig,
             reps,
-            labIdStr
+            labIdStr,
+            codigoOperador || undefined
         );
 
         if (result.success && result.data && result.data.files) {
@@ -631,6 +634,10 @@ export default function ReanalisePage() {
 
     const handleExport = async () => {
         if (!selectedMachine) return;
+        if (!codigoOperador.trim()) {
+            setExportStatus({ ok: false, msg: 'Preencha o "Código do Operador" antes de gerar o arquivo.' });
+            return;
+        }
         setIsExporting(true);
         setExportStatus(null);
         try {
@@ -672,7 +679,8 @@ export default function ReanalisePage() {
                 selectedMachine.machineId,
                 fakeConfig,
                 reps,
-                labIdStr
+                labIdStr,
+                codigoOperador
             );
 
             if (!result.success || !result.data) {
@@ -930,12 +938,14 @@ export default function ReanalisePage() {
                             {selectedMachine && (
                                 <div className="flex items-center gap-2 mt-1">
                                     <Cpu className="w-3.5 h-3.5 text-neutral-500" />
-                                    <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-0.5 ${selectedMachine.model === 'USTER' ? 'bg-blue-50 text-blue-700 border border-blue-200' : 'bg-purple-50 text-purple-700 border border-purple-200'
-                                        }`}>
-                                        {selectedMachine.model}
+                                    {/* Toda máquina gera arquivo no formato Úster agora (mesmo as Premier) —
+                                        o rótulo aqui é sempre USTER, independente do modelo cadastrado da
+                                        máquina, pra não contradizer o arquivo/preview real que sai abaixo. */}
+                                    <span className="text-[10px] font-black uppercase tracking-widest px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-200">
+                                        USTER
                                     </span>
                                     <span className="text-[9px] text-neutral-400 font-mono uppercase">
-                                        {selectedMachine.model === 'USTER' ? 'Extensão: .H1' : 'Formato PREMIER'}
+                                        Extensão: .H1
                                     </span>
                                 </div>
                             )}
@@ -1100,6 +1110,20 @@ export default function ReanalisePage() {
                                 className="w-full h-9 border border-neutral-200 px-2 text-[11px] font-bold text-black focus:border-black outline-none rounded-none"
                             />
                         </div>
+                        <div className="col-span-2">
+                            <label htmlFor="reanalise-operador" className="text-[9px] font-black uppercase text-neutral-400 tracking-widest block mb-1">
+                                Código do Operador
+                            </label>
+                            <input
+                                id="reanalise-operador"
+                                type="text"
+                                title="Código de quem operou a leitura — vai dentro do arquivo gerado"
+                                placeholder="Ex: 01"
+                                value={codigoOperador}
+                                onChange={e => setCodigoOperador(e.target.value)}
+                                className="w-full h-9 border border-neutral-200 px-2 text-[11px] font-bold text-black focus:border-black outline-none rounded-none"
+                            />
+                        </div>
                     </div>
 
                     {/* Exportar */}
@@ -1162,7 +1186,7 @@ export default function ReanalisePage() {
                 <div className="bg-neutral-100 border-b border-neutral-200 px-3 py-2 text-[10px] font-black uppercase text-neutral-500 tracking-widest flex items-center justify-between shrink-0">
                     <div className="flex items-center gap-2">
                         <Eye className="w-3.5 h-3.5" />
-                        {selectedMachine ? `Prévia — ${selectedMachine.model}` : 'Prévia'}
+                        {selectedMachine ? 'Prévia — USTER' : 'Prévia'}
                     </div>
                     {!previewShowAll && previewFiles && previewFiles.length > 1 && (
                         <div className="flex items-center gap-2 normal-case tracking-normal">

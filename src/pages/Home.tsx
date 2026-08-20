@@ -21,6 +21,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Modal } from "@/components/shared/Modal";
 import { AnalistaService } from "@/entities/Analista";
+import ExportFolderSection from "@/components/shared/ExportFolderSection";
 
 export default function Home() {
     const [lotes, setLotes] = useState<Lote[]>([]);
@@ -305,6 +306,16 @@ export default function Home() {
                     </Button>
                 </div>
             </div>
+
+            {/* Pasta de Exportação Automática — visível pra todo mundo (não só admin),
+                porque precisa ser configurada em CADA computador que gera arquivos, e
+                quem senta em cada máquina do laboratório nem sempre é admin. */}
+            {(() => {
+                const activeLabId = currentLab?.id || user?.lab_id || null;
+                if (!activeLabId) return null;
+                const activeLabName = currentLab?.nome || labs.find(l => l.id === activeLabId)?.nome || '';
+                return <ExportFolderSection labId={activeLabId} labName={activeLabName} />;
+            })()}
 
             {/* Grid */}
             <div>

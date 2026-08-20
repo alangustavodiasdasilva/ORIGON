@@ -837,13 +837,16 @@ export class HVIFileGeneratorService {
         area: number,
         leaf: number,
         mat: number,
-        csp: number
+        csp: number,
+        codigoOperador: string = '01'
     ): string {
-        // AMOSTRA: formato '{mala}#01' — o sufixo é sempre "01", não o índice real
-        // da repetição (repIndex segue um contador global entre gerações e não deve
-        // aparecer aqui, senão o arquivo sai com "#03", "#04"... em vez de sempre "#01").
+        // AMOSTRA: formato '{mala}#<código do operador>' — o sufixo NÃO é o índice da
+        // repetição (repIndex segue um contador global entre gerações e não deve aparecer
+        // aqui, senão o arquivo sai com "#03", "#04"...), é o código de quem operou a
+        // leitura, digitado pelo analista na hora de gerar (fallback '01' se omitido).
         const safeMala = (sample.mala || '').replace(/\./g, '');
-        const amostraBase = `${safeMala}#01`;
+        const safeCodigoOperador = (codigoOperador || '01').trim() || '01';
+        const amostraBase = `${safeMala}#${safeCodigoOperador}`;
         const amostraPad = amostraBase.substring(0, 40).padEnd(40, ' ');
         const etiquetaPad = (sample.etiqueta || '').substring(0, 40).padEnd(40, ' ');
 
@@ -921,7 +924,8 @@ export class HVIFileGeneratorService {
         customHvi?: string,
         configuracoesAnalise?: Record<string, any>,
         repCount?: number,
-        labId?: string
+        labId?: string,
+        codigoOperador?: string
     ): Promise<{
         success: boolean; message?: string; data?: HVIPreviewData }> {
         try {
@@ -1192,7 +1196,8 @@ export class HVIFileGeneratorService {
                         areaReadings[i],
                         leafReadings[i],
                         matReadings[i],
-                        cspReadings[i]
+                        cspReadings[i],
+                        codigoOperador
                     );
 
                     // Mesmo padrão de nome do arquivo nativo da USTER, pra Lotes e Reanálise:

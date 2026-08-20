@@ -27,6 +27,7 @@ interface AnalysisTableProps {
         b: number;
     };
     configuracoesAnalise?: Record<string, any>;
+    codigoOperador?: string;
 }
 
 const COLORS = [
@@ -36,7 +37,7 @@ const COLORS = [
     { value: "#f59e0b", label: "Amarelo", name: "yellow" },
 ];
 
-export default function AnalysisTable({ samples, onUpdateSample, onColorChange, onDeleteSample, isProcessing, highlightedSampleId, loteId, tolerancias, configuracoesAnalise }: AnalysisTableProps) {
+export default function AnalysisTable({ samples, onUpdateSample, onColorChange, onDeleteSample, isProcessing, highlightedSampleId, loteId, tolerancias, configuracoesAnalise, codigoOperador }: AnalysisTableProps) {
     const { t } = useLanguage();
     const { user, currentLab, isLoading } = useAuth();
     const fields = ['mic', 'len', 'unf', 'str', 'rd', 'b'] as const;
@@ -399,12 +400,16 @@ export default function AnalysisTable({ samples, onUpdateSample, onColorChange, 
                                         ) : (
                                             <button
                                                 onClick={async () => {
+                                                    if (!codigoOperador?.trim()) {
+                                                        alert('Preencha o "Código Operador" (acima da tabela) antes de gerar o arquivo.');
+                                                        return;
+                                                    }
                                                     const labIdStr = currentLab?.id ? String(currentLab.id) : (user?.lab_id ? String(user.lab_id) : undefined);
                                                     const result = await HVIFileGeneratorService.generatePreviewForSample(
                                                         sample, samples, tolerancias, undefined, undefined,
                                                         sample.data_analise || undefined,
                                                         sample.hora_analise ? sample.hora_analise.substring(0, 5) : undefined,
-                                                        undefined, configuracoesAnalise, undefined, labIdStr
+                                                        undefined, configuracoesAnalise, undefined, labIdStr, codigoOperador
                                                     );
                                                     if (!result.success) {
                                                         alert(result.message);
@@ -509,7 +514,8 @@ export default function AnalysisTable({ samples, onUpdateSample, onColorChange, 
                                 (config as any)?.customHvi,
                                 configuracoesAnalise,
                                 undefined,
-                                labIdStr
+                                labIdStr,
+                                codigoOperador
                             );
                             if (result.success && result.data) {
                                 setPreviewModal(prev => ({
