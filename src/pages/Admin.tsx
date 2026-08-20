@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
-import { Activity, Database, Server, ShieldCheck, Users, Trash2, Edit, LogOut, Upload, Lock, LockOpen } from "lucide-react";
+import { Activity, Database, Server, ShieldCheck, Users, Trash2, Edit, LogOut, Upload, Lock, LockOpen, FolderOpen } from "lucide-react";
 import { Navigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { AnalistaService, type Analista } from "@/entities/Analista";
@@ -16,6 +16,8 @@ import { usePresence } from "@/hooks/usePresence";
 import { useAudioAlerts } from "@/hooks/useAudioAlerts";
 import AuditLogsTab from "@/components/admin/AuditLogsTab";
 import { systemStatusService, type SystemStatus, type LabLockInfo, type UserLockInfo } from "@/services/systemStatus.service";
+import { exportFolderService, type ExportFolderInfo } from "@/services/exportFolder.service";
+import { getFolderHandle, saveFolderHandle, removeFolderHandle, ensureFolderPermission, isFolderPickerSupported } from "@/lib/folderHandleStore";
 
 const isSupabaseEnabled = () => {
     const url = import.meta.env.VITE_SUPABASE_URL;
@@ -847,9 +849,23 @@ function SystemConfigTab() {
         }
     };
 
+    const activeLabId = currentLab?.id || (user?.acesso === 'admin_lab' ? user.lab_id : null) || null;
+    const activeLabName = currentLab?.nome || labs.find(l => l.id === activeLabId)?.nome || '';
+
     return (
         <div className="grid gap-8 lg:grid-cols-12">
-            
+
+            {/* Pasta de Exportação Automática (Admin Global e Admin de Lab) */}
+            {activeLabId ? (
+                <ExportFolderSection labId={activeLabId} labName={activeLabName} />
+            ) : (
+                <div className="lg:col-span-12 border border-dashed border-neutral-300 bg-neutral-50 p-8 text-center">
+                    <p className="text-xs text-neutral-400 uppercase tracking-widest">
+                        Selecione um laboratório pra configurar a pasta de exportação automática.
+                    </p>
+                </div>
+            )}
+
             {/* Configurações Globais (Apenas Admin Global) */}
             {user?.acesso === 'admin_global' && (
                 <div className="lg:col-span-12 border border-neutral-200 bg-white p-10 space-y-8 shadow-sm">
@@ -1091,4 +1107,174 @@ function SystemConfigTab() {
             </div>
         </div>
     )
+}
+
+// Pasta de exportação automática: escolhe uma pasta NESTE computador (File System
+// Access API) pra onde os arquivos Uster/Premier gerados passam a ir direto, sem
+// abrir a janela de "Salvar como". O handle da pasta é local ao navegador — só o
+// NOME configurado fica salvo no Supabase, pra outros admins verem o que está
+// configurado (cada computador que gera arquivo precisa escolher a própria pasta).
+function ExportFolderSection({ labId, labName }: { labId: string; labName: string }) {
+    const { user } = useAuth();
+    const { addToast } = useToast();
+    const [info, setInfo] = useState<ExportFolderInfo | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
+    const [localStatus, setLocalStatus] = useState<'checking' | 'none' | 'needs-permission' | 'ready'>('checking');
+    const [isBusy, setIsBusy] = useState(false);
+
+    const checkLocalHandle = async () => {
+        setLocalStatus('checking');
+        const handle = await getFolderHandle(labId);
+        if (!handle) {
+            setLocalStatus('none');
+            return;
+        }
+        try {
+            const granted = await handle.queryPermission({ mode: 'readwrite' });
+            setLocalStatus(granted === 'granted' ? 'ready' : 'needs-permission');
+        } catch {
+            setLocalStatus('needs-permission');
+        }
+    };
+
+    useEffect(() => {
+        setIsLoading(true);
+        exportFolderService.get(labId).then(i => { setInfo(i); setIsLoading(false); }).catch(() => setIsLoading(false));
+        checkLocalHandle();
+
+        const unsubscribe = exportFolderService.subscribe(list => {
+            setInfo(list.find(i => i.labId === labId) || null);
+        });
+        return unsubscribe;
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [labId]);
+
+    const handleChooseFolder = async () => {
+        if (!isFolderPickerSupported()) {
+            addToast({
+                title: "Não Suportado Nesse Navegador",
+                description: "Escolher pasta direto só funciona no Chrome ou Edge.",
+                type: "warning"
+            });
+            return;
+        }
+        setIsBusy(true);
+        try {
+            const handle = await window.showDirectoryPicker!({ mode: 'readwrite' });
+            await saveFolderHandle(labId, handle);
+            await exportFolderService.set(labId, handle.name, user?.nome || "Administrador");
+            addToast({
+                title: "Pasta Configurada",
+                description: `Os arquivos gerados agora vão direto para "${handle.name}" neste computador.`,
+                type: "success"
+            });
+            await checkLocalHandle();
+        } catch (err: any) {
+            if (err?.name !== 'AbortError') {
+                addToast({ title: "Erro ao Escolher Pasta", description: err.message, type: "error" });
+            }
+        } finally {
+            setIsBusy(false);
+        }
+    };
+
+    const handleReactivate = async () => {
+        const handle = await getFolderHandle(labId);
+        if (!handle) return;
+        setIsBusy(true);
+        const granted = await ensureFolderPermission(handle);
+        setIsBusy(false);
+        setLocalStatus(granted ? 'ready' : 'needs-permission');
+        if (!granted) addToast({ title: "Permissão Negada", type: "error" });
+    };
+
+    const handleRemove = async () => {
+        setIsBusy(true);
+        try {
+            await removeFolderHandle(labId);
+            await exportFolderService.remove(labId);
+            setLocalStatus('none');
+            addToast({ title: "Pasta Removida", description: "Os arquivos voltam a ser baixados normalmente pelo navegador.", type: "info" });
+        } catch (err: any) {
+            addToast({ title: "Erro ao Remover", description: err.message, type: "error" });
+        } finally {
+            setIsBusy(false);
+        }
+    };
+
+    return (
+        <div className="lg:col-span-12 border border-neutral-200 bg-white p-10 space-y-6 shadow-sm">
+            <div className="flex items-center justify-between border-b border-black pb-4">
+                <div>
+                    <h3 className="text-xl font-serif">Pasta de Exportação Automática</h3>
+                    {labName && <p className="text-xs text-neutral-500 mt-1">Laboratório: {labName}</p>}
+                </div>
+                <FolderOpen className="h-5 w-5" />
+            </div>
+
+            <p className="text-xs text-neutral-500 max-w-2xl">
+                Escolha uma pasta neste computador — os arquivos Uster/Premier gerados passam a cair
+                direto nela, sem abrir a janela de "Salvar como" do navegador. Só funciona no Chrome
+                ou Edge, e precisa ser configurado em cada computador que gera arquivos: não é um
+                caminho de rede, é uma pasta local escolhida aqui mesmo.
+            </p>
+
+            {isLoading ? (
+                <Loader2 className="h-5 w-5 animate-spin text-neutral-400" />
+            ) : (
+                <div className="space-y-4">
+                    {info && (
+                        <p className="text-[10px] uppercase tracking-widest text-neutral-400">
+                            Configurado como "{info.folderName}" por {info.updatedBy}
+                            {info.updatedAt ? ` em ${new Date(info.updatedAt).toLocaleString('pt-BR')}` : ''}
+                        </p>
+                    )}
+
+                    {localStatus === 'ready' && (
+                        <p className="text-xs font-bold text-emerald-600 uppercase tracking-widest">● Ativo neste computador</p>
+                    )}
+                    {localStatus === 'needs-permission' && (
+                        <p className="text-xs font-bold text-amber-600 uppercase tracking-widest">
+                            Pasta escolhida, mas a permissão expirou neste computador
+                        </p>
+                    )}
+                    {localStatus === 'none' && (
+                        <p className="text-xs font-bold text-neutral-400 uppercase tracking-widest">
+                            {info ? "Ainda não configurado neste computador" : "Nenhuma pasta configurada"}
+                        </p>
+                    )}
+
+                    <div className="flex gap-3">
+                        <Button
+                            onClick={handleChooseFolder}
+                            disabled={isBusy}
+                            className="h-11 px-6 rounded-none font-black text-[10px] uppercase tracking-widest bg-black hover:bg-neutral-800 text-white flex items-center gap-2"
+                        >
+                            {isBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <FolderOpen className="h-4 w-4" />}
+                            {localStatus === 'ready' || localStatus === 'needs-permission' ? "Trocar Pasta" : "Escolher Pasta"}
+                        </Button>
+                        {localStatus === 'needs-permission' && (
+                            <Button
+                                onClick={handleReactivate}
+                                disabled={isBusy}
+                                className="h-11 px-6 rounded-none font-black text-[10px] uppercase tracking-widest bg-amber-600 hover:bg-amber-700 text-white"
+                            >
+                                Reativar Acesso
+                            </Button>
+                        )}
+                        {(info || localStatus === 'ready' || localStatus === 'needs-permission') && (
+                            <Button
+                                onClick={handleRemove}
+                                disabled={isBusy}
+                                variant="outline"
+                                className="h-11 px-6 rounded-none font-black text-[10px] uppercase tracking-widest"
+                            >
+                                Remover
+                            </Button>
+                        )}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
 }

@@ -7,6 +7,7 @@
 import type { Sample } from '@/entities/Sample';
 import { MachineService, type Machine } from '@/entities/Machine';
 import { safeSetItem } from "@/lib/safeStorage";
+import { getFolderHandle, ensureFolderPermission } from "@/lib/folderHandleStore";
 
 export interface HVITolerancias {
     mic: number;
@@ -59,34 +60,45 @@ export class HVIFileGeneratorService {
      * Get machine by HVI number
      */
     /**
+     * Resolve o laboratório ativo a partir da sessão/laboratório selecionado no
+     * localStorage — mesma lógica usada em toda a tela pra saber "onde estou".
+     */
+    private static resolveActiveLabId(explicitlyPassedLabId?: string): string | null {
+        let labId = explicitlyPassedLabId || null;
+        if (labId) return labId;
+
+        const selectedLabData = localStorage.getItem("fibertech_selected_lab");
+        if (selectedLabData && selectedLabData !== "[object Object]" && selectedLabData !== "undefined") {
+            try {
+                const parsed = JSON.parse(selectedLabData);
+                labId = parsed?.id || parsed;
+            } catch (e) {
+                labId = selectedLabData;
+            }
+        }
+
+        if (!labId) {
+            const sessionData = localStorage.getItem("fibertech_session");
+            if (sessionData) {
+                try {
+                    const user = JSON.parse(sessionData);
+                    if (user.lab_id && user.acesso !== 'admin_global') {
+                        labId = user.lab_id;
+                    }
+                } catch (e) {}
+            }
+        }
+
+        return labId;
+    }
+
+    /**
      * Get machine by HVI number
      */
     private static async getMachineByHVI(hviNumber: string, explicitlyPassedLabId?: string): Promise<Machine | null> {
         try {
             let machines: Machine[] = [];
-            const sessionData = localStorage.getItem("fibertech_session");
-            const selectedLabData = localStorage.getItem("fibertech_selected_lab");
-
-            let labId = explicitlyPassedLabId || null;
-            if (!labId) {
-                if (selectedLabData && selectedLabData !== "[object Object]" && selectedLabData !== "undefined") {
-                    try {
-                        const parsed = JSON.parse(selectedLabData);
-                        labId = parsed?.id || parsed;
-                    } catch (e) {
-                        labId = selectedLabData;
-                    }
-                }
-
-                if (!labId && sessionData) {
-                    try {
-                        const user = JSON.parse(sessionData);
-                        if (user.lab_id && user.acesso !== 'admin_global') {
-                            labId = user.lab_id;
-                        }
-                    } catch (e) {}
-                }
-            }
+            const labId = this.resolveActiveLabId(explicitlyPassedLabId);
 
             try {
                 if (labId) {
@@ -1343,36 +1355,59 @@ export class HVIFileGeneratorService {
     }
 
     /**
-     * Download the HVI file content (Individual files)
+     * Tenta escrever o arquivo direto na pasta configurada pelo laboratório
+     * (File System Access API). Retorna false se não há pasta configurada,
+     * a permissão foi negada, ou o navegador não suporta — nesses casos o
+     * chamador cai no download padrão do navegador.
      */
-    static async downloadHVIFile(content: string, filename: string, files?: Array<{ content: string; filename: string }>): Promise<void> {
-        if (files && files.length > 0) {
-            // Fazer download individual sequencialmente com um pequeno delay de 150ms para evitar bloqueios do navegador
-            for (const f of files) {
-                const bytes = this.toASCIIBytes(f.content);
-                const blob = new Blob([bytes as unknown as BlobPart], { type: 'application/octet-stream' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = f.filename;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-                await new Promise(resolve => setTimeout(resolve, 150));
+    private static async tryWriteToConfiguredFolder(filename: string, bytes: Uint8Array, labId: string | null): Promise<boolean> {
+        if (!labId) return false;
+        try {
+            const handle = await getFolderHandle(labId);
+            if (!handle) return false;
+            if (!(await ensureFolderPermission(handle))) return false;
+
+            const fileHandle = await handle.getFileHandle(filename, { create: true });
+            const writable = await fileHandle.createWritable();
+            await writable.write(bytes as unknown as BufferSource);
+            await writable.close();
+            return true;
+        } catch (err) {
+            console.warn(`Falha ao escrever "${filename}" na pasta configurada, usando download padrão:`, err);
+            return false;
+        }
+    }
+
+    private static downloadAsBlob(filename: string, bytes: Uint8Array): void {
+        const blob = new Blob([bytes as unknown as BlobPart], { type: 'application/octet-stream' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }
+
+    /**
+     * Download the HVI file content (Individual files). Se o laboratório ativo
+     * tiver uma pasta de exportação configurada NESTE computador, os arquivos
+     * são escritos direto nela; senão cai no download padrão do navegador.
+     */
+    static async downloadHVIFile(content: string, filename: string, files?: Array<{ content: string; filename: string }>, labId?: string): Promise<void> {
+        const activeLabId = this.resolveActiveLabId(labId);
+        const items = files && files.length > 0 ? files : [{ content, filename }];
+
+        for (const f of items) {
+            const bytes = this.toASCIIBytes(f.content);
+            const wroteToFolder = await this.tryWriteToConfiguredFolder(f.filename, bytes, activeLabId);
+            if (!wroteToFolder) {
+                this.downloadAsBlob(f.filename, bytes);
+                // Só precisa do delay entre downloads via blob (evita bloqueio do navegador);
+                // escrita direta na pasta não tem esse problema.
+                if (items.length > 1) await new Promise(resolve => setTimeout(resolve, 150));
             }
-        } else {
-            // Arquivo único
-            const bytes = this.toASCIIBytes(content);
-            const blob = new Blob([bytes as unknown as BlobPart], { type: 'application/octet-stream' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = filename;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
         }
     }
 }
