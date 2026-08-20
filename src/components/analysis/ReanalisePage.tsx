@@ -675,7 +675,11 @@ export default function ReanalisePage() {
             };
 
             const reps = typeof repCount === 'number' ? repCount : 1;
-            const overrides = isRangeMode ? getRandomRangeOverrides(reps) : undefined;
+            // Fora do modo Intervalo, reaproveita exatamente o que está na tabela
+            // "Visualização de Dados Gerados (Editável)" (gridData) — sem isso, o
+            // export gerava valores novos e aleatórios do zero, ignorando qualquer
+            // edição feita na tabela e saindo diferente do que o analista via na tela.
+            const overrides = isRangeMode ? getRandomRangeOverrides(reps) : (gridData || undefined);
             const labIdStr = currentLab?.id ? String(currentLab.id) : (user?.lab_id ? String(user.lab_id) : undefined);
 
             const result = await HVIFileGeneratorService.generatePreviewForSample(
