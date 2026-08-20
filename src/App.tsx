@@ -26,22 +26,65 @@ const Verificacao = lazy(() => import("@/pages/Verificacao"));
 
 
 // Tela mostrada no lugar do sistema pra quem está bloqueado (manutenção global
-// ou o laboratório dele travado). Disfarçada de propósito como um crash real
-// da aplicação — visual idêntico ao ErrorBoundary.tsx (o crash de verdade que
-// o React mostra quando algo quebra de fato), incluindo a mesma mensagem que
-// já aparece organicamente após um deploy (chunk antigo). Sem logo, sem cor
-// de marca, sem qualquer palavra que entregue que foi um bloqueio intencional.
+// ou o laboratório dele travado). Disfarçada de propósito como um erro NATIVO
+// do navegador (estilo "Este site não pode ser acessado" do Chrome) — tudo em
+// estilo inline, sem Tailwind e sem nenhuma fonte/cor do app, pra não ter a
+// cara do sistema. Também troca o título da aba pro domínio, igual o
+// navegador faz numa página que falhou ao carregar.
 function BlockedScreen() {
+    useEffect(() => {
+        const original = document.title;
+        document.title = window.location.hostname;
+        return () => { document.title = original; };
+    }, []);
+
+    const host = window.location.hostname || "este site";
+
     return (
-        <div className="flex flex-col items-center justify-center min-h-screen bg-neutral-50 p-4">
-            <h1 className="text-2xl font-bold mb-4">Something went wrong.</h1>
-            <p className="text-neutral-600 mb-4">Failed to fetch dynamically imported module</p>
-            <button
-                className="px-4 py-2 bg-black text-white rounded hover:bg-neutral-800"
-                onClick={() => window.location.reload()}
-            >
-                Reload Page
-            </button>
+        <div
+            style={{
+                position: "fixed",
+                inset: 0,
+                background: "#fff",
+                color: "#202124",
+                fontFamily: "Arial, sans-serif",
+                zIndex: 9999,
+                overflow: "auto",
+            }}
+        >
+            <div style={{ maxWidth: 560, margin: "0 auto", padding: "15vh 24px 24px 24px" }}>
+                <h1 style={{ fontSize: 22, fontWeight: 400, margin: "0 0 16px 0", lineHeight: 1.4 }}>
+                    This site can&#39;t be reached
+                </h1>
+                <p style={{ fontSize: 14, lineHeight: 1.7, margin: "0 0 20px 0" }}>
+                    <strong>{host}</strong> refused to connect.
+                </p>
+                <p style={{ fontSize: 14, fontWeight: 700, margin: "0 0 8px 0" }}>Try:</p>
+                <ul style={{ fontSize: 14, lineHeight: 1.9, margin: "0 0 28px 0", paddingLeft: 20 }}>
+                    <li>Checking the connection</li>
+                    <li>Checking the proxy and the firewall</li>
+                    <li>Running Windows Network Diagnostics</li>
+                </ul>
+                <button
+                    onClick={() => window.location.reload()}
+                    style={{
+                        background: "#1a73e8",
+                        color: "#fff",
+                        border: "none",
+                        borderRadius: 4,
+                        fontSize: 14,
+                        fontWeight: 500,
+                        padding: "9px 24px",
+                        cursor: "pointer",
+                        fontFamily: "Arial, sans-serif",
+                    }}
+                >
+                    Reload
+                </button>
+                <p style={{ fontSize: 12, color: "#5f6368", marginTop: 32, letterSpacing: 0.3 }}>
+                    ERR_CONNECTION_REFUSED
+                </p>
+            </div>
         </div>
     );
 }
