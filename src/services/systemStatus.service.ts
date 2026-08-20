@@ -6,6 +6,12 @@ export interface SystemStatus {
     updatedAt: string | null;
 }
 
+export interface LabLockInfo {
+    labId: string;
+    updatedBy: string | null;
+    updatedAt: string | null;
+}
+
 const isSupabaseEnabled = () => !!import.meta.env.VITE_SUPABASE_URL && !!import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 export const systemStatusService = {
@@ -40,6 +46,48 @@ export const systemStatusService = {
                     if (row) {
                         callback({ maintenanceMode: !!row.maintenance_mode, updatedBy: row.updated_by, updatedAt: row.updated_at });
                     }
+                }
+            )
+            .subscribe();
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    },
+
+    // ── Travamento por laboratório ────────────────────────────────────────
+    // Um laboratório "travado" é simplesmente uma linha presente nessa tabela.
+    // Trava = insere a linha; destrava = apaga.
+
+    async getLockedLabs(): Promise<LabLockInfo[]> {
+        if (!isSupabaseEnabled()) return [];
+        const { data, error } = await supabase.from("lab_lockdown").select("*");
+        if (error || !data) return [];
+        return data.map((row: any) => ({ labId: row.lab_id, updatedBy: row.updated_by, updatedAt: row.updated_at }));
+    },
+
+    async lockLab(labId: string, updatedBy: string): Promise<void> {
+        const { error } = await supabase
+            .from("lab_lockdown")
+            .upsert({ lab_id: labId, updated_by: updatedBy, updated_at: new Date().toISOString() }, { onConflict: "lab_id" });
+        if (error) throw error;
+    },
+
+    async unlockLab(labId: string): Promise<void> {
+        const { error } = await supabase.from("lab_lockdown").delete().eq("lab_id", labId);
+        if (error) throw error;
+    },
+
+    subscribeLabLockdown(callback: (locked: LabLockInfo[]) => void): () => void {
+        if (!isSupabaseEnabled()) return () => {};
+        const channel = supabase
+            .channel("lab-lockdown-realtime")
+            .on(
+                "postgres_changes",
+                { event: "*", schema: "public", table: "lab_lockdown" },
+                async () => {
+                    // Qualquer mudança (insert/update/delete) — busca a lista inteira de novo,
+                    // é a forma mais simples de manter tudo consistente com poucas linhas.
+                    callback(await systemStatusService.getLockedLabs());
                 }
             )
             .subscribe();

@@ -15,7 +15,7 @@ import { Loader2 } from "lucide-react";
 import { usePresence } from "@/hooks/usePresence";
 import { useAudioAlerts } from "@/hooks/useAudioAlerts";
 import AuditLogsTab from "@/components/admin/AuditLogsTab";
-import { systemStatusService, type SystemStatus } from "@/services/systemStatus.service";
+import { systemStatusService, type SystemStatus, type LabLockInfo } from "@/services/systemStatus.service";
 
 const isSupabaseEnabled = () => {
     const url = import.meta.env.VITE_SUPABASE_URL;
@@ -314,6 +314,36 @@ function DashboardTab({ onlineAnalysts, labs }: { onlineAnalysts: Analista[], la
 // sistema pros outros usuários enquanto atualiza algo. Enquanto ativo, o
 // admin_global continua usando tudo normalmente — só os outros são bloqueados.
 function MaintenanceTab() {
+    const [subTab, setSubTab] = useState<'global' | 'labs'>('global');
+
+    return (
+        <div className="max-w-3xl space-y-6">
+            <div className="flex gap-6 border-b border-neutral-200 pb-px">
+                {[
+                    { id: 'global' as const, label: 'Global' },
+                    { id: 'labs' as const, label: 'Por Laboratório' }
+                ].map(t => (
+                    <button
+                        key={t.id}
+                        onClick={() => setSubTab(t.id)}
+                        className={cn(
+                            "pb-3 border-b-2 text-[10px] font-bold uppercase tracking-widest transition-all",
+                            subTab === t.id
+                                ? "border-black text-black"
+                                : "border-transparent text-neutral-400 hover:text-black hover:border-neutral-300"
+                        )}
+                    >
+                        {t.label}
+                    </button>
+                ))}
+            </div>
+
+            {subTab === 'global' ? <GlobalMaintenanceTab /> : <LabMaintenanceTab />}
+        </div>
+    );
+}
+
+function GlobalMaintenanceTab() {
     const { user } = useAuth();
     const { addToast } = useToast();
     const [status, setStatus] = useState<SystemStatus | null>(null);
@@ -339,7 +369,7 @@ function MaintenanceTab() {
             addToast({
                 title: next ? "Sistema Travado" : "Sistema Liberado",
                 description: next
-                    ? "Os outros usuários agora veem a tela de manutenção. Você continua com acesso normal."
+                    ? "Os outros usuários agora veem a tela de bloqueio. Você continua com acesso normal."
                     : "O sistema voltou a funcionar normalmente para todo mundo.",
                 type: next ? "warning" : "success"
             });
@@ -368,12 +398,12 @@ function MaintenanceTab() {
 
                 <div>
                     <h2 className={cn("text-2xl font-serif", status.maintenanceMode ? "text-red-700" : "text-emerald-700")}>
-                        {status.maintenanceMode ? "Sistema em Manutenção" : "Sistema Ativo"}
+                        {status.maintenanceMode ? "Sistema em Manutenção (Global)" : "Sistema Ativo"}
                     </h2>
                     <p className="text-sm text-neutral-500 mt-2 max-w-md">
                         {status.maintenanceMode
-                            ? "Os outros usuários estão vendo uma tela de bloqueio. Só você (admin_global) continua com acesso normal enquanto atualiza o sistema."
-                            : "Todo mundo está usando o sistema normalmente. Ative a manutenção antes de fazer uma atualização que exige que ninguém mais mexa."}
+                            ? "Todo mundo (de todos os laboratórios) está vendo a tela de bloqueio. Só você (admin_global) continua com acesso normal enquanto atualiza o sistema."
+                            : "Todo mundo está usando o sistema normalmente. Ative antes de fazer uma atualização que exige que ninguém mais mexa em nenhum laboratório."}
                     </p>
                     {status.updatedBy && (
                         <p className="text-[10px] uppercase tracking-widest text-neutral-400 mt-3">
@@ -394,8 +424,102 @@ function MaintenanceTab() {
                     )}
                 >
                     {isToggling ? <Loader2 className="h-4 w-4 animate-spin" /> : (status.maintenanceMode ? <LockOpen className="h-4 w-4" /> : <Lock className="h-4 w-4" />)}
-                    {status.maintenanceMode ? "Liberar Sistema" : "Travar Sistema"}
+                    {status.maintenanceMode ? "Liberar Sistema" : "Travar Sistema (Todos os Laboratórios)"}
                 </Button>
+            </div>
+        </div>
+    );
+}
+
+function LabMaintenanceTab() {
+    const { user } = useAuth();
+    const { addToast } = useToast();
+    const [labs, setLabs] = useState<Lab[]>([]);
+    const [lockedLabs, setLockedLabs] = useState<LabLockInfo[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [togglingLabId, setTogglingLabId] = useState<string | null>(null);
+
+    useEffect(() => {
+        Promise.all([LabService.list(), systemStatusService.getLockedLabs()])
+            .then(([labsList, locked]) => {
+                setLabs(labsList);
+                setLockedLabs(locked);
+                setIsLoading(false);
+            })
+            .catch(() => setIsLoading(false));
+
+        const unsubscribe = systemStatusService.subscribeLabLockdown(setLockedLabs);
+        return unsubscribe;
+    }, []);
+
+    const handleToggleLab = async (labId: string, isLocked: boolean) => {
+        setTogglingLabId(labId);
+        try {
+            if (isLocked) {
+                await systemStatusService.unlockLab(labId);
+                addToast({ title: "Laboratório Liberado", type: "success" });
+            } else {
+                await systemStatusService.lockLab(labId, user?.nome || "Administrador");
+                addToast({
+                    title: "Laboratório Travado",
+                    description: "Quem é vinculado a esse laboratório agora vê a tela de bloqueio.",
+                    type: "warning"
+                });
+            }
+        } catch (error: any) {
+            addToast({ title: "Erro ao Alterar Laboratório", description: error.message, type: "error" });
+        } finally {
+            setTogglingLabId(null);
+        }
+    };
+
+    if (isLoading) {
+        return <div className="flex justify-center py-24"><Loader2 className="h-6 w-6 animate-spin text-neutral-400" /></div>;
+    }
+
+    return (
+        <div className="space-y-3">
+            <p className="text-xs text-neutral-500 max-w-xl">
+                Trava só o(s) laboratório(s) selecionado(s) — quem é vinculado a eles vê a tela de
+                bloqueio, os outros laboratórios continuam funcionando normalmente. Você (admin_global)
+                nunca é afetado, mesmo travando o laboratório que estiver selecionado no momento.
+            </p>
+            <div className="border border-neutral-200 divide-y divide-neutral-200">
+                {labs.map(lab => {
+                    const lockInfo = lockedLabs.find(l => l.labId === lab.id);
+                    const isLocked = !!lockInfo;
+                    return (
+                        <div key={lab.id} className="flex items-center justify-between p-4">
+                            <div>
+                                <p className="font-bold text-sm text-black">{lab.nome}</p>
+                                {isLocked && lockInfo?.updatedBy && (
+                                    <p className="text-[10px] uppercase tracking-widest text-red-500 mt-1">
+                                        Travado por {lockInfo.updatedBy}
+                                        {lockInfo.updatedAt ? ` em ${new Date(lockInfo.updatedAt).toLocaleString('pt-BR')}` : ''}
+                                    </p>
+                                )}
+                            </div>
+                            <Button
+                                onClick={() => handleToggleLab(lab.id, isLocked)}
+                                disabled={togglingLabId === lab.id}
+                                className={cn(
+                                    "h-9 px-4 rounded-none font-black text-[10px] uppercase tracking-widest transition-colors flex items-center gap-2",
+                                    isLocked
+                                        ? "bg-emerald-600 hover:bg-emerald-700 text-white"
+                                        : "bg-red-600 hover:bg-red-700 text-white"
+                                )}
+                            >
+                                {togglingLabId === lab.id
+                                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                    : (isLocked ? <LockOpen className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5" />)}
+                                {isLocked ? "Liberar" : "Travar"}
+                            </Button>
+                        </div>
+                    );
+                })}
+                {labs.length === 0 && (
+                    <p className="p-4 text-xs text-neutral-400 text-center">Nenhum laboratório cadastrado.</p>
+                )}
             </div>
         </div>
     );
