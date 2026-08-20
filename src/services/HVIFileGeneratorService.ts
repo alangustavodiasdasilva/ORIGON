@@ -1102,7 +1102,12 @@ export class HVIFileGeneratorService {
             let content: string;
             let filename: string;
             const files: Array<{ content: string; filename: string }> = [];
-            const isUster = machine.model?.toUpperCase() === 'USTER';
+            // Pedido do Alan: máquina Premier também gera arquivo/preview no formato e
+            // nomenclatura da Úster (R_X<máquina><contador>.H1) — só o número da máquina
+            // real (Premier) muda, via lineName/mNum abaixo, que já vêm de machine.machineId
+            // independente do modelo. O cadastro da máquina continua mostrando "PREMIER"
+            // normalmente; só a geração do arquivo em si segue sempre o formato Úster.
+            const isUster = true;
 
             if (isUster) {
                 const repContents: string[] = [];
