@@ -1078,11 +1078,16 @@ export class HVIFileGeneratorService {
             const fallbackCount= this.getBalancedReadings(countVal, 5, 0, seedMod, count, 'count');
             const countReadings= overrideReadings?.count?.length ? overrideReadings.count : fallbackCount;
 
+            // CG não tem variação por leitura (é o mesmo grau em todas as repetições), mas
+            // ainda precisa respeitar edição manual na tabela — antes ficava sempre travado
+            // em averages.cg, ignorando qualquer override, e a edição nunca "colava".
+            const cgReadings = overrideReadings?.cg?.length ? overrideReadings.cg : Array(count).fill(averages.cg || "31-3");
+
             const balancedReadingsRecord = {
-                mic: micReadings, len: lenReadings, unf: unfReadings, str: strReadings, 
-                rd: rdReadings, b: bReadings, elg: elgReadings, sfi: sfiReadings, 
-                sci: sciReadings, mat: matReadings, csp: cspReadings, leaf: leafReadings, 
-                area: areaReadings, count: countReadings, cg: Array(count).fill(averages.cg)
+                mic: micReadings, len: lenReadings, unf: unfReadings, str: strReadings,
+                rd: rdReadings, b: bReadings, elg: elgReadings, sfi: sfiReadings,
+                sci: sciReadings, mat: matReadings, csp: cspReadings, leaf: leafReadings,
+                area: areaReadings, count: countReadings, cg: cgReadings
             };
 
 
@@ -1192,7 +1197,7 @@ export class HVIFileGeneratorService {
                         sciReadings[i],
                         rdReadings[i],
                         bReadings[i],
-                        averages.cg || "31-3",
+                        cgReadings[i],
                         areaReadings[i],
                         leafReadings[i],
                         matReadings[i],
