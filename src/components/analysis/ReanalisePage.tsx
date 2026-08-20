@@ -210,8 +210,18 @@ export default function ReanalisePage() {
     const [rangeEnd, setRangeEnd] = useState('');
     const [rangeError, setRangeError] = useState<string | null>(null);
     const [osInput, setOsInput] = useState('');
-    const [customDate, setCustomDate] = useState('');
-    const [customTime, setCustomTime] = useState('');
+    // Data/hora começam preenchidas com "agora" (quando o analista está fazendo a
+    // reanálise), mas continuam 100% editáveis se ele quiser gerar com outro horário.
+    const [customDate, setCustomDate] = useState(() => {
+        const now = new Date();
+        const pad = (n: number) => String(n).padStart(2, '0');
+        return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+    });
+    const [customTime, setCustomTime] = useState(() => {
+        const now = new Date();
+        const pad = (n: number) => String(n).padStart(2, '0');
+        return `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+    });
     const [codigoOperador, setCodigoOperador] = useState('');
 
     useEffect(() => {
@@ -953,20 +963,37 @@ export default function ReanalisePage() {
                     )}
 
                     <div className="space-y-4">
-                        {/* Ordem de Serviço (OS) */}
-                        <div>
-                            <label htmlFor="reanalise-os" className="text-[9px] font-black uppercase text-neutral-400 tracking-widest block mb-2">
-                                Ordem de Serviço (OS)
-                            </label>
-                            <input
-                                id="reanalise-os"
-                                type="text"
-                                title="Ordem de Serviço"
-                                value={osInput}
-                                onChange={e => setOsInput(e.target.value)}
-                                onFocus={e => e.target.select()}
-                                className="w-full h-10 border border-neutral-300 px-3 text-[12px] font-bold text-black focus:border-black outline-none rounded-none bg-white"
-                            />
+                        {/* Ordem de Serviço (OS) + Código do Operador */}
+                        <div className="grid grid-cols-2 gap-3">
+                            <div>
+                                <label htmlFor="reanalise-os" className="text-[9px] font-black uppercase text-neutral-400 tracking-widest block mb-2">
+                                    Ordem de Serviço (OS)
+                                </label>
+                                <input
+                                    id="reanalise-os"
+                                    type="text"
+                                    title="Ordem de Serviço"
+                                    value={osInput}
+                                    onChange={e => setOsInput(e.target.value)}
+                                    onFocus={e => e.target.select()}
+                                    className="w-full h-10 border border-neutral-300 px-3 text-[12px] font-bold text-black focus:border-black outline-none rounded-none bg-white"
+                                />
+                            </div>
+                            <div>
+                                <label htmlFor="reanalise-operador" className="text-[9px] font-black uppercase text-neutral-400 tracking-widest block mb-2">
+                                    Código do Operador
+                                </label>
+                                <input
+                                    id="reanalise-operador"
+                                    type="text"
+                                    title="Código de quem operou a leitura — vai dentro do arquivo gerado"
+                                    placeholder="Ex: 01"
+                                    value={codigoOperador}
+                                    onChange={e => setCodigoOperador(e.target.value)}
+                                    onFocus={e => e.target.select()}
+                                    className="w-full h-10 border border-neutral-300 px-3 text-[12px] font-bold text-black focus:border-black outline-none rounded-none bg-white"
+                                />
+                            </div>
                         </div>
 
                         {/* Etiquetas */}
@@ -1107,20 +1134,6 @@ export default function ReanalisePage() {
                                 title="Hora de geração"
                                 value={customTime}
                                 onChange={e => setCustomTime(e.target.value)}
-                                className="w-full h-9 border border-neutral-200 px-2 text-[11px] font-bold text-black focus:border-black outline-none rounded-none"
-                            />
-                        </div>
-                        <div className="col-span-2">
-                            <label htmlFor="reanalise-operador" className="text-[9px] font-black uppercase text-neutral-400 tracking-widest block mb-1">
-                                Código do Operador
-                            </label>
-                            <input
-                                id="reanalise-operador"
-                                type="text"
-                                title="Código de quem operou a leitura — vai dentro do arquivo gerado"
-                                placeholder="Ex: 01"
-                                value={codigoOperador}
-                                onChange={e => setCodigoOperador(e.target.value)}
                                 className="w-full h-9 border border-neutral-200 px-2 text-[11px] font-bold text-black focus:border-black outline-none rounded-none"
                             />
                         </div>
