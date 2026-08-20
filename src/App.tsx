@@ -2,7 +2,6 @@ import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import { lazy, Suspense, useEffect, useState } from "react";
 import Layout from "@/components/shared/Layout";
 import LoadingScreen from "@/components/shared/LoadingScreen";
-import ParticleBackground from "@/components/shared/ParticleBackground";
 import { ToastProvider } from "@/contexts/ToastContext";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { LabProvider } from "@/contexts/LabContext";
@@ -27,25 +26,22 @@ const Verificacao = lazy(() => import("@/pages/Verificacao"));
 
 
 // Tela mostrada no lugar do sistema pra quem está bloqueado (manutenção global
-// ou o laboratório dele travado). Disfarçada de erro genérico de propósito —
-// mesmo visual da tela de login (bolinhas + logo), sem palavra nenhuma que
-// entregue que foi um bloqueio administrativo intencional.
+// ou o laboratório dele travado). Disfarçada de propósito como um crash real
+// da aplicação — visual idêntico ao ErrorBoundary.tsx (o crash de verdade que
+// o React mostra quando algo quebra de fato), incluindo a mesma mensagem que
+// já aparece organicamente após um deploy (chunk antigo). Sem logo, sem cor
+// de marca, sem qualquer palavra que entregue que foi um bloqueio intencional.
 function BlockedScreen() {
     return (
-        <div className="min-h-screen w-full flex flex-col items-center justify-center bg-white text-neutral-900 relative overflow-hidden px-6 text-center">
-            <ParticleBackground />
-            <div className="relative z-10 flex flex-col items-center gap-6">
-                <svg width="64" height="64" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <circle cx="50" cy="50" r="48" stroke="#dc2626" strokeWidth="2" />
-                    <circle cx="50" cy="50" r="8" fill="#dc2626" />
-                </svg>
-                <div className="space-y-2">
-                    <h1 className="text-xl font-serif tracking-wide text-neutral-800">Ocorreu um erro inesperado</h1>
-                    <p className="text-xs text-neutral-400 max-w-sm uppercase tracking-widest">
-                        Não foi possível carregar o sistema no momento. Tente novamente mais tarde.
-                    </p>
-                </div>
-            </div>
+        <div className="flex flex-col items-center justify-center min-h-screen bg-neutral-50 p-4">
+            <h1 className="text-2xl font-bold mb-4">Something went wrong.</h1>
+            <p className="text-neutral-600 mb-4">Failed to fetch dynamically imported module</p>
+            <button
+                className="px-4 py-2 bg-black text-white rounded hover:bg-neutral-800"
+                onClick={() => window.location.reload()}
+            >
+                Reload Page
+            </button>
         </div>
     );
 }
