@@ -1,5 +1,5 @@
 import { useAuth } from "@/contexts/AuthContext";
-import { ArrowRight, Package, Building2, Activity, LogOut } from "lucide-react";
+import { ArrowRight, Package, Building2, Activity, LogOut, Microscope } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { LabService, type Lab } from "@/entities/Lab";
@@ -91,6 +91,14 @@ export default function Inicio() {
             icon: Package,
             gradient: "from-blue-500/10 to-purple-500/10",
             iconColor: "text-blue-600"
+        },
+        {
+            title: "ICAC",
+            description: "Simulador de amostras HVI por alvo e desvio",
+            href: "/icac",
+            icon: Microscope,
+            gradient: "from-emerald-500/10 to-teal-500/10",
+            iconColor: "text-emerald-600"
         }
     ];
 

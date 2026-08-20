@@ -23,6 +23,7 @@ const Admin = lazy(() => import("@/pages/Admin"));
 const Login = lazy(() => import("@/pages/Login"));
 const Reanalise = lazy(() => import("@/pages/Reanalise"));
 const Verificacao = lazy(() => import("@/pages/Verificacao"));
+const Icac = lazy(() => import("@/pages/Icac"));
 
 
 // Tela mostrada no lugar do sistema pra quem está bloqueado (manutenção global
@@ -197,6 +198,7 @@ function AppRoutes() {
                     <Route path="export" element={<Export />} />
                     <Route path="reanalise" element={<Reanalise />} />
                     <Route path="verificacao" element={<Verificacao />} />
+                    <Route path="icac" element={<Icac />} />
                     <Route path="admin" element={<Admin />} />
                 </Route>
             </Routes>
