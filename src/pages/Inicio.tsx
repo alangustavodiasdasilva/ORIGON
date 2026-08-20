@@ -1,5 +1,5 @@
 import { useAuth } from "@/contexts/AuthContext";
-import { ArrowRight, Package, Building2, Activity, LogOut, Microscope } from "lucide-react";
+import { ArrowRight, Package, Building2, Activity, LogOut, Microscope, ScanLine, ShieldCheck } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { LabService, type Lab } from "@/entities/Lab";
@@ -83,6 +83,8 @@ export default function Inicio() {
         );
     }
 
+    // Espelha os itens do menu (navItems em Layout.tsx) — mesma lógica de visibilidade
+    // por papel, pra Início mostrar exatamente o que aparece na barra de navegação.
     const quickActions = [
         {
             title: "Gerenciar Lotes",
@@ -99,7 +101,23 @@ export default function Inicio() {
             icon: Microscope,
             gradient: "from-emerald-500/10 to-teal-500/10",
             iconColor: "text-emerald-600"
-        }
+        },
+        {
+            title: "Reanálise",
+            description: "Preenchimento manual e exportação Úster/Premier",
+            href: "/reanalise",
+            icon: ScanLine,
+            gradient: "from-amber-500/10 to-orange-500/10",
+            iconColor: "text-amber-600"
+        },
+        ...(user?.acesso === 'admin_global' || user?.acesso === 'admin_lab' ? [{
+            title: "Configurações",
+            description: "Laboratórios, usuários, máquinas e manutenção",
+            href: "/admin",
+            icon: ShieldCheck,
+            gradient: "from-neutral-500/10 to-neutral-700/10",
+            iconColor: "text-neutral-700"
+        }] : [])
     ];
 
     return (
