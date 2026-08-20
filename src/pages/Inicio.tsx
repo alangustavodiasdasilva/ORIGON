@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { LabService, type Lab } from "@/entities/Lab";
 import { Button } from "@/components/ui/button";
+import ExportFolderSection from "@/components/shared/ExportFolderSection";
 
 export default function Inicio() {
     const { user, currentLab, selectLab, deselectLab } = useAuth();
@@ -189,6 +190,20 @@ export default function Inicio() {
                             <p className="text-sm font-mono text-black">ORIGO v2.0</p>
                         </div>
                     </div>
+
+                    {/* Pasta de Exportação Automática — visível pra todo mundo (não só admin),
+                        porque precisa ser configurada em CADA computador que gera arquivos, e
+                        quem senta em cada máquina do laboratório nem sempre é admin. */}
+                    {(() => {
+                        const activeLabId = currentLab?.id || user?.lab_id || null;
+                        if (!activeLabId) return null;
+                        const activeLabName = currentLab?.nome || '';
+                        return (
+                            <div className="pt-4">
+                                <ExportFolderSection labId={activeLabId} labName={activeLabName} />
+                            </div>
+                        );
+                    })()}
                 </div>
             </div>
         </div>
