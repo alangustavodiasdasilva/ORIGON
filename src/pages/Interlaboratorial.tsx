@@ -350,18 +350,6 @@ export default function Interlaboratorial() {
         );
     };
 
-    const downloadFile = (content: string, filename: string) => {
-        const blob = new Blob([content], { type: 'text/plain' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-    };
-
     const generateForMachine = async () => {
         const machine = machines.find(m => m.id === selectedMachineId);
         if (!machine) {
@@ -447,10 +435,10 @@ export default function Interlaboratorial() {
                 nome: `Dia ${dayIndex} — ${machine.machineId}`, identificacoes: pending.length, arquivos: rows.length, operador: operatorCode
             });
 
-            for (const f of filesToDownload) {
-                downloadFile(f.content, f.filename);
-                await new Promise(resolve => setTimeout(resolve, 120));
-            }
+            // Escreve direto na pasta de exportação configurada pro laboratório
+            // (mesma lógica de Lotes/Reanálise); só cai pro download padrão do
+            // navegador se não tiver pasta configurada nesse computador.
+            await HVIFileGeneratorService.downloadHVIFile('', '', filesToDownload, labId);
 
             addToast({ title: "Gerado", description: `${rows.length} arquivo(s) — Dia ${dayIndex}, ${machine.machineId}`, type: "success" });
             await loadData();
@@ -461,7 +449,7 @@ export default function Interlaboratorial() {
         }
     };
 
-    const redownloadGeneration = (gen: InterlabGeneration) => {
+    const redownloadGeneration = async (gen: InterlabGeneration) => {
         const machine = machines.find(m => m.id === gen.machineId);
         if (!machine) { addToast({ title: "Máquina não encontrada", type: "error" }); return; }
         const ident = identificacoes.find(i => i.id === gen.identificacaoId);
@@ -470,7 +458,7 @@ export default function Interlaboratorial() {
         const dateStr = now.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: '2-digit' }).replace(/\//g, '-');
         const machineNum = machine.machineId.replace(/\D/g, '') || '5';
         const content = buildFileContent(gen.etiqueta, tv?.grd || "31-1", gen.reading, `Line${machineNum}`, dateStr, gen.generatedTime);
-        downloadFile(content, gen.filename);
+        await HVIFileGeneratorService.downloadHVIFile(content, gen.filename, undefined, labId);
     };
 
     const deleteGeneration = async (id: string) => {
