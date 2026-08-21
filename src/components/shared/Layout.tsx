@@ -6,7 +6,6 @@ import {
     LogOut,
     Microscope,
     Network,
-    Award,
     CheckCircle2,
     AlertCircle,
     Info,
@@ -68,11 +67,13 @@ export default function Layout() {
         { href: "/lotes", label: t('nav.batches'), icon: Package, public: true, prefetch: () => import("@/pages/Home") },
         { href: "/icac", label: "ICAC", icon: Microscope, public: true, prefetch: () => import("@/pages/Icac") },
         { href: "/interlaboratorial", label: "Interlaboratorial", icon: Network, public: true, prefetch: () => import("@/pages/Interlaboratorial") },
-        { href: "/resultados", label: "Resultados", icon: Award, public: true, prefetch: () => import("@/pages/InterlabResultados") },
         { href: "/reanalise", label: "Reanálise", icon: ScanLine, public: true, prefetch: () => import("@/pages/Reanalise") },
         // Verificação removida do menu a pedido do Alan — página/rota/dados continuam
         // intactos (só tirada da navegação), igual foi feito antes com ICAC.
         // { href: "/verificacao", label: "Verificação", icon: CheckCircle2, allowedRoles: ['admin_global', 'admin_lab', 'quality_admin'], prefetch: () => import("@/pages/Verificacao") },
+        // Resultados (consenso interlaboratorial) removido do menu a pedido do Alan —
+        // página/rota/dados continuam intactos, mesmo padrão acima.
+        // { href: "/resultados", label: "Resultados", icon: Award, public: true, prefetch: () => import("@/pages/InterlabResultados") },
 
         { href: "/admin", label: t('nav.config'), icon: ShieldCheck, allowedRoles: ['admin_global', 'admin_lab'], prefetch: () => import("@/pages/Admin") },
     ];
