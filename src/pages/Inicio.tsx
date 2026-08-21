@@ -165,6 +165,18 @@ export default function Inicio() {
                         </p>
                     </div>
 
+                    {/* Pasta de Exportação Automática — visível pra todo mundo (não só admin),
+                        porque precisa ser configurada em CADA computador que gera arquivos, e
+                        quem senta em cada máquina do laboratório nem sempre é admin. Fica logo
+                        no topo (não lá embaixo) porque é uma configuração que precisa ser vista
+                        e resolvida de cara em cada computador novo. */}
+                    {(() => {
+                        const activeLabId = currentLab?.id || user?.lab_id || null;
+                        if (!activeLabId) return null;
+                        const activeLabName = currentLab?.nome || '';
+                        return <ExportFolderSection labId={activeLabId} labName={activeLabName} />;
+                    })()}
+
                     {/* Quick Actions Grid */}
                     <div className="grid gap-8 md:grid-cols-2 pt-8">
                         {quickActions.map((action, index) => {
@@ -224,20 +236,6 @@ export default function Inicio() {
                             <p className="text-sm font-mono text-black">ORIGO v2.0</p>
                         </div>
                     </div>
-
-                    {/* Pasta de Exportação Automática — visível pra todo mundo (não só admin),
-                        porque precisa ser configurada em CADA computador que gera arquivos, e
-                        quem senta em cada máquina do laboratório nem sempre é admin. */}
-                    {(() => {
-                        const activeLabId = currentLab?.id || user?.lab_id || null;
-                        if (!activeLabId) return null;
-                        const activeLabName = currentLab?.nome || '';
-                        return (
-                            <div className="pt-4">
-                                <ExportFolderSection labId={activeLabId} labName={activeLabName} />
-                            </div>
-                        );
-                    })()}
                 </div>
             </div>
         </div>

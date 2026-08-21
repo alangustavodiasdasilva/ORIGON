@@ -7,7 +7,7 @@
 import type { Sample } from '@/entities/Sample';
 import { MachineService, type Machine } from '@/entities/Machine';
 import { safeSetItem } from "@/lib/safeStorage";
-import { getFolderHandle, ensureFolderPermission } from "@/lib/folderHandleStore";
+import { getFolderHandle, ensureFolderPermission, isExportPaused } from "@/lib/folderHandleStore";
 import { filenameConfigService } from "@/services/filenameConfig.service";
 
 export interface HVITolerancias {
@@ -1377,6 +1377,7 @@ export class HVIFileGeneratorService {
      */
     private static async tryWriteToConfiguredFolder(filename: string, bytes: Uint8Array, labId: string | null): Promise<boolean> {
         if (!labId) return false;
+        if (isExportPaused(labId)) return false;
         try {
             const handle = await getFolderHandle(labId);
             if (!handle) return false;

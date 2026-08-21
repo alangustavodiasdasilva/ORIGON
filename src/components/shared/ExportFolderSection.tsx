@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { FolderOpen, Loader2 } from "lucide-react";
+import { FolderOpen, Loader2, Pause, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/contexts/ToastContext";
@@ -9,7 +9,9 @@ import {
     saveFolderHandle,
     removeFolderHandle,
     ensureFolderPermission,
-    isFolderPickerSupported
+    isFolderPickerSupported,
+    isExportPaused,
+    setExportPaused
 } from "@/lib/folderHandleStore";
 
 // Pasta de exportação automática: escolhe uma pasta NESTE computador (File System
@@ -26,9 +28,11 @@ export default function ExportFolderSection({ labId, labName }: { labId: string;
     const [isLoading, setIsLoading] = useState(true);
     const [localStatus, setLocalStatus] = useState<'checking' | 'none' | 'needs-permission' | 'ready'>('checking');
     const [isBusy, setIsBusy] = useState(false);
+    const [isPaused, setIsPaused] = useState(false);
 
     const checkLocalHandle = async () => {
         setLocalStatus('checking');
+        setIsPaused(isExportPaused(labId));
         const handle = await getFolderHandle(labId);
         if (!handle) {
             setLocalStatus('none');
@@ -40,6 +44,19 @@ export default function ExportFolderSection({ labId, labName }: { labId: string;
         } catch {
             setLocalStatus('needs-permission');
         }
+    };
+
+    const handleTogglePause = () => {
+        const next = !isPaused;
+        setExportPaused(labId, next);
+        setIsPaused(next);
+        addToast({
+            title: next ? "Exportação Pausada" : "Exportação Retomada",
+            description: next
+                ? "Os arquivos voltam a baixar pelo navegador. A pasta continua configurada — é só clicar em Retomar."
+                : `Os arquivos voltam a cair direto na pasta configurada neste computador.`,
+            type: "info"
+        });
     };
 
     useEffect(() => {
@@ -137,7 +154,10 @@ export default function ExportFolderSection({ labId, labName }: { labId: string;
                         </p>
                     )}
 
-                    {localStatus === 'ready' && (
+                    {localStatus === 'ready' && isPaused && (
+                        <p className="text-xs font-bold text-amber-600 uppercase tracking-widest">⏸ Pausado — arquivos voltam a baixar pelo navegador</p>
+                    )}
+                    {localStatus === 'ready' && !isPaused && (
                         <p className="text-xs font-bold text-emerald-600 uppercase tracking-widest">● Ativo neste computador</p>
                     )}
                     {localStatus === 'needs-permission' && (
@@ -167,6 +187,18 @@ export default function ExportFolderSection({ labId, labName }: { labId: string;
                                 className="h-11 px-6 rounded-none font-black text-[10px] uppercase tracking-widest bg-amber-600 hover:bg-amber-700 text-white"
                             >
                                 Reativar Acesso
+                            </Button>
+                        )}
+                        {localStatus === 'ready' && (
+                            <Button
+                                onClick={handleTogglePause}
+                                variant="outline"
+                                className={`h-11 px-6 rounded-none font-black text-[10px] uppercase tracking-widest flex items-center gap-2 ${
+                                    isPaused ? 'border-amber-300 text-amber-700 hover:bg-amber-50' : ''
+                                }`}
+                            >
+                                {isPaused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
+                                {isPaused ? "Retomar" : "Pausar"}
                             </Button>
                         )}
                         {(info || localStatus === 'ready' || localStatus === 'needs-permission') && (

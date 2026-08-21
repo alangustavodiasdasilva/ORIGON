@@ -58,6 +58,28 @@ export async function removeFolderHandle(labId: string): Promise<void> {
     });
 }
 
+// Pausa é por computador (igual o handle da pasta) — guardada em localStorage,
+// não no Supabase. Pausar NÃO apaga a pasta escolhida: só faz os arquivos
+// voltarem a baixar pelo navegador até o usuário retomar.
+const pauseKey = (labId: string) => `origo_export_paused_${labId}`;
+
+export function isExportPaused(labId: string): boolean {
+    try {
+        return localStorage.getItem(pauseKey(labId)) === '1';
+    } catch {
+        return false;
+    }
+}
+
+export function setExportPaused(labId: string, paused: boolean): void {
+    try {
+        if (paused) localStorage.setItem(pauseKey(labId), '1');
+        else localStorage.removeItem(pauseKey(labId));
+    } catch {
+        // localStorage indisponível (modo privado etc) — pausa simplesmente não persiste
+    }
+}
+
 // Verifica se já temos permissão de escrita; se não, pede (isso SÓ funciona
 // como resposta direta a um clique do usuário — não dá pra chamar "sozinho"
 // em segundo plano).
