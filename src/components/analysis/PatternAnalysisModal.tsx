@@ -4,7 +4,7 @@ import { createPortal } from "react-dom";
 import { type Sample } from "@/entities/Sample";
 import { X, Bot, Loader2, BarChart3, TrendingUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { DeepSeekService } from "@/services/DeepSeekService";
+import { DeepSeekService, CLASSIFICATION_PARAMS, type ClassificationParam } from "@/services/DeepSeekService";
 
 interface PatternAnalysisModalProps {
     isOpen: boolean;
@@ -26,7 +26,12 @@ interface Group {
     sampleIds: string[];
     color: string | null;
     patternFeatures?: string[];
+    focusParamKey?: string;
+    focusMin?: number;
+    focusMax?: number;
 }
+
+const PARAM_DECIMALS: Record<string, number> = { mic: 2, len: 2, unf: 1, str: 1, rd: 1, b: 1 };
 
 function ClusterScatterPlot({ samples, groups, xAxis, yAxis }: { samples: Sample[], groups: Group[], xAxis: keyof Sample, yAxis: keyof Sample }) {
     // Valid and map points
@@ -113,20 +118,27 @@ function ClusterScatterPlot({ samples, groups, xAxis, yAxis }: { samples: Sample
 export default function PatternAnalysisModal({ isOpen, onClose, samples, onApplyColors }: PatternAnalysisModalProps) {
     const [groups, setGroups] = useState<Group[]>([]);
     const [scanned, setScanned] = useState(false);
+    // 'auto' segue a hierarquia automática de sempre (MIC > LEN > UNF > STR > RD > +B,
+    // parando no primeiro com variação relevante); escolher um parâmetro específico
+    // classifica direto por ele — mais preciso quando o analista já sabe o que procura.
+    const [selectedParam, setSelectedParam] = useState<ClassificationParam | 'auto'>('auto');
 
     // AI Report State
     const [aiAnalysis, setAiAnalysis] = useState("");
     const [isAiLoading, setIsAiLoading] = useState(false);
     const [isScanning, setIsScanning] = useState(false);
 
+    const forcedParam = selectedParam === 'auto' ? null : selectedParam;
+
     // Análise de Padrões Estatísticos
     const runAnalysis = () => {
         setScanned(false);
         setIsScanning(true);
+        setAiAnalysis("");
 
         setTimeout(() => {
             try {
-                const result = DeepSeekService.classifySamplesSmart(samples);
+                const result = DeepSeekService.classifySamplesSmart(samples, forcedParam);
                 setGroups(result);
             } catch (error) {
                 console.error("Erro na identificação de padrões:", error);
@@ -139,7 +151,7 @@ export default function PatternAnalysisModal({ isOpen, onClose, samples, onApply
     const handleGenerateReport = async () => {
         setIsAiLoading(true);
         try {
-            const analysis = await DeepSeekService.analyzeSamples(samples);
+            const analysis = await DeepSeekService.analyzeSamples(samples, forcedParam);
             setAiAnalysis(analysis);
         } catch (error) {
             setAiAnalysis("Erro ao gerar relatório descritivo.");
@@ -212,6 +224,22 @@ export default function PatternAnalysisModal({ isOpen, onClose, samples, onApply
                                     </span>
                                 </p>
                             </div>
+                            <div className="space-y-1.5 w-full max-w-xs">
+                                <label className="block text-center text-[9px] uppercase tracking-[0.2em] text-neutral-400 font-bold">
+                                    Classificar por
+                                </label>
+                                <select
+                                    title="Parâmetro de classificação"
+                                    value={selectedParam}
+                                    onChange={e => setSelectedParam(e.target.value as ClassificationParam | 'auto')}
+                                    className="w-full h-10 px-3 border border-neutral-300 bg-white text-sm font-bold text-center uppercase tracking-wider focus:outline-none focus:border-black"
+                                >
+                                    <option value="auto">Automático (o sistema escolhe)</option>
+                                    {CLASSIFICATION_PARAMS.map(p => (
+                                        <option key={p.key} value={p.key}>{p.label}</option>
+                                    ))}
+                                </select>
+                            </div>
                             <Button
                                 onClick={runAnalysis}
                                 disabled={isScanning}
@@ -231,14 +259,27 @@ export default function PatternAnalysisModal({ isOpen, onClose, samples, onApply
                                         ({groups.reduce((acc, g) => acc + g.count, 0)} amostras = 100%)
                                     </span>
                                 </h3>
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={runAnalysis}
-                                    className="h-8 text-[10px] uppercase font-bold border-black hover:bg-neutral-50 rounded-none bg-white"
-                                >
-                                    Reanalisar
-                                </Button>
+                                <div className="flex items-center gap-2">
+                                    <select
+                                        title="Parâmetro de classificação"
+                                        value={selectedParam}
+                                        onChange={e => setSelectedParam(e.target.value as ClassificationParam | 'auto')}
+                                        className="h-8 px-2 border border-neutral-300 bg-white text-[10px] font-bold uppercase tracking-wider focus:outline-none focus:border-black"
+                                    >
+                                        <option value="auto">Automático</option>
+                                        {CLASSIFICATION_PARAMS.map(p => (
+                                            <option key={p.key} value={p.key}>{p.label}</option>
+                                        ))}
+                                    </select>
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={runAnalysis}
+                                        className="h-8 text-[10px] uppercase font-bold border-black hover:bg-neutral-50 rounded-none bg-white"
+                                    >
+                                        Reanalisar
+                                    </Button>
+                                </div>
                             </div>
 
                             {groups.length === 0 ? (
@@ -288,32 +329,32 @@ export default function PatternAnalysisModal({ isOpen, onClose, samples, onApply
                                                             </div>
                                                         </div>
 
-                                                        {/* Grid de Estatísticas */}
+                                                        {/* Grid de Estatísticas — o parâmetro usado pra classificar (foco)
+                                                            mostra a faixa real (mín–máx) do grupo, não só a média */}
                                                         <div className="grid grid-cols-6 gap-4 text-xs font-mono border-t border-neutral-100 pt-2 text-neutral-600">
-                                                            <div className="text-center">
-                                                                <span className="text-[8px] text-neutral-400 block mb-0.5">MIC</span>
-                                                                <b>{(group.micAvg || 0).toFixed(2)}</b>
-                                                            </div>
-                                                            <div className="text-center">
-                                                                <span className="text-[8px] text-neutral-400 block mb-0.5">LEN</span>
-                                                                <b>{(group.lenAvg || 0).toFixed(2)}</b>
-                                                            </div>
-                                                            <div className="text-center">
-                                                                <span className="text-[8px] text-neutral-400 block mb-0.5">STR</span>
-                                                                <b>{(group.strAvg || 0).toFixed(1)}</b>
-                                                            </div>
-                                                            <div className="text-center">
-                                                                <span className="text-[8px] text-neutral-400 block mb-0.5">RD</span>
-                                                                <b>{(group.rdAvg || 0).toFixed(1)}</b>
-                                                            </div>
-                                                            <div className="text-center">
-                                                                <span className="text-[8px] text-neutral-400 block mb-0.5">+B</span>
-                                                                <b>{(group.bAvg || 0).toFixed(1)}</b>
-                                                            </div>
-                                                            <div className="text-center">
-                                                                <span className="text-[8px] text-neutral-400 block mb-0.5">UNF</span>
-                                                                <b>{(group.unfAvg || 0).toFixed(1)}</b>
-                                                            </div>
+                                                            {([
+                                                                { key: 'mic', label: 'MIC', avg: group.micAvg },
+                                                                { key: 'len', label: 'LEN', avg: group.lenAvg },
+                                                                { key: 'str', label: 'STR', avg: group.strAvg },
+                                                                { key: 'rd', label: 'RD', avg: group.rdAvg },
+                                                                { key: 'b', label: '+B', avg: group.bAvg },
+                                                                { key: 'unf', label: 'UNF', avg: group.unfAvg },
+                                                            ] as const).map(stat => {
+                                                                const isFocus = group.focusParamKey === stat.key;
+                                                                const decimals = PARAM_DECIMALS[stat.key] ?? 1;
+                                                                return (
+                                                                    <div key={stat.key} className={`text-center ${isFocus ? 'rounded bg-neutral-50 ring-1 ring-neutral-200 py-1 -my-1' : ''}`}>
+                                                                        <span className="text-[8px] text-neutral-400 block mb-0.5">{stat.label}</span>
+                                                                        {isFocus && group.focusMin !== undefined && group.focusMax !== undefined ? (
+                                                                            <b ref={(el) => { if (el) el.style.color = group.color || '#000'; }}>
+                                                                                {group.focusMin.toFixed(decimals)}–{group.focusMax.toFixed(decimals)}
+                                                                            </b>
+                                                                        ) : (
+                                                                            <b>{(stat.avg || 0).toFixed(decimals)}</b>
+                                                                        )}
+                                                                    </div>
+                                                                );
+                                                            })}
                                                         </div>
                                                     </div>
                                                 </div>

@@ -14,16 +14,32 @@ export interface PatternGroup {
     sampleIds: string[];
     color: string | null;
     patternFeatures?: string[];
+    // Faixa real (mín–máx) do parâmetro usado pra classificar esse grupo —
+    // mais precisa que só a média pra saber exatamente o que cada grupo cobre.
+    focusParamKey?: string;
+    focusMin?: number;
+    focusMax?: number;
 }
+
+export type ClassificationParam = 'mic' | 'len' | 'unf' | 'str' | 'rd' | 'b';
+
+export const CLASSIFICATION_PARAMS: { key: ClassificationParam; label: string }[] = [
+    { key: 'mic', label: 'Micronaire (MIC)' },
+    { key: 'len', label: 'Comprimento (LEN)' },
+    { key: 'unf', label: 'Uniformidade (UNF)' },
+    { key: 'str', label: 'Resistência (STR)' },
+    { key: 'rd', label: 'Refletância (RD)' },
+    { key: 'b', label: 'Amarelecimento (+B)' },
+];
 
 export class DeepSeekService {
     /**
      * Gera uma análise descritiva técnica baseada na hierarquia de parâmetros.
      */
-    public static async analyzeSamples(samples: Sample[]): Promise<string> {
+    public static async analyzeSamples(samples: Sample[], forcedParam?: ClassificationParam | null): Promise<string> {
         if (!samples || samples.length === 0) return "Sem sinal de dados para processamento.";
 
-        const groups = this.classifySamplesSmart(samples);
+        const groups = this.classifySamplesSmart(samples, forcedParam);
         const dominant = this.findDominantFactor(samples);
 
         let report = `[ SISTEMA DE INTELIGÊNCIA FIBERSCAN - RELATÓRIO TÉCNICO ]\n`;
@@ -56,7 +72,11 @@ export class DeepSeekService {
     }
 
     /**
-     * Agrupa as amostras seguindo a hierarquia solicitada:
+     * Agrupa as amostras por um parâmetro HVI.
+     *
+     * Se `forcedParam` for passado, classifica direto por ele (escolha manual
+     * do analista — mais preciso quando ele já sabe o que quer identificar).
+     * Sem parâmetro, cai na hierarquia automática original:
      * 1. MIC (se houver padrão conciso)
      * 2. LEN (UHML)
      * 3. UNF (UI)
@@ -64,7 +84,7 @@ export class DeepSeekService {
      * 5. RD
      * 6. +B
      */
-    public static classifySamplesSmart(samples: Sample[]): PatternGroup[] {
+    public static classifySamplesSmart(samples: Sample[], forcedParam?: ClassificationParam | null): PatternGroup[] {
         if (!samples || samples.length === 0) return [];
 
         // 1. Parse de dados
@@ -91,19 +111,33 @@ export class DeepSeekService {
         let finalMean = 0;
         let finalStd = 0;
 
-        // 2. Encontrar o primeiro parâmetro com "padrão conciso" (CV acima do threshold)
-        for (const p of hierarchy) {
-            const vals = data.map(d => (d as any)[p.key]);
+        const computeMeanStd = (key: string) => {
+            const vals = data.map(d => (d as any)[key]);
             const mean = vals.reduce((a, b) => a + b, 0) / vals.length;
             const variance = vals.reduce((acc, v) => acc + Math.pow(v - mean, 2), 0) / vals.length;
-            const std = Math.sqrt(variance);
-            const cv = (std / (mean || 1)) * 100;
+            return { mean, std: Math.sqrt(variance) };
+        };
 
-            if (cv >= p.cvThreshold || p === hierarchy[hierarchy.length - 1]) {
-                selected = p;
-                finalMean = mean;
-                finalStd = std;
-                break;
+        const forced = forcedParam ? hierarchy.find(p => p.key === forcedParam) : null;
+        if (forced) {
+            // Escolha manual do analista — classifica direto por esse parâmetro,
+            // sem passar pela hierarquia automática.
+            selected = forced;
+            const { mean, std } = computeMeanStd(forced.key);
+            finalMean = mean;
+            finalStd = std;
+        } else {
+            // 2. Encontrar o primeiro parâmetro com "padrão conciso" (CV acima do threshold)
+            for (const p of hierarchy) {
+                const { mean, std } = computeMeanStd(p.key);
+                const cv = (std / (mean || 1)) * 100;
+
+                if (cv >= p.cvThreshold || p === hierarchy[hierarchy.length - 1]) {
+                    selected = p;
+                    finalMean = mean;
+                    finalStd = std;
+                    break;
+                }
             }
         }
 
@@ -129,6 +163,12 @@ export class DeepSeekService {
             const avg = (k: keyof typeof clusterData[0]) =>
                 clusterData.reduce((a, b) => a + (b[k] as number), 0) / clusterData.length;
 
+            // Faixa real (mín–máx) do parâmetro de foco dentro desse grupo — mostra
+            // exatamente o que cada grupo cobre, não só a média.
+            const focusVals = clusterData.map(d => (d as any)[selected.key] as number);
+            const focusMin = Math.min(...focusVals);
+            const focusMax = Math.max(...focusVals);
+
             // Gerar labels baseados no parâmetro escolhido
             let featureName = "";
             if (idx === 0) featureName = `${selected.label} Superior`;
@@ -148,7 +188,10 @@ export class DeepSeekService {
                 count: clusterData.length,
                 sampleIds: clusterData.map(d => d.id),
                 color: colors[idx],
-                patternFeatures: [featureName, `Foco: ${selected.key.toUpperCase()}`]
+                patternFeatures: [featureName, `Foco: ${selected.key.toUpperCase()}`],
+                focusParamKey: selected.key,
+                focusMin,
+                focusMax
             });
         });
 
