@@ -8,6 +8,7 @@ import type { Sample } from '@/entities/Sample';
 import { MachineService, type Machine } from '@/entities/Machine';
 import { safeSetItem } from "@/lib/safeStorage";
 import { getFolderHandle, ensureFolderPermission } from "@/lib/folderHandleStore";
+import { filenameConfigService } from "@/services/filenameConfig.service";
 
 export interface HVITolerancias {
     mic: number;
@@ -1112,10 +1113,10 @@ export class HVIFileGeneratorService {
             let filename: string;
             const files: Array<{ content: string; filename: string }> = [];
             // Pedido do Alan: máquina Premier também gera arquivo/preview no formato e
-            // nomenclatura da Úster (R_X<máquina><contador>.H1) — só o número da máquina
-            // real (Premier) muda, via lineName/mNum abaixo, que já vêm de machine.machineId
-            // independente do modelo. O cadastro da máquina continua mostrando "PREMIER"
-            // normalmente; só a geração do arquivo em si segue sempre o formato Úster.
+            // nomenclatura da Úster — o número da máquina real (Premier) continua indo
+            // dentro do conteúdo via lineName, que já vem de machine.machineId independente
+            // do modelo. O cadastro da máquina continua mostrando "PREMIER" normalmente; só
+            // a geração do arquivo em si segue sempre o formato Úster.
             const isUster = true;
 
             if (isUster) {
@@ -1144,15 +1145,15 @@ export class HVIFileGeneratorService {
                     offsets.push(currentOffset);
                 }
 
-                // Contador sequencial próprio de cada máquina (imita o contador interno
-                // do instrumento USTER real: R_X<máquina><contador 5 dígitos>.H1),
-                // por isso a chave do localStorage é por número de máquina.
-                const mNum = isNaN(machineNum) ? 1 : machineNum;
-                let startRep = 1;
-                const repCounterKey = `hvi_rep_uster_m${mNum}`;
-                const storedRep = localStorage.getItem(repCounterKey);
-                startRep = storedRep && !isNaN(parseInt(storedRep, 10)) ? parseInt(storedRep, 10) + 1 : 1;
-                safeSetItem(repCounterKey, (startRep + count - 1).toString());
+                // Prefixo + sequência do nome do arquivo são configurados por laboratório
+                // (cada lab tem o seu, ex: "R_X" em Sorriso, "RAX" em Rondonópolis) e ficam
+                // no banco — reservados atomicamente aqui, então continuam de onde pararam
+                // e nunca colidem entre analistas diferentes gerando ao mesmo tempo.
+                const resolvedLabId = this.resolveActiveLabId(labId);
+                const reserved = resolvedLabId ? await filenameConfigService.reserveSequence(resolvedLabId, count) : null;
+                const filenamePrefix = reserved?.prefix ?? 'R_X';
+                const filenameDigits = reserved?.digits ?? 5;
+                const startRep = reserved?.startSeq ?? 1;
 
                 for (let i = 0; i < count; i++) {
                     const localRep = i + 1;
@@ -1205,9 +1206,8 @@ export class HVIFileGeneratorService {
                         codigoOperador
                     );
 
-                    // Mesmo padrão de nome do arquivo nativo da USTER, pra Lotes e Reanálise:
-                    // R_X<máquina><contador 5 dígitos>.H1
-                    const repFilename = `R_X${mNum}${String(repIndex).padStart(5, '0')}.H1`;
+                    // <prefixo do laboratório><sequência>.H1 — ex: R_X791628.H1, RAX180209.H1
+                    const repFilename = `${filenamePrefix}${String(repIndex).padStart(filenameDigits, '0')}.H1`;
 
                     files.push({ content: repContent, filename: repFilename });
                     repContents.push(`=== ARQUIVO: ${repFilename} ===\n${repContent}`);

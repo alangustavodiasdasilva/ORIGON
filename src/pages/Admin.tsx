@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
-import { Activity, Database, Server, ShieldCheck, Users, Trash2, Edit, LogOut, Lock, LockOpen } from "lucide-react";
+import { Activity, Database, Server, ShieldCheck, Users, Trash2, Edit, LogOut, Lock, LockOpen, FileText } from "lucide-react";
 import { Navigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { AnalistaService, type Analista } from "@/entities/Analista";
@@ -15,6 +15,7 @@ import { Loader2 } from "lucide-react";
 import { usePresence } from "@/hooks/usePresence";
 import AuditLogsTab from "@/components/admin/AuditLogsTab";
 import { systemStatusService, type SystemStatus, type LabLockInfo, type UserLockInfo } from "@/services/systemStatus.service";
+import { filenameConfigService, type LabFilenameConfig } from "@/services/filenameConfig.service";
 
 const isSupabaseEnabled = () => {
     const url = import.meta.env.VITE_SUPABASE_URL;
@@ -786,8 +787,14 @@ function SystemConfigTab() {
         return labs.find(l => l.id === id)?.nome || "Lab Desconhecido";
     };
 
+    const activeLabId = currentLab?.id || (user?.acesso === 'admin_lab' ? user.lab_id : null) || null;
+    const activeLabName = currentLab?.nome || labs.find(l => l.id === activeLabId)?.nome || '';
+
     return (
         <div className="grid gap-8 lg:grid-cols-12">
+
+            {/* Nome dos Arquivos Gerados (só admin_lab/admin_global, por laboratório) */}
+            {activeLabId && <LabFilenameSection labId={activeLabId} labName={activeLabName} />}
 
             {/* Coluna Principal: Máquinas */}
             <div className="lg:col-span-12 border border-neutral-200 bg-white p-10 space-y-8 shadow-sm">
@@ -962,4 +969,143 @@ function SystemConfigTab() {
             </div>
         </div>
     )
+}
+
+// Prefixo + sequência do nome dos arquivos gerados, configurável por laboratório
+// (ex: Sorriso usa "R_X", Rondonópolis usa "RAX", cada um com sua própria
+// numeração). Só admin_lab/admin_global configuram — depois disso, todo mundo
+// que gerar arquivo naquele laboratório usa esse padrão automaticamente,
+// continuando a sequência de onde ela estiver (nunca reinicia sozinha).
+function LabFilenameSection({ labId, labName }: { labId: string; labName: string }) {
+    const { user } = useAuth();
+    const { addToast } = useToast();
+    const [config, setConfig] = useState<LabFilenameConfig | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
+    const [isSaving, setIsSaving] = useState(false);
+    const [prefixInput, setPrefixInput] = useState('R_X');
+    const [sequenceInput, setSequenceInput] = useState('1');
+
+    useEffect(() => {
+        setIsLoading(true);
+        filenameConfigService.get(labId).then(c => {
+            setConfig(c);
+            if (c) {
+                setPrefixInput(c.prefix);
+                setSequenceInput(String(c.nextSequence).padStart(c.sequenceDigits, '0'));
+            }
+            setIsLoading(false);
+        }).catch(() => setIsLoading(false));
+
+        const unsubscribe = filenameConfigService.subscribe(labId, (c) => {
+            setConfig(c);
+            if (c) {
+                setPrefixInput(c.prefix);
+                setSequenceInput(String(c.nextSequence).padStart(c.sequenceDigits, '0'));
+            }
+        });
+        return unsubscribe;
+    }, [labId]);
+
+    const handleSave = async () => {
+        const trimmedPrefix = prefixInput.trim();
+        const trimmedSeq = sequenceInput.trim();
+        if (!trimmedPrefix) {
+            addToast({ title: "Preencha o prefixo", type: "warning" });
+            return;
+        }
+        const seqNumber = parseInt(trimmedSeq.replace(/\D/g, ''), 10);
+        if (isNaN(seqNumber) || seqNumber < 0) {
+            addToast({ title: "Sequência inválida", description: "Digite só números.", type: "warning" });
+            return;
+        }
+        const digits = Math.max(trimmedSeq.replace(/\D/g, '').length, 1);
+        setIsSaving(true);
+        try {
+            await filenameConfigService.set(labId, trimmedPrefix, seqNumber, digits, user?.nome || "Administrador");
+            addToast({
+                title: "Configuração Salva",
+                description: `Próximo arquivo gerado sairá como "${trimmedPrefix}${String(seqNumber).padStart(digits, '0')}.H1"`,
+                type: "success"
+            });
+        } catch (error: any) {
+            addToast({ title: "Erro ao Salvar", description: error.message, type: "error" });
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    return (
+        <div className="lg:col-span-12 border border-neutral-200 bg-white p-10 space-y-6 shadow-sm">
+            <div className="flex items-center justify-between border-b border-black pb-4">
+                <div>
+                    <h3 className="text-xl font-serif">Nome dos Arquivos Gerados</h3>
+                    {labName && <p className="text-xs text-neutral-500 mt-1">Laboratório: {labName}</p>}
+                </div>
+                <FileText className="h-5 w-5" />
+            </div>
+
+            <p className="text-xs text-neutral-500 max-w-2xl">
+                Prefixo e número inicial dos arquivos .H1 gerados neste laboratório (ex: "R_X" + "791628" gera
+                "R_X791628.H1", depois "R_X791629.H1", e assim por diante). Vale pra todo mundo que gerar arquivo
+                aqui, independente de quem esteja logado — a sequência nunca reinicia sozinha, só se você mudar
+                o número aqui.
+            </p>
+
+            {isLoading ? (
+                <Loader2 className="h-5 w-5 animate-spin text-neutral-400" />
+            ) : (
+                <div className="space-y-4">
+                    <div className="flex flex-col sm:flex-row gap-4">
+                        <div className="w-full sm:w-40">
+                            <label className="block text-[10px] font-bold text-neutral-500 uppercase tracking-wider mb-1">
+                                Prefixo
+                            </label>
+                            <input
+                                type="text"
+                                title="Prefixo do nome do arquivo"
+                                placeholder="Ex: R_X"
+                                value={prefixInput}
+                                onChange={(e) => setPrefixInput(e.target.value)}
+                                className="w-full h-11 px-3 border border-neutral-300 text-sm font-mono focus:outline-none focus:border-black"
+                            />
+                        </div>
+                        <div className="w-full sm:w-48">
+                            <label className="block text-[10px] font-bold text-neutral-500 uppercase tracking-wider mb-1">
+                                Próxima Sequência
+                            </label>
+                            <input
+                                type="text"
+                                title="Próximo número a ser usado"
+                                placeholder="Ex: 791628"
+                                value={sequenceInput}
+                                onChange={(e) => setSequenceInput(e.target.value)}
+                                className="w-full h-11 px-3 border border-neutral-300 text-sm font-mono focus:outline-none focus:border-black"
+                            />
+                        </div>
+                        <div className="flex-1 flex flex-col justify-end">
+                            <p className="text-[10px] uppercase tracking-widest text-neutral-400 mb-1">Prévia</p>
+                            <p className="h-11 flex items-center px-3 bg-neutral-50 border border-neutral-200 text-sm font-mono font-bold text-black">
+                                {(prefixInput.trim() || 'R_X')}{sequenceInput.replace(/\D/g, '') || '1'}.H1
+                            </p>
+                        </div>
+                        <Button
+                            onClick={handleSave}
+                            disabled={isSaving}
+                            className="h-11 px-8 rounded-none font-black text-[10px] uppercase tracking-widest bg-black hover:bg-neutral-800 text-white flex items-center gap-2 shrink-0"
+                        >
+                            {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                            Salvar
+                        </Button>
+                    </div>
+
+                    {config && (
+                        <p className="text-[10px] uppercase tracking-widest text-neutral-400">
+                            Última alteração por {config.updatedBy}
+                            {config.updatedAt ? ` em ${new Date(config.updatedAt).toLocaleString('pt-BR')}` : ''}
+                        </p>
+                    )}
+                </div>
+            )}
+        </div>
+    );
 }
