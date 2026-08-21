@@ -5,9 +5,7 @@ import { Input } from "@/components/ui/input";
 import { useAuth } from "@/contexts/AuthContext";
 import { AuditLogService } from "@/entities/AuditLog";
 import { HVIFileGeneratorService } from "@/services/HVIFileGeneratorService";
-
-
-type SystemType = "uster" | "premier";
+import { MachineService, type Machine } from "@/entities/Machine";
 
 // Helper para converter string "X.Y" ou "X,Y" para número
 const parseNumber = (val: string): number => {
@@ -42,7 +40,7 @@ interface HVIResults {
 interface HistoryItem {
     id: number;
     date: string;
-    system: SystemType;
+    machineLabel: string;
     quantity: number;
     etiqueta: string;
     filename: string;
@@ -73,35 +71,35 @@ const USTER_FIELDS: { key: keyof HVIResults; label: string; decimals: number; wi
     { key: "sci", label: "SCI", decimals: 1, width: 5, hasDev: true },
 ];
 
-// Premier-specific configuration (Requested Order)
-const PREMIER_FIELDS: { key: keyof HVIResults; label: string; decimals: number; width: number; hasDev: boolean }[] = [
-    { key: "uhml", label: "UHML", decimals: 2, width: 5, hasDev: true },
-    { key: "ml", label: "ML", decimals: 2, width: 4, hasDev: true },
-    { key: "ui", label: "UI", decimals: 1, width: 4, hasDev: true },
-    { key: "elg", label: "Elg", decimals: 1, width: 4, hasDev: true },
-    { key: "str", label: "Str", decimals: 1, width: 4, hasDev: true },
-    { key: "mic", label: "Mic", decimals: 2, width: 4, hasDev: true },
-    { key: "rd", label: "Rd", decimals: 1, width: 4, hasDev: true },
-    { key: "plusB", label: "+b", decimals: 1, width: 4, hasDev: true },
-    { key: "cg", label: "C.G.", decimals: 0, width: 0, hasDev: false },
-    { key: "sfi", label: "SFI", decimals: 1, width: 4, hasDev: true },
-    { key: "grd", label: "Lf.Grade", decimals: 0, width: 0, hasDev: false },
-    { key: "cnt", label: "Tr.Cnt", decimals: 0, width: 3, hasDev: true },
-    { key: "area", label: "Tr.Area", decimals: 2, width: 0, hasDev: true },
-    { key: "mat", label: "MR", decimals: 2, width: 4, hasDev: true },
-];
-
-// Helper to look up config for formatting from either list
+// Helper to look up config for formatting
 const getFieldConfig = (key: keyof HVIResults) => {
-    return PREMIER_FIELDS.find(f => f.key === key) || USTER_FIELDS.find(f => f.key === key);
+    return USTER_FIELDS.find(f => f.key === key);
 };
 
 export default function Interlaboratorial() {
     const { user, currentLab } = useAuth();
-    const [selectedSystem, setSelectedSystem] = useState<SystemType>("uster");
+    // Em vez de escolher "Uster"/"Premier" abstrato, escolhe uma máquina de
+    // verdade vinculada ao laboratório — o arquivo sempre sai no formato Úster
+    // (mesma regra do resto do sistema), com o número real da máquina dentro.
+    const [machines, setMachines] = useState<Machine[]>([]);
+    const [selectedMachineId, setSelectedMachineId] = useState<string>("");
     const [sampleQuantity, setSampleQuantity] = useState<number>(1);
     const [history, setHistory] = useState<HistoryItem[]>([]);
     const [expandedHistoryId, setExpandedHistoryId] = useState<number | null>(null);
+
+    useEffect(() => {
+        const labId = currentLab?.id || user?.lab_id;
+        const fetchMachines = async () => {
+            try {
+                const fetched = labId ? await MachineService.listByLab(labId) : await MachineService.list();
+                setMachines(fetched);
+                if (fetched.length > 0) setSelectedMachineId(prev => prev || fetched[0].id);
+            } catch (err) {
+                console.error("Erro ao buscar máquinas:", err);
+            }
+        };
+        fetchMachines();
+    }, [user, currentLab]);
 
     useEffect(() => {
         const savedHistory = localStorage.getItem("interlab_history");
@@ -121,7 +119,7 @@ export default function Interlaboratorial() {
         
         // Log to Global Audit
         AuditLogService.logAction('interlaboratorial', newItem.id.toString(), 'CREATE', null, { 
-            nome: `Teste ${newItem.system.toUpperCase()}`,
+            nome: `Teste ${newItem.machineLabel}`,
             quantidade: newItem.quantity,
             etiqueta: newItem.etiqueta 
         });
@@ -175,254 +173,91 @@ export default function Interlaboratorial() {
     };
 
     const generateFile = () => {
-        if (selectedSystem === "uster") {
-            const { etiqueta } = results;
+        const machine = machines.find(m => m.id === selectedMachineId);
+        if (!machine) {
+            alert("Selecione uma máquina antes de gerar o arquivo.");
+            return;
+        }
 
-            const applyDeviation = (base: string, dev: string) => {
-                const baseVal = parseNumber(base);
-                const devVal = parseNumber(dev);
-                if (devVal === 0) return baseVal;
-                return baseVal + (Math.random() * 2 - 1) * devVal;
+        const { etiqueta } = results;
+
+        const applyDeviation = (base: string, dev: string) => {
+            const baseVal = parseNumber(base);
+            const devVal = parseNumber(dev);
+            if (devVal === 0) return baseVal;
+            return baseVal + (Math.random() * 2 - 1) * devVal;
+        };
+
+        const now = new Date();
+        const dateStr = now.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: '2-digit' }).replace(/\//g, '-');
+        const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+
+        // Nome real da máquina vinculada ao laboratório, em vez do "Line5" fixo
+        // de antes — mesma lógica usada no resto do sistema.
+        const machineNum = machine.machineId.replace(/\D/g, '') || '5';
+        const lineName = `Line${machineNum}`;
+
+        const dataLinesArray = Array(sampleQuantity).fill(null).map((_, index) => {
+            const getVal = (key: keyof HVIResults) => applyDeviation(results[key], deviations[key]);
+
+            const repIndex = index + 1;
+            const sampleObj: any = {
+                id: `INTERLAB_${Date.now()}_${repIndex}`,
+                mala: "INTERLAB",
+                etiqueta: etiqueta.trim(),
+                cor: null,
+                lote_id: 0
             };
 
-            const now = new Date();
-            const dateStr = now.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: '2-digit' }).replace(/\//g, '-');
-            const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+            const uhml = getVal('uhml');
 
-            const dataLinesArray = Array(sampleQuantity).fill(null).map((_, index) => {
-                const getVal = (key: keyof HVIResults) => applyDeviation(results[key], deviations[key]);
+            return HVIFileGeneratorService.generateH1FileContent(
+                sampleObj,
+                dateStr,
+                timeStr,
+                repIndex,
+                repIndex,
+                lineName,
+                getVal('mic'),
+                uhml,
+                getVal('ui'),
+                getVal('str'),
+                getVal('elg'),
+                getVal('sfi'),
+                uhml * 0.95, // aprox len
+                Math.round(getVal('cnt')),
+                Math.round(getVal('sci') || 120),
+                getVal('rd'),
+                getVal('plusB'),
+                results.grd || "31-1",
+                getVal('area'),
+                3, // default leaf
+                getVal('mat'),
+                2000 // default csp
+            );
+        });
 
-                const repIndex = index + 1;
-                const sampleObj: any = {
-                    id: `INTERLAB_${Date.now()}_${repIndex}`,
-                    mala: "INTERLAB",
-                    etiqueta: etiqueta.trim(),
-                    cor: null,
-                    lote_id: 0
-                };
+        dataLinesArray.forEach((lineContent, index) => {
+            const repIndex = index + 1;
+            const filename = `interlaboratorial_${etiqueta}_REP${repIndex}_${Date.now()}.H1`;
+            downloadFile(lineContent, filename);
+        });
 
-                const uhml = getVal('uhml');
-                
-                return HVIFileGeneratorService.generateH1FileContent(
-                    sampleObj,
-                    dateStr,
-                    timeStr,
-                    repIndex,
-                    repIndex,
-                    "Line5",
-                    getVal('mic'),
-                    uhml,
-                    getVal('ui'),
-                    getVal('str'),
-                    getVal('elg'),
-                    getVal('sfi'),
-                    uhml * 0.95, // aprox len
-                    Math.round(getVal('cnt')),
-                    Math.round(getVal('sci') || 120),
-                    getVal('rd'),
-                    getVal('plusB'),
-                    results.grd || "31-1",
-                    getVal('area'),
-                    3, // default leaf
-                    getVal('mat'),
-                    2000 // default csp
-                );
-            });
+        const filename = `interlaboratorial_${etiqueta}_(Multiplos).H1`;
+        const fullContent = dataLinesArray.join('\n');
 
-            dataLinesArray.forEach((lineContent, index) => {
-                const repIndex = index + 1;
-                const filename = `interlaboratorial_uster_${etiqueta}_REP${repIndex}_${Date.now()}.H1`;
-                downloadFile(lineContent, filename);
-            });
-
-            const filename = `interlaboratorial_uster_${etiqueta}_(Multiplos).H1`;
-            const fullContent = dataLinesArray.join('\n');
-
-            saveHistory({
-                id: Date.now(),
-                date: new Date().toLocaleString(),
-                system: "uster",
-                quantity: sampleQuantity,
-                etiqueta,
-                filename,
-                content: fullContent,
-                results: { ...results },
-                labId: currentLab?.id || user?.lab_id || undefined,
-                labName: currentLab?.nome || "N/A"
-            });
-        } else {
-            const { etiqueta } = results;
-
-            // Helper to format date "02-01-20267:12AM" style or standard "02-01-2026 7:12AM"
-            const now = new Date();
-            const dateStr = now.toLocaleDateString('pt-BR').replace(/\//g, '-');
-            const timeStr = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }).replace(' ', '');
-            const dateTimeStr = `${dateStr} ${timeStr}`; // Standard space
-            const dateTimeStrHeader = `${dateStr}${timeStr}`; // Header quirky format
-
-            const header = [
-                `"System Test Report"\t"PREMIER ART3 V3.2.13 "`,
-                `${dateTimeStrHeader}`,
-                `"Test ID"\t":"\t16229\t"Identifier"\t":"\t"158727"`,
-                ``,
-                ``,
-                ``,
-                ``,
-                ``,
-                `"Test Type"\t":"\t"USDA"`,
-                `"Test Date & Time"\t":"\t${dateTimeStr}`,
-                `"Remarks"\t":"\t"467"`,
-                `\t\t"UHML"\t"ML"\t"UI"\t"Elg"\t"Str"\t"Mic"\t"Rd"\t"+b"\t"C.G."\t"SFI"\t"Lf.Grade"\t"Tr.Cnt"\t"Tr.Area"\t"MR"\t""`,
-                `"Test No"\t"Sub ID"\t"(mm)"\t"(mm)"\t"(%)"\t"(%)"\t"(g/tex)"\t""\t""\t""\t""\t""\t""\t""\t"(%)"\t""\t""`,
-                ``
-            ].join('\n');
-
-            const fmt = (value: number, decimals: number) => value.toFixed(decimals);
-
-            // Generate raw data first to calculate stats
-            const rawData = Array(sampleQuantity).fill(null).map((_, index) => {
-                const getVal = (field: keyof HVIResults) => {
-                    const devStr = deviations[field];
-                    const baseVal = parseNumber(results[field]);
-                    const devVal = parseNumber(devStr);
-                    return (devVal === 0) ? baseVal : baseVal + (Math.random() * 2 - 1) * devVal;
-                };
-
-                const uhml = getVal('uhml');
-                const ui = getVal('ui');
-                const ml = getVal('ml');
-
-                return {
-                    index: index + 1,
-                    etiqueta: `"${etiqueta.trim()} "`,
-                    uhml,
-                    ml,
-                    ui,
-                    elg: getVal('elg'),
-                    str: getVal('str'),
-                    mic: getVal('mic'),
-                    rd: getVal('rd'),
-                    plusB: getVal('plusB'),
-                    cg: results.cg.includes('"') ? results.cg : `"${results.cg}"`,
-                    sfi: getVal('sfi'),
-                    grd: results.grd.includes('"') ? results.grd : `"${results.grd}"`,
-                    cnt: Math.round(getVal('cnt')),
-                    area: getVal('area'),
-                    mat: getVal('mat')
-                };
-            });
-
-            const repContents: string[] = [];
-
-            rawData.forEach((d, index) => {
-                const repIndex = index + 1;
-                const singleDataLine = [
-                    1, // test number is always 1 for individual files
-                    d.etiqueta,
-                    fmt(d.uhml, 2),
-                    fmt(d.ml, 2),
-                    fmt(d.ui, 1),
-                    fmt(d.elg, 1),
-                    fmt(d.str, 1),
-                    fmt(d.mic, 2),
-                    fmt(d.rd, 1),
-                    fmt(d.plusB, 1),
-                    d.cg,
-                    fmt(d.sfi, 1),
-                    d.grd,
-                    d.cnt,
-                    fmt(d.area, 2),
-                    fmt(d.mat, 2)
-                ].join('\t');
-
-                // --- Statistics Calculation for single value ---
-                const stats = {
-                    uhml: { avg: d.uhml, median: d.uhml, sd: 0, cv: 0, min: d.uhml, max: d.uhml },
-                    ml: { avg: d.ml, median: d.ml, sd: 0, cv: 0, min: d.ml, max: d.ml },
-                    ui: { avg: d.ui, median: d.ui, sd: 0, cv: 0, min: d.ui, max: d.ui },
-                    elg: { avg: d.elg, median: d.elg, sd: 0, cv: 0, min: d.elg, max: d.elg },
-                    str: { avg: d.str, median: d.str, sd: 0, cv: 0, min: d.str, max: d.str },
-                    mic: { avg: d.mic, median: d.mic, sd: 0, cv: 0, min: d.mic, max: d.mic },
-                    rd: { avg: d.rd, median: d.rd, sd: 0, cv: 0, min: d.rd, max: d.rd },
-                    plusB: { avg: d.plusB, median: d.plusB, sd: 0, cv: 0, min: d.plusB, max: d.plusB },
-                    sfi: { avg: d.sfi, median: d.sfi, sd: 0, cv: 0, min: d.sfi, max: d.sfi },
-                    cnt: { avg: d.cnt, median: d.cnt, sd: 0, cv: 0, min: d.cnt, max: d.cnt },
-                    area: { avg: d.area, median: d.area, sd: 0, cv: 0, min: d.area, max: d.area },
-                    mat: { avg: d.mat, median: d.mat, sd: 0, cv: 0, min: d.mat, max: d.mat }
-                };
-
-                const cgVal = results.cg.includes('"') ? results.cg : `"${results.cg}"`;
-                const grdVal = results.grd.includes('"') ? results.grd : `"${results.grd}"`;
-
-                const makeStatRow = (label: string, prop: 'avg' | 'median' | 'sd' | 'cv' | 'min' | 'max') => {
-                    const f = (key: keyof typeof stats, decimals: number) => {
-                        let p = decimals;
-                        if (prop === 'cv') p = 2;
-                        if (['cnt', 'area'].includes(key)) {
-                            if (prop === 'avg' || prop === 'median') p = decimals === 0 ? 0 : 2;
-                            if (prop === 'sd') p = 2;
-                            if (prop === 'min' || prop === 'max') p = decimals;
-                        }
-                        if (prop === 'sd' && key === 'cnt') return Math.round(stats[key].sd).toFixed(0);
-                        return prop ? fmt(stats[key][prop], p) : '';
-                    }
-
-                    const row = [
-                        label,
-                        `""`,
-                        f('uhml', 2),
-                        f('ml', 2),
-                        f('ui', 1),
-                        f('elg', 1),
-                        f('str', 1),
-                        f('mic', 2),
-                        f('rd', 1),
-                        f('plusB', 1),
-                    ];
-                    if (label === '"Avg"') { row.push(cgVal); } else { row.push(""); }
-                    row.push(f('sfi', 1));
-                    if (label === '"Avg"') { row.push(grdVal); } else { row.push(""); }
-                    row.push(f('cnt', 0));
-                    row.push(f('area', 2));
-                    row.push(f('mat', 2));
-
-                    return row.join('\t');
-                };
-
-                const statsBlock = [
-                    ``, ``, `" Statistics"`,
-                    makeStatRow('"Avg"', 'avg'),
-                    ``, ``, ``, ``, ``, ``, ``, ``, ``,
-                    makeStatRow('"Median"', 'median'),
-                    makeStatRow('"SD"', 'sd'),
-                    makeStatRow('"CV%"', 'cv'),
-                    makeStatRow('"Min"', 'min'),
-                    makeStatRow('"Max"', 'max'),
-                ].join('\n');
-
-                const content = header + '\n' + singleDataLine + '\n' + statsBlock;
-                const filename = `interlaboratorial_premier_${etiqueta.trim()}_REP${repIndex}_${Date.now()}.txt`;
-
-                downloadFile(content, filename);
-                repContents.push(`=== ARQUIVO: ${filename} ===\n${content}`);
-            });
-
-            const content = repContents.join('\n\n');
-            const filename = `interlaboratorial_premier_${etiqueta.trim()}_(Multiplos).txt`;
-
-            saveHistory({
-                id: Date.now(),
-                date: new Date().toLocaleString(),
-                system: "premier",
-                quantity: sampleQuantity,
-                etiqueta,
-                filename,
-                content,
-                results: { ...results },
-                labId: currentLab?.id || user?.lab_id || undefined,
-                labName: currentLab?.nome || "N/A"
-            });
-        }
+        saveHistory({
+            id: Date.now(),
+            date: new Date().toLocaleString(),
+            machineLabel: `${machine.machineId} (${machine.model})`,
+            quantity: sampleQuantity,
+            etiqueta,
+            filename,
+            content: fullContent,
+            results: { ...results },
+            labId: currentLab?.id || user?.lab_id || undefined,
+            labName: currentLab?.nome || "N/A"
+        });
     };
 
     const downloadFile = (content: string, filename: string) => {
@@ -451,7 +286,8 @@ export default function Interlaboratorial() {
         return `${min.toFixed(config.decimals)} - ${max.toFixed(config.decimals)}`;
     };
 
-    const currentFields = selectedSystem === "uster" ? USTER_FIELDS : PREMIER_FIELDS;
+    const currentFields = USTER_FIELDS;
+    const selectedMachine = machines.find(m => m.id === selectedMachineId);
 
     return (
         <div className="space-y-6 animate-fade-in">
@@ -459,40 +295,31 @@ export default function Interlaboratorial() {
             <div className="border-b border-neutral-200 pb-6">
                 <h1 className="text-4xl font-serif text-black">Teste Interlaboratorial</h1>
                 <p className="text-neutral-600 font-mono text-sm mt-2">
-                    Gere arquivos de intercâmbio para sistemas Uster ou Premier
+                    Gere arquivos de intercâmbio no formato Úster, pela máquina vinculada ao laboratório
                 </p>
             </div>
 
             {/* Main Form Card */}
             <div className="bg-white border-2 border-neutral-200 rounded-xl overflow-hidden">
-                {/* Top Section - Sistema e Quantidade */}
+                {/* Top Section - Máquina e Quantidade */}
                 <div className="bg-neutral-50 border-b border-neutral-200 p-3">
                     <div className="grid md:grid-cols-2 gap-4">
-                        {/* Sistema Selection */}
+                        {/* Máquina Selection */}
                         <div className="space-y-1.5">
                             <label className="block text-[9px] uppercase tracking-[0.2em] text-neutral-500 font-mono">
-                                Sistema
+                                Máquina
                             </label>
-                            <div className="flex gap-2">
-                                <button
-                                    onClick={() => setSelectedSystem("uster")}
-                                    className={`flex-1 py-1.5 rounded font-mono text-xs uppercase tracking-wider transition-all border ${selectedSystem === "uster"
-                                        ? "bg-black text-white border-black"
-                                        : "bg-white text-neutral-600 border-neutral-200 hover:border-neutral-400"
-                                        }`}
-                                >
-                                    Uster
-                                </button>
-                                <button
-                                    onClick={() => setSelectedSystem("premier")}
-                                    className={`flex-1 py-1.5 rounded font-mono text-xs uppercase tracking-wider transition-all border ${selectedSystem === "premier"
-                                        ? "bg-black text-white border-black"
-                                        : "bg-white text-neutral-600 border-neutral-200 hover:border-neutral-400"
-                                        }`}
-                                >
-                                    Premier
-                                </button>
-                            </div>
+                            <select
+                                title="Máquina HVI"
+                                value={selectedMachineId}
+                                onChange={(e) => setSelectedMachineId(e.target.value)}
+                                className="w-full h-8 px-2 rounded font-mono text-xs uppercase tracking-wider border border-neutral-200 bg-white focus:outline-none focus:border-black"
+                            >
+                                {machines.length === 0 && <option value="">Nenhuma máquina cadastrada</option>}
+                                {machines.map(m => (
+                                    <option key={m.id} value={m.id}>{m.machineId} — {m.model} ({m.serialNumber})</option>
+                                ))}
+                            </select>
                         </div>
 
                         {/* Quantidade */}
@@ -588,11 +415,11 @@ export default function Interlaboratorial() {
                 <div className="bg-neutral-50 border-t-2 border-neutral-200 p-6">
                     <Button
                         onClick={generateFile}
-                        disabled={!results.etiqueta}
+                        disabled={!results.etiqueta || !selectedMachine}
                         className="w-full bg-black text-white hover:bg-neutral-800 h-14 font-mono uppercase tracking-widest text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         <FileDown className="h-5 w-5 mr-2" />
-                        Gerar Arquivo {selectedSystem.toUpperCase()}
+                        Gerar Arquivo Úster{selectedMachine ? ` — HVI ${selectedMachine.machineId}` : ''}
                     </Button>
                 </div>
             </div>
@@ -620,9 +447,8 @@ export default function Interlaboratorial() {
                                 <div className="p-4 flex items-center justify-between">
                                     <div className="space-y-1">
                                         <div className="flex items-center gap-3">
-                                            <span className={`px-2 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider ${item.system === 'uster' ? 'bg-black text-white' : 'bg-blue-600 text-white'
-                                                }`}>
-                                                {item.system}
+                                            <span className="px-2 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider bg-black text-white">
+                                                {item.machineLabel}
                                             </span>
                                             <span className="text-sm font-mono font-medium text-neutral-900">
                                                 {item.filename}
@@ -660,7 +486,7 @@ export default function Interlaboratorial() {
                                 {expandedHistoryId === item.id && item.results && (
                                     <div className="px-4 pb-4 border-t border-neutral-100 bg-neutral-50/50">
                                         <div className="pt-2 grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2">
-                                            {(item.system === 'uster' ? USTER_FIELDS : PREMIER_FIELDS).map(f => (
+                                            {USTER_FIELDS.map(f => (
                                                 <div key={f.key} className="text-xs">
                                                     <span className="block text-[9px] uppercase tracking-wider text-neutral-400 font-mono">{f.label}</span>
                                                     <span className="font-mono text-neutral-900">{item.results?.[f.key] || '-'}</span>
