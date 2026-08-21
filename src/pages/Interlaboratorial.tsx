@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { FileDown, Trash2, Download, Plus, ChevronDown, ChevronRight, Loader2, X, CheckCircle2 } from "lucide-react";
+import { FileDown, Trash2, Download, Plus, ChevronDown, ChevronRight, Loader2, X, CheckCircle2, Dices } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/contexts/AuthContext";
@@ -17,6 +17,21 @@ const parseNumber = (val: string): number => {
     if (!val) return 0;
     return parseFloat(val.replace(',', '.')) || 0;
 };
+
+// Máscara estilo "moeda": usuário só digita os dígitos, a vírgula decimal
+// é inserida automaticamente na posição certa conforme as casas do campo.
+const formatDecimalInput = (raw: string, decimals: number): string => {
+    const digits = raw.replace(/\D/g, '');
+    if (decimals === 0) return digits;
+    if (!digits) return '';
+    const padded = digits.padStart(decimals + 1, '0');
+    const intPart = padded.slice(0, -decimals).replace(/^0+(?=\d)/, '');
+    const decPart = padded.slice(-decimals);
+    return `${intPart},${decPart}`;
+};
+
+const randomInRange = (min: number, max: number, decimals: number): string =>
+    (min + Math.random() * (max - min)).toFixed(decimals).replace('.', ',');
 
 interface HVIResults {
     grd: string; area: string; cnt: string; uhml: string; ui: string; sfi: string;
@@ -73,6 +88,27 @@ const randomTime = () => {
     return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
 };
 
+// Faixas plausíveis de algodão pra preencher Valores-Alvo com um clique (testes).
+// "cg" fica de fora — tem formato especial ("11-1"), não é um decimal simples.
+const RANDOM_RANGES: Partial<Record<keyof HVIResults, { min: number; max: number; deviation: number }>> = {
+    grd: { min: 1, max: 4, deviation: 0 },
+    area: { min: 0.20, max: 0.30, deviation: 0.02 },
+    cnt: { min: 24, max: 34, deviation: 2 },
+    uhml: { min: 27, max: 31, deviation: 0.5 },
+    ui: { min: 78, max: 85, deviation: 1 },
+    sfi: { min: 5, max: 9, deviation: 0.5 },
+    str: { min: 27, max: 33, deviation: 1.5 },
+    elg: { min: 5, max: 7.5, deviation: 0.5 },
+    mic: { min: 3.5, max: 4.9, deviation: 0.1 },
+    mat: { min: 0.80, max: 0.95, deviation: 0.02 },
+    rd: { min: 70, max: 82, deviation: 1 },
+    plusB: { min: 7, max: 11, deviation: 0.5 },
+    mst: { min: 6.5, max: 8.5, deviation: 0.3 },
+    tmp: { min: 22, max: 27, deviation: 0.5 },
+    rh: { min: 45, max: 55, deviation: 2 },
+    sci: { min: 120, max: 160, deviation: 5 },
+};
+
 export default function Interlaboratorial() {
     const { user, currentLab } = useAuth();
     const { addToast } = useToast();
@@ -99,6 +135,9 @@ export default function Interlaboratorial() {
     // Adicionar etiqueta (novo dia) numa identificação já existente
     const [addingDayFor, setAddingDayFor] = useState<string | null>(null);
     const [newDayEtiqueta, setNewDayEtiqueta] = useState("");
+
+    // Quais identificações (dentre as pendentes do dia/máquina atual) serão geradas
+    const [selectedIdentIds, setSelectedIdentIds] = useState<Set<string>>(new Set());
 
     useEffect(() => {
         const fetchMachines = async () => {
@@ -150,6 +189,35 @@ export default function Interlaboratorial() {
     const removeEtiquetaField = (index: number) => setNewEtiquetas(prev => prev.filter((_, i) => i !== index));
     const updateEtiquetaField = (index: number, value: string) => {
         setNewEtiquetas(prev => { const next = [...prev]; next[index] = value; return next; });
+    };
+
+    const randomizeTargetValues = () => {
+        setNewResults(prev => {
+            const next = { ...prev };
+            (Object.keys(RANDOM_RANGES) as (keyof HVIResults)[]).forEach(key => {
+                const range = RANDOM_RANGES[key]!;
+                const config = USTER_FIELDS.find(f => f.key === key)!;
+                if (key === 'cnt') {
+                    const val = Math.round(range.min + Math.random() * (range.max - range.min));
+                    next[key] = String(val).padStart(3, '0');
+                } else {
+                    next[key] = randomInRange(range.min, range.max, config.decimals);
+                }
+            });
+            return next;
+        });
+        setNewDeviations(prev => {
+            const next = { ...prev };
+            (Object.keys(RANDOM_RANGES) as (keyof HVIResults)[]).forEach(key => {
+                const range = RANDOM_RANGES[key]!;
+                const config = USTER_FIELDS.find(f => f.key === key)!;
+                if (config.hasDev) {
+                    next[key] = range.deviation.toFixed(config.decimals).replace('.', ',');
+                }
+            });
+            return next;
+        });
+        addToast({ title: "Valores Aleatórios Gerados", description: "Confira antes de salvar.", type: "info" });
     };
 
     const saveNewIdentificacao = async () => {
@@ -212,6 +280,34 @@ export default function Interlaboratorial() {
             .map(g => g.identificacaoId)
     );
 
+    const pendingForDay = qualifyingForDay.filter(id => !alreadyGeneratedIds.has(id.id));
+    const selectedPending = pendingForDay.filter(id => selectedIdentIds.has(id.id));
+    const allPendingSelected = pendingForDay.length > 0 && pendingForDay.every(id => selectedIdentIds.has(id.id));
+
+    // Checklist geral — pra nenhuma combinação Identificação x Máquina ficar esquecida
+    const isCellDone = (identId: string, machineId: string) =>
+        generations.some(g => g.dayIndex === dayIndex && g.identificacaoId === identId && g.machineId === machineId);
+
+    // Toda vez que trocar de Dia ou Máquina, seleciona por padrão todas as
+    // identificações pendentes (mesmo comportamento de antes); o usuário pode
+    // desmarcar as que não quer gerar.
+    useEffect(() => {
+        setSelectedIdentIds(new Set(qualifyingForDay.filter(id => !alreadyGeneratedIds.has(id.id)).map(i => i.id)));
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [dayIndex, selectedMachineId]);
+
+    const toggleIdentSelected = (id: string) => {
+        setSelectedIdentIds(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id); else next.add(id);
+            return next;
+        });
+    };
+
+    const toggleSelectAllPending = () => {
+        setSelectedIdentIds(allPendingSelected ? new Set() : new Set(pendingForDay.map(i => i.id)));
+    };
+
     const buildFileContent = (etiquetaVal: string, grd: string, reading: any, lineName: string, dateStr: string, timeStr: string): string => {
         const sampleObj: any = { id: `INTERLAB_${Date.now()}_${Math.random()}`, mala: "INTERLAB", etiqueta: etiquetaVal, cor: null, lote_id: 0 };
         return HVIFileGeneratorService.generateH1FileContent(
@@ -244,9 +340,15 @@ export default function Interlaboratorial() {
             addToast({ title: "Preencha o Operador dessa máquina", type: "warning" });
             return;
         }
-        const pending = qualifyingForDay.filter(id => !alreadyGeneratedIds.has(id.id));
+        const pending = selectedPending;
         if (pending.length === 0) {
-            addToast({ title: "Nada pra gerar", description: "Todas as identificações desse dia já foram geradas nessa máquina.", type: "info" });
+            addToast({
+                title: "Nada pra gerar",
+                description: pendingForDay.length === 0
+                    ? "Todas as identificações desse dia já foram geradas nessa máquina."
+                    : "Selecione ao menos uma identificação pra gerar.",
+                type: "info"
+            });
             return;
         }
 
@@ -394,16 +496,29 @@ export default function Interlaboratorial() {
                                 </div>
 
                                 <div className="space-y-2">
-                                    <label className="block text-[10px] uppercase tracking-[0.2em] text-neutral-500 font-mono">Valores-Alvo HVI</label>
+                                    <div className="flex items-center justify-between">
+                                        <label className="block text-[10px] uppercase tracking-[0.2em] text-neutral-500 font-mono">Valores-Alvo HVI</label>
+                                        <button
+                                            type="button"
+                                            onClick={randomizeTargetValues}
+                                            className="flex items-center gap-1 text-[9px] uppercase tracking-widest font-mono text-blue-600 hover:text-blue-800"
+                                        >
+                                            <Dices className="h-3 w-3" /> Gerar Valores Aleatórios (Teste)
+                                        </button>
+                                    </div>
                                     <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-9 gap-2">
-                                        {USTER_FIELDS.map(({ label, key, hasDev }) => (
+                                        {USTER_FIELDS.map(({ label, key, hasDev, decimals }) => (
                                             <div key={key} className="bg-white p-1.5 rounded border border-neutral-200 flex flex-col justify-between">
                                                 <label className="block text-[9px] uppercase tracking-wider text-neutral-500 font-mono text-center mb-1">{label}</label>
                                                 <div className="flex flex-col gap-1">
                                                     <Input
                                                         type="text"
+                                                        inputMode="decimal"
                                                         value={newResults[key]}
-                                                        onChange={e => setNewResults(prev => ({ ...prev, [key]: e.target.value }))}
+                                                        onChange={e => setNewResults(prev => ({
+                                                            ...prev,
+                                                            [key]: key === 'cg' ? e.target.value : formatDecimalInput(e.target.value, decimals)
+                                                        }))}
                                                         className="font-mono text-xs h-8 text-center border-neutral-200 bg-white"
                                                         placeholder="Valor"
                                                     />
@@ -411,8 +526,9 @@ export default function Interlaboratorial() {
                                                         <>
                                                             <Input
                                                                 type="text"
+                                                                inputMode="decimal"
                                                                 value={newDeviations[key]}
-                                                                onChange={e => setNewDeviations(prev => ({ ...prev, [key]: e.target.value }))}
+                                                                onChange={e => setNewDeviations(prev => ({ ...prev, [key]: formatDecimalInput(e.target.value, decimals) }))}
                                                                 className="font-mono text-[10px] h-6 text-center border-dashed bg-transparent border-neutral-300"
                                                                 placeholder="+/-"
                                                             />
@@ -486,14 +602,16 @@ export default function Interlaboratorial() {
                             <div className="grid md:grid-cols-3 gap-4">
                                 <div className="space-y-1.5">
                                     <label className="block text-[9px] uppercase tracking-[0.2em] text-neutral-500 font-mono">Dia</label>
-                                    <Input
-                                        type="number"
-                                        min="1"
-                                        max={maxDay}
+                                    <select
+                                        title="Dia"
                                         value={dayIndex}
-                                        onChange={e => setDayIndex(Math.max(1, parseInt(e.target.value) || 1))}
-                                        className="font-mono text-sm h-9 text-center"
-                                    />
+                                        onChange={e => setDayIndex(parseInt(e.target.value) || 1)}
+                                        className="w-full h-9 px-2 rounded font-mono text-xs uppercase tracking-wider border border-neutral-200 bg-white focus:outline-none focus:border-black"
+                                    >
+                                        {Array.from({ length: maxDay }, (_, i) => i + 1).map(d => (
+                                            <option key={d} value={d}>Dia {d}</option>
+                                        ))}
+                                    </select>
                                 </div>
                                 <div className="space-y-1.5">
                                     <label className="block text-[9px] uppercase tracking-[0.2em] text-neutral-500 font-mono">Máquina</label>
@@ -513,17 +631,42 @@ export default function Interlaboratorial() {
                                 </div>
                             </div>
 
+                            {pendingForDay.length > 0 && (
+                                <div className="flex items-center justify-between">
+                                    <span className="text-[9px] uppercase tracking-[0.2em] text-neutral-500 font-mono">
+                                        Identificações a Gerar ({selectedPending.length}/{pendingForDay.length} selecionada{selectedPending.length === 1 ? '' : 's'})
+                                    </span>
+                                    <button onClick={toggleSelectAllPending} className="text-[9px] uppercase tracking-widest font-mono text-blue-600 hover:text-blue-800">
+                                        {allPendingSelected ? 'Desmarcar Todas' : 'Selecionar Todas'}
+                                    </button>
+                                </div>
+                            )}
+
                             <div className="border border-neutral-200 rounded divide-y divide-neutral-100">
                                 {qualifyingForDay.length === 0 ? (
                                     <p className="p-4 text-center text-xs text-neutral-400 font-mono">Nenhuma identificação tem etiqueta cadastrada pro Dia {dayIndex}</p>
                                 ) : qualifyingForDay.map(ident => {
                                     const done = alreadyGeneratedIds.has(ident.id);
+                                    const checked = selectedIdentIds.has(ident.id);
                                     return (
-                                        <div key={ident.id} className="p-2.5 flex items-center justify-between text-xs font-mono">
-                                            <span>
-                                                <span className="font-bold text-black">{ident.identificacao}</span>
-                                                <span className="text-neutral-400 mx-2">•</span>
-                                                <span className="text-neutral-600">{ident.etiquetas[dayIndex - 1]}</span>
+                                        <label
+                                            key={ident.id}
+                                            className={`p-2.5 flex items-center justify-between text-xs font-mono ${done ? '' : 'cursor-pointer hover:bg-neutral-50'}`}
+                                        >
+                                            <span className="flex items-center gap-2.5">
+                                                {!done && (
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={checked}
+                                                        onChange={() => toggleIdentSelected(ident.id)}
+                                                        className="h-3.5 w-3.5 accent-black"
+                                                    />
+                                                )}
+                                                <span>
+                                                    <span className="font-bold text-black">{ident.identificacao}</span>
+                                                    <span className="text-neutral-400 mx-2">•</span>
+                                                    <span className="text-neutral-600">{ident.etiquetas[dayIndex - 1]}</span>
+                                                </span>
                                             </span>
                                             {done ? (
                                                 <span className="flex items-center gap-1 text-emerald-600 text-[10px] uppercase tracking-widest">
@@ -532,20 +675,75 @@ export default function Interlaboratorial() {
                                             ) : (
                                                 <span className="text-[10px] uppercase tracking-widest text-neutral-300">Pendente</span>
                                             )}
-                                        </div>
+                                        </label>
                                     );
                                 })}
                             </div>
 
                             <Button
                                 onClick={generateForMachine}
-                                disabled={isGenerating || qualifyingForDay.length === 0}
+                                disabled={isGenerating || selectedPending.length === 0}
                                 className="w-full h-14 bg-black text-white hover:bg-neutral-800 font-mono uppercase tracking-widest text-sm disabled:opacity-50"
                             >
                                 {isGenerating ? <Loader2 className="h-5 w-5 mr-2 animate-spin" /> : <FileDown className="h-5 w-5 mr-2" />}
                                 Gerar Dia {dayIndex} — {selectedMachine ? `HVI ${selectedMachine.machineId}` : '(selecione a máquina)'}
+                                {selectedPending.length > 0 ? ` (${selectedPending.length})` : ''}
                             </Button>
                         </div>
+                    </div>
+
+                    {/* Checklist — visão de todas as máquinas x identificações do dia selecionado,
+                        pra garantir que nenhuma combinação fique esquecida/perdida */}
+                    <div className="bg-white border-2 border-neutral-200 rounded-xl overflow-hidden">
+                        <div className="bg-neutral-50 border-b-2 border-neutral-200 p-4">
+                            <h2 className="text-lg font-serif text-black">Checklist — Dia {dayIndex}</h2>
+                            <p className="text-[10px] text-neutral-500 font-mono mt-1">Cada identificação precisa ser gerada em todas as máquinas nesse dia</p>
+                        </div>
+                        {machines.length === 0 || qualifyingForDay.length === 0 ? (
+                            <p className="p-8 text-center text-xs text-neutral-400 font-mono uppercase tracking-widest">
+                                {machines.length === 0 ? "Nenhuma máquina cadastrada" : `Nenhuma identificação tem etiqueta pro Dia ${dayIndex}`}
+                            </p>
+                        ) : (
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-xs font-mono">
+                                    <thead>
+                                        <tr className="text-neutral-400 uppercase text-[9px] tracking-wider">
+                                            <th className="text-left p-2 sticky left-0 bg-white">Identificação</th>
+                                            {machines.map(m => (
+                                                <th key={m.id} className="text-center p-2 whitespace-nowrap">{m.machineId}</th>
+                                            ))}
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {qualifyingForDay.map(ident => {
+                                            const doneCount = machines.filter(m => isCellDone(ident.id, m.id)).length;
+                                            const allDone = doneCount === machines.length;
+                                            return (
+                                                <tr key={ident.id} className="border-t border-neutral-200">
+                                                    <td className="p-2 sticky left-0 bg-white whitespace-nowrap">
+                                                        <span className="font-bold text-black">{ident.identificacao}</span>
+                                                        <span className="text-neutral-400 mx-1.5">•</span>
+                                                        <span className="text-neutral-500">{ident.etiquetas[dayIndex - 1]}</span>
+                                                        <span className={`ml-2 text-[9px] ${allDone ? 'text-emerald-600' : 'text-neutral-400'}`}>
+                                                            ({doneCount}/{machines.length})
+                                                        </span>
+                                                    </td>
+                                                    {machines.map(m => (
+                                                        <td key={m.id} className="text-center p-2">
+                                                            {isCellDone(ident.id, m.id) ? (
+                                                                <CheckCircle2 className="h-4 w-4 text-emerald-600 inline-block" />
+                                                            ) : (
+                                                                <span className="inline-block h-2 w-2 rounded-full bg-neutral-200" />
+                                                            )}
+                                                        </td>
+                                                    ))}
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
                     </div>
 
                     {/* Dados Gerados */}
