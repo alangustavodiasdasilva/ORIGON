@@ -366,9 +366,9 @@ export default function HVIPreviewModal({
                                         className="w-full px-3 py-2 text-sm border border-neutral-300 rounded focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                                     />
                                 </div>
-                                <div className="w-full sm:w-32">
-                                    <label className="block text-[10px] font-bold text-neutral-500 uppercase tracking-wider mb-1">
-                                        Código Operador
+                                <div className="w-full sm:w-24">
+                                    <label className="block text-[10px] font-bold text-neutral-500 uppercase tracking-wider mb-1 whitespace-nowrap">
+                                        Operador
                                     </label>
                                     <input
                                         type="text"
