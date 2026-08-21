@@ -40,7 +40,6 @@ export default function Analysis() {
     const [filterColor, setFilterColor] = useState<string | null>(null);
     const [filterStatus, setFilterStatus] = useState<'all' | 'generated' | 'pending'>('all');
     const [searchQuery, setSearchQuery] = useState("");
-    const [codigoOperador, setCodigoOperador] = useState("");
     void setFilterStatus; // setter disponível para uso futuro
     const [isTemplatesModalOpen, setIsTemplatesModalOpen] = useState(false);
     const [activeColorForTemplate, setActiveColorForTemplate] = useState<string | null>(null);
@@ -557,17 +556,6 @@ export default function Analysis() {
                                 </div>
                             ))}
                         </div>
-                        <div className="flex flex-col items-center gap-1 shrink-0">
-                            <label className="text-[10px] font-bold text-neutral-400 uppercase">Código Operador</label>
-                            <input
-                                type="text"
-                                value={codigoOperador}
-                                onChange={(e) => setCodigoOperador(e.target.value)}
-                                placeholder="Ex: 01"
-                                title="Código de quem operou a leitura — vai dentro do arquivo gerado"
-                                className="w-20 h-8 text-center border border-neutral-200 rounded text-[11px] font-black text-black bg-neutral-50/30 focus:border-black outline-none transition-all"
-                            />
-                        </div>
                         <div className="ml-auto shrink-0 flex items-center gap-4">
                             <div className="px-3 py-1.5 bg-blue-50 border border-blue-200 rounded text-[9px] font-bold text-blue-700 uppercase tracking-tight">
                                 <span className="opacity-70 mr-1 italic">Objetivo:</span>
@@ -590,7 +578,6 @@ export default function Analysis() {
                             highlightedSampleId={null}
                             loteId={loteId || undefined}
                             tolerancias={tolerancias}
-                            codigoOperador={codigoOperador}
                             configuracoesAnalise={{
                                 ...(lote?.configuracoes_analise || {}),
                                 manual_overrides: manualOverrides

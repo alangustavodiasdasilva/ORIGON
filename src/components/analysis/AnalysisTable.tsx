@@ -27,7 +27,6 @@ interface AnalysisTableProps {
         b: number;
     };
     configuracoesAnalise?: Record<string, any>;
-    codigoOperador?: string;
 }
 
 const COLORS = [
@@ -37,13 +36,17 @@ const COLORS = [
     { value: "#f59e0b", label: "Amarelo", name: "yellow" },
 ];
 
-export default function AnalysisTable({ samples, onUpdateSample, onColorChange, onDeleteSample, isProcessing, highlightedSampleId, loteId, tolerancias, configuracoesAnalise, codigoOperador }: AnalysisTableProps) {
+export default function AnalysisTable({ samples, onUpdateSample, onColorChange, onDeleteSample, isProcessing, highlightedSampleId, loteId, tolerancias, configuracoesAnalise }: AnalysisTableProps) {
     const { t } = useLanguage();
     const { user, currentLab, isLoading } = useAuth();
     const fields = ['mic', 'len', 'unf', 'str', 'rd', 'b'] as const;
     const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
     const [previewModal, setPreviewModal] = useState<{ isOpen: boolean; data: HVIPreviewData | null; sample: Sample | null }>({ isOpen: false, data: null, sample: null });
     const [machines, setMachines] = useState<Machine[]>([]);
+    // Não é mais um campo visível na página — cada amostra pede o código dentro
+    // do próprio modal de prévia. Isso só guarda o último valor digitado nesta
+    // sessão pra pré-preencher o modal da próxima amostra (conveniência).
+    const [lastCodigoOperador, setLastCodigoOperador] = useState('');
 
     useEffect(() => {
         if (isLoading) return;
@@ -407,7 +410,7 @@ export default function AnalysisTable({ samples, onUpdateSample, onColorChange, 
                                                         sample, samples, tolerancias, undefined, undefined,
                                                         sample.data_analise || undefined,
                                                         sample.hora_analise ? sample.hora_analise.substring(0, 5) : undefined,
-                                                        undefined, configuracoesAnalise, undefined, labIdStr, codigoOperador
+                                                        undefined, configuracoesAnalise, undefined, labIdStr, lastCodigoOperador
                                                     );
                                                     if (!result.success) {
                                                         alert(result.message);
@@ -498,9 +501,12 @@ export default function AnalysisTable({ samples, onUpdateSample, onColorChange, 
                     originalSample={previewModal.sample}
                     generatedValues={previewModal.data.generatedValues}
                     balancedReadings={previewModal.data.balancedReadings}
-                    defaultCodigoOperador={codigoOperador}
+                    defaultCodigoOperador={lastCodigoOperador}
                     onRegenerate={async (newReadings, config) => {
                         if (previewModal.sample) {
+                            if (config?.codigoOperador && config.codigoOperador !== lastCodigoOperador) {
+                                setLastCodigoOperador(config.codigoOperador);
+                            }
                             const labIdStr = currentLab?.id ? String(currentLab.id) : (user?.lab_id ? String(user.lab_id) : undefined);
                             const result = await HVIFileGeneratorService.generatePreviewForSample(
                                 previewModal.sample,
@@ -514,7 +520,7 @@ export default function AnalysisTable({ samples, onUpdateSample, onColorChange, 
                                 configuracoesAnalise,
                                 undefined,
                                 labIdStr,
-                                config?.codigoOperador ?? codigoOperador
+                                config?.codigoOperador ?? lastCodigoOperador
                             );
                             if (result.success && result.data) {
                                 setPreviewModal(prev => ({
