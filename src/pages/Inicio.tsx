@@ -1,5 +1,5 @@
 import { useAuth } from "@/contexts/AuthContext";
-import { ArrowRight, Package, Building2, Activity, LogOut, Microscope, ScanLine, ShieldCheck, Network } from "lucide-react";
+import { ArrowRight, Package, Building2, Activity, LogOut, Microscope, ScanLine, ShieldCheck, Network, Award } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { LabService, type Lab } from "@/entities/Lab";
@@ -117,6 +117,14 @@ export default function Inicio() {
             icon: Network,
             gradient: "from-indigo-500/10 to-sky-500/10",
             iconColor: "text-indigo-600"
+        },
+        {
+            title: "Resultados",
+            description: "Consenso interlaboratorial — médias, valor designado e z-score",
+            href: "/resultados",
+            icon: Award,
+            gradient: "from-purple-500/10 to-fuchsia-500/10",
+            iconColor: "text-purple-600"
         },
         ...(user?.acesso === 'admin_global' || user?.acesso === 'admin_lab' ? [{
             title: "Configurações",

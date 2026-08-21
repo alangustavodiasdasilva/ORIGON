@@ -32,6 +32,18 @@ export interface InterlabGeneration {
     createdAt: string;
 }
 
+// Meta de σ (dispersão-alvo) pra uma amostra+parâmetro, opcional — quando
+// preenchida, substitui o σ robusto (1,4826×MAD) calculado automaticamente
+// no cálculo de z-score. Compartilhada entre todos os labs (mesma amostra
+// pode ser comparada por analistas de laboratórios diferentes).
+export interface InterlabSigmaMeta {
+    identificacao: string;
+    parametro: string;
+    sigmaMeta: number;
+    updatedBy: string | null;
+    updatedAt: string;
+}
+
 const isSupabaseEnabled = () => !!import.meta.env.VITE_SUPABASE_URL && !!import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 const mapIdentificacao = (row: any): InterlabIdentificacao => ({
@@ -139,6 +151,61 @@ export const interlaboratorialService = {
             .channel(`interlab-${labId}`)
             .on("postgres_changes", { event: "*", schema: "public", table: "interlab_identificacoes", filter: `lab_id=eq.${labId}` }, callback)
             .on("postgres_changes", { event: "*", schema: "public", table: "interlab_generations", filter: `lab_id=eq.${labId}` }, callback)
+            .subscribe();
+        return () => { supabase.removeChannel(channel); };
+    },
+
+    // ── Consenso entre laboratórios (aba Resultados) ────────────────────────
+    // Sem filtro de lab_id de propósito — a política "Acesso Total" (RLS)
+    // já libera leitura entre labs; a comparação só faz sentido vendo todo
+    // mundo que reportou a mesma amostra.
+    async listAllIdentificacoesAllLabs(): Promise<InterlabIdentificacao[]> {
+        if (!isSupabaseEnabled()) return [];
+        const { data, error } = await supabase.from("interlab_identificacoes").select("*");
+        if (error || !data) return [];
+        return data.map(mapIdentificacao);
+    },
+
+    async listAllGenerationsAllLabs(): Promise<InterlabGeneration[]> {
+        if (!isSupabaseEnabled()) return [];
+        const { data, error } = await supabase.from("interlab_generations").select("*");
+        if (error || !data) return [];
+        return data.map(mapGeneration);
+    },
+
+    async listSigmaMeta(): Promise<InterlabSigmaMeta[]> {
+        if (!isSupabaseEnabled()) return [];
+        const { data, error } = await supabase.from("interlab_sigma_meta").select("*");
+        if (error || !data) return [];
+        return data.map((row: any) => ({
+            identificacao: row.identificacao,
+            parametro: row.parametro,
+            sigmaMeta: Number(row.sigma_meta),
+            updatedBy: row.updated_by,
+            updatedAt: row.updated_at
+        }));
+    },
+
+    async setSigmaMeta(identificacao: string, parametro: string, sigmaMeta: number, updatedBy: string): Promise<void> {
+        const { error } = await supabase.from("interlab_sigma_meta").upsert({
+            identificacao, parametro, sigma_meta: sigmaMeta, updated_by: updatedBy, updated_at: new Date().toISOString()
+        }, { onConflict: "identificacao,parametro" });
+        if (error) throw error;
+    },
+
+    async clearSigmaMeta(identificacao: string, parametro: string): Promise<void> {
+        const { error } = await supabase.from("interlab_sigma_meta").delete()
+            .eq("identificacao", identificacao).eq("parametro", parametro);
+        if (error) throw error;
+    },
+
+    subscribeConsenso(callback: () => void): () => void {
+        if (!isSupabaseEnabled()) return () => {};
+        const channel = supabase
+            .channel("interlab-consenso")
+            .on("postgres_changes", { event: "*", schema: "public", table: "interlab_identificacoes" }, callback)
+            .on("postgres_changes", { event: "*", schema: "public", table: "interlab_generations" }, callback)
+            .on("postgres_changes", { event: "*", schema: "public", table: "interlab_sigma_meta" }, callback)
             .subscribe();
         return () => { supabase.removeChannel(channel); };
     }

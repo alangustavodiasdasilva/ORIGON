@@ -25,6 +25,7 @@ const Reanalise = lazy(() => import("@/pages/Reanalise"));
 const Verificacao = lazy(() => import("@/pages/Verificacao"));
 const Icac = lazy(() => import("@/pages/Icac"));
 const Interlaboratorial = lazy(() => import("@/pages/Interlaboratorial"));
+const InterlabResultados = lazy(() => import("@/pages/InterlabResultados"));
 
 
 // Tela mostrada no lugar do sistema pra quem está bloqueado (manutenção global
@@ -201,6 +202,7 @@ function AppRoutes() {
                     <Route path="verificacao" element={<Verificacao />} />
                     <Route path="icac" element={<Icac />} />
                     <Route path="interlaboratorial" element={<Interlaboratorial />} />
+                    <Route path="resultados" element={<InterlabResultados />} />
                     <Route path="admin" element={<Admin />} />
                 </Route>
             </Routes>
