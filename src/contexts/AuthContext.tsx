@@ -4,6 +4,12 @@ import { AnalistaService } from "@/entities/Analista";
 import type { Analista } from "@/entities/Analista";
 import { LabService, type Lab } from "@/entities/Lab";
 import { safeSetItem as safeSetLocalStorage } from "@/lib/safeStorage";
+import { labThrottleService } from "@/services/labThrottle.service";
+import { enableNetworkThrottle, disableNetworkThrottle } from "@/lib/networkThrottle";
+
+// Único admin_global de verdade — nunca sente a lentidão artificial que ele
+// mesmo liga pra um laboratório, mesmo entrando nesse lab pra conferir.
+const ALAN_USER_ID = "3222b299-4785-45f0-a76a-6ae6d6f17a4e";
 
 interface AuthContextType {
     user: Analista | null;
@@ -101,6 +107,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         return () => clearInterval(heartBeat);
     }, [user, isLoading]);
+
+    // Lentidão artificial por laboratório (Admin > só o Alan vê/liga). O Alan
+    // nunca sente, mesmo se entrar no laboratório throttled pra conferir.
+    useEffect(() => {
+        if (isLoading) return;
+
+        const labId = currentLab?.id || user?.lab_id || null;
+        if (!user || !labId || user.id === ALAN_USER_ID) {
+            disableNetworkThrottle();
+            return;
+        }
+
+        let cancelled = false;
+        labThrottleService.get(labId).then(delayMs => {
+            if (cancelled) return;
+            if (delayMs > 0) enableNetworkThrottle(delayMs); else disableNetworkThrottle();
+        });
+
+        const unsubscribe = labThrottleService.subscribe(labId, delayMs => {
+            if (delayMs > 0) enableNetworkThrottle(delayMs); else disableNetworkThrottle();
+        });
+
+        return () => {
+            cancelled = true;
+            unsubscribe();
+        };
+    }, [user, currentLab, isLoading]);
 
     const refreshUser = async () => {
         if (!user) return;

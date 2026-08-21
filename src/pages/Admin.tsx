@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
-import { Activity, Database, Server, ShieldCheck, Users, Trash2, Edit, LogOut, Lock, LockOpen, FileText } from "lucide-react";
+import { Activity, Database, Server, ShieldCheck, Users, Trash2, Edit, LogOut, Lock, LockOpen, FileText, Turtle } from "lucide-react";
 import { Navigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { AnalistaService, type Analista } from "@/entities/Analista";
@@ -16,6 +16,11 @@ import { usePresence } from "@/hooks/usePresence";
 import AuditLogsTab from "@/components/admin/AuditLogsTab";
 import { systemStatusService, type SystemStatus, type LabLockInfo, type UserLockInfo } from "@/services/systemStatus.service";
 import { filenameConfigService, type LabFilenameConfig } from "@/services/filenameConfig.service";
+import { labThrottleService } from "@/services/labThrottle.service";
+
+// Único admin_global de verdade — a aba de Lentidão só aparece pra ele,
+// mesmo que outra conta admin_global venha a existir no futuro.
+const ALAN_USER_ID = "3222b299-4785-45f0-a76a-6ae6d6f17a4e";
 
 const isSupabaseEnabled = () => {
     const url = import.meta.env.VITE_SUPABASE_URL;
@@ -314,7 +319,9 @@ function DashboardTab({ onlineAnalysts, labs }: { onlineAnalysts: Analista[], la
 // sistema pros outros usuários enquanto atualiza algo. Enquanto ativo, o
 // admin_global continua usando tudo normalmente — só os outros são bloqueados.
 function MaintenanceTab() {
-    const [subTab, setSubTab] = useState<'global' | 'labs' | 'users'>('global');
+    const { user } = useAuth();
+    const [subTab, setSubTab] = useState<'global' | 'labs' | 'users' | 'lentidao'>('global');
+    const isAlan = user?.id === ALAN_USER_ID;
 
     return (
         <div className="max-w-3xl space-y-6">
@@ -322,7 +329,8 @@ function MaintenanceTab() {
                 {[
                     { id: 'global' as const, label: 'Global' },
                     { id: 'labs' as const, label: 'Por Laboratório' },
-                    { id: 'users' as const, label: 'Por Usuário' }
+                    { id: 'users' as const, label: 'Por Usuário' },
+                    ...(isAlan ? [{ id: 'lentidao' as const, label: 'Lentidão' }] : [])
                 ].map(t => (
                     <button
                         key={t.id}
@@ -339,7 +347,10 @@ function MaintenanceTab() {
                 ))}
             </div>
 
-            {subTab === 'global' ? <GlobalMaintenanceTab /> : subTab === 'labs' ? <LabMaintenanceTab /> : <UserMaintenanceTab />}
+            {subTab === 'global' ? <GlobalMaintenanceTab />
+                : subTab === 'labs' ? <LabMaintenanceTab />
+                : subTab === 'lentidao' && isAlan ? <LabThrottleTab />
+                : <UserMaintenanceTab />}
         </div>
     );
 }
@@ -515,6 +526,96 @@ function LabMaintenanceTab() {
                                     : (isLocked ? <LockOpen className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5" />)}
                                 {isLocked ? "Liberar" : "Travar"}
                             </Button>
+                        </div>
+                    );
+                })}
+                {labs.length === 0 && (
+                    <p className="p-4 text-xs text-neutral-400 text-center">Nenhum laboratório cadastrado.</p>
+                )}
+            </div>
+        </div>
+    );
+}
+
+// Lentidão artificial por laboratório — visível só pro Alan (ver ALAN_USER_ID
+// no MaintenanceTab). Liga um atraso real nas requisições de rede de quem
+// está vinculado ao laboratório selecionado; o Alan nunca sente, mesmo
+// entrando nesse laboratório pra conferir (ver AuthContext.tsx).
+const THROTTLE_MAX_MS = 5000;
+const THROTTLE_STEP_MS = 250;
+
+function LabThrottleTab() {
+    const { user } = useAuth();
+    const { addToast } = useToast();
+    const [labs, setLabs] = useState<Lab[]>([]);
+    const [delays, setDelays] = useState<Record<string, number>>({});
+    const [isLoading, setIsLoading] = useState(true);
+    const saveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+
+    useEffect(() => {
+        Promise.all([LabService.list(), labThrottleService.listAll()])
+            .then(([labsList, map]) => {
+                setLabs(labsList);
+                setDelays(map);
+                setIsLoading(false);
+            })
+            .catch(() => setIsLoading(false));
+    }, []);
+
+    // Atualiza o slider na hora (arrastando), mas só salva no banco 400ms
+    // depois de parar de arrastar — evita mandar uma requisição por pixel.
+    const handleSlide = (labId: string, delayMs: number) => {
+        setDelays(prev => ({ ...prev, [labId]: delayMs }));
+        clearTimeout(saveTimers.current[labId]);
+        saveTimers.current[labId] = setTimeout(async () => {
+            try {
+                await labThrottleService.set(labId, delayMs, user?.nome || "Administrador");
+            } catch (error: any) {
+                addToast({ title: "Erro ao Salvar Lentidão", description: error.message, type: "error" });
+            }
+        }, 400);
+    };
+
+    if (isLoading) {
+        return <div className="flex justify-center py-24"><Loader2 className="h-6 w-6 animate-spin text-neutral-400" /></div>;
+    }
+
+    return (
+        <div className="space-y-3">
+            <p className="text-xs text-neutral-500 max-w-xl">
+                Tipo volume: arraste pra deixar a rede mais lenta só pro laboratório selecionado —
+                quem é vinculado a ele sente cada ação do sistema mais demorada, na medida que você
+                escolher. Zero = normal. Os outros laboratórios não são afetados. Você nunca sente,
+                nem selecionando o laboratório throttled.
+            </p>
+            <div className="border border-neutral-200 divide-y divide-neutral-200">
+                {labs.map(lab => {
+                    const delayMs = delays[lab.id] || 0;
+                    const seconds = (delayMs / 1000).toFixed(2).replace('.', ',');
+                    return (
+                        <div key={lab.id} className="p-4 space-y-2">
+                            <div className="flex items-center justify-between">
+                                <p className="font-bold text-sm text-black flex items-center gap-2">
+                                    <Turtle className={cn("h-4 w-4", delayMs > 0 ? "text-amber-600" : "text-neutral-300")} />
+                                    {lab.nome}
+                                </p>
+                                <span className={cn(
+                                    "text-[10px] font-black uppercase tracking-widest px-2 py-1",
+                                    delayMs > 0 ? "text-amber-700 bg-amber-50" : "text-neutral-400 bg-neutral-50"
+                                )}>
+                                    {delayMs > 0 ? `${seconds}s por ação` : "Normal"}
+                                </span>
+                            </div>
+                            <input
+                                type="range"
+                                min={0}
+                                max={THROTTLE_MAX_MS}
+                                step={THROTTLE_STEP_MS}
+                                value={delayMs}
+                                onChange={e => handleSlide(lab.id, Number(e.target.value))}
+                                className="w-full accent-amber-600"
+                                title={`Lentidão de ${lab.nome}`}
+                            />
                         </div>
                     );
                 })}
