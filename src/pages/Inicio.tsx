@@ -1,5 +1,5 @@
 import { useAuth } from "@/contexts/AuthContext";
-import { ArrowRight, Package, Building2, Activity, LogOut, Microscope, ScanLine, ShieldCheck } from "lucide-react";
+import { ArrowRight, Package, Building2, Activity, LogOut, Microscope, ScanLine, ShieldCheck, Network } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { LabService, type Lab } from "@/entities/Lab";
@@ -109,6 +109,14 @@ export default function Inicio() {
             icon: ScanLine,
             gradient: "from-amber-500/10 to-orange-500/10",
             iconColor: "text-amber-600"
+        },
+        {
+            title: "Interlaboratorial",
+            description: "Comparativo de ensaios entre laboratórios",
+            href: "/interlaboratorial",
+            icon: Network,
+            gradient: "from-indigo-500/10 to-sky-500/10",
+            iconColor: "text-indigo-600"
         },
         ...(user?.acesso === 'admin_global' || user?.acesso === 'admin_lab' ? [{
             title: "Configurações",

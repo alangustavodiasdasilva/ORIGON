@@ -66,7 +66,7 @@ export default function Layout() {
         { href: "/", label: t('nav.home'), icon: LayoutDashboard, public: true, prefetch: () => import("@/pages/Inicio") },
         { href: "/lotes", label: t('nav.batches'), icon: Package, public: true, prefetch: () => import("@/pages/Home") },
         { href: "/icac", label: "ICAC", icon: Microscope, public: true, prefetch: () => import("@/pages/Icac") },
-        // { href: "/interlaboratorial", label: t('nav.interlab'), icon: Network, public: true, prefetch: () => import("@/pages/Interlaboratorial") },
+        { href: "/interlaboratorial", label: "Interlaboratorial", icon: Network, public: true, prefetch: () => import("@/pages/Interlaboratorial") },
         { href: "/reanalise", label: "Reanálise", icon: ScanLine, public: true, prefetch: () => import("@/pages/Reanalise") },
         // Verificação removida do menu a pedido do Alan — página/rota/dados continuam
         // intactos (só tirada da navegação), igual foi feito antes com ICAC.
