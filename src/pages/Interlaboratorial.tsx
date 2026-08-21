@@ -410,12 +410,6 @@ export default function Interlaboratorial() {
             const rows = [];
             const filesToDownload: { content: string; filename: string }[] = [];
 
-            // Um relógio só pra essa geração inteira (todas as identificações
-            // selecionadas nessa máquina) — continua avançando 45s–2min entre
-            // arquivos mesmo trocando de identificação, como uma máquina de
-            // verdade rodando amostra após amostra sem parar.
-            const nextTimeStr = createMachineClock();
-
             for (const ident of pending) {
                 const etiquetaVal = ident.etiquetas[dayIndex - 1];
                 const tv = (ident.targetValues as any)?.values as HVIResults;
@@ -428,6 +422,11 @@ export default function Interlaboratorial() {
                     const raw = b + (Math.random() * 2 - 1) * d;
                     return Math.min(b + d, Math.max(b - d, raw));
                 };
+                // Relógio próprio dessa identificação — começa num horário aleatório
+                // diferente das outras (cada identificação é uma amostra separada) e só
+                // avança 45s–2min entre as 10 repetições DELA. Não continua de uma
+                // identificação pra outra.
+                const nextTimeStr = createMachineClock();
                 // Continua de onde parou, se já existirem repetições geradas antes (retomada de sessão interrompida)
                 const alreadyDone = repCountFor(ident.id, selectedMachineId);
                 for (let rep = alreadyDone + 1; rep <= REPS_PER_IDENTIFICACAO; rep++) {
