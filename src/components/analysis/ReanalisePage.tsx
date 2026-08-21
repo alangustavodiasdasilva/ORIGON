@@ -209,6 +209,14 @@ export default function ReanalisePage() {
     const [rangeStart, setRangeStart] = useState('');
     const [rangeEnd, setRangeEnd] = useState('');
     const [rangeError, setRangeError] = useState<string | null>(null);
+    // Colar Automático: em vez do analista precisar clicar no campo e apertar
+    // Ctrl+V pra cada etiqueta copiada de outro sistema (ex: a tela de Revisão de
+    // HVI), ele só copia lá e volta o foco pra essa janela (ou pra janela
+    // flutuante/PiP) — a gente lê a área de transferência sozinho nesse momento.
+    const [autoPasteEnabled, setAutoPasteEnabled] = useState(false);
+    const [autoPasteFlash, setAutoPasteFlash] = useState(false);
+    const lastAutoPastedRef = useRef('');
+    const autoPasteWarnedRef = useRef(false);
     const [osInput, setOsInput] = useState('');
     // Data/hora começam preenchidas com "agora" (quando o analista está fazendo a
     // reanálise), mas continuam 100% editáveis se ele quiser gerar com outro horário.
@@ -400,11 +408,23 @@ export default function ReanalisePage() {
         }, 30);
     };
 
+    // Preenche etiquetas a partir do índice indicado, criando campos novos
+    // automaticamente se precisar (sem deixar nenhum em branco, já que todo
+    // campo criado sai preenchido com um dos valores). Usada tanto pelo colar
+    // manual (Ctrl+V) quanto pelo colar automático (ver useEffect mais abaixo).
+    const applyEtiquetaValues = (parts: string[], startIdx: number) => {
+        setEtiquetas(prev => {
+            const needed = startIdx + parts.length;
+            const next = needed > prev.length ? [...prev, ...Array(needed - prev.length).fill('')] : [...prev];
+            parts.forEach((part, i) => { next[startIdx + i] = part; });
+            return next;
+        });
+    };
+
     // Colar um valor único preenche o campo atual e pula pro próximo campo que já
-    // existe. Colar várias linhas de uma vez (coluna do Excel, várias leituras de
-    // código de barras) distribui um valor em cada campo existente a partir do atual —
-    // sem criar nenhum campo novo (isso deixaria uma etiqueta em branco sobrando e
-    // geraria um arquivo a mais sem querer).
+    // existe. Colar várias linhas de uma vez (coluna do Excel, várias etiquetas
+    // selecionadas na revisão do HVI, várias leituras de código de barras) preenche
+    // um valor em cada campo a partir do atual, criando campos novos se precisar.
     const handleEtiquetaPaste = (e: React.ClipboardEvent<HTMLInputElement>, idx: number) => {
         const text = e.clipboardData.getData('text');
         if (!text) return;
@@ -412,15 +432,7 @@ export default function ReanalisePage() {
         if (parts.length === 0) return;
         e.preventDefault();
 
-        setEtiquetas(prev => {
-            const next = [...prev];
-            parts.forEach((part, i) => {
-                const targetIdx = idx + i;
-                if (targetIdx < next.length) next[targetIdx] = part;
-            });
-            return next;
-        });
-
+        applyEtiquetaValues(parts, idx);
         focusEtiquetaField(e.currentTarget.ownerDocument, idx + parts.length);
     };
 
@@ -432,6 +444,49 @@ export default function ReanalisePage() {
         e.preventDefault();
         focusEtiquetaField(e.currentTarget.ownerDocument, idx + 1);
     };
+
+    // Colar Automático: toda vez que essa janela (ou a flutuante/PiP, se estiver
+    // aberta) recupera o foco — ou seja, o analista voltou de ter copiado algo em
+    // outro sistema — a gente lê a área de transferência sozinho. Se o texto tiver
+    // cara de etiqueta ORIGO (formato validado por parseEtiquetaTemplate) e for
+    // diferente do último valor já colado, preenche automaticamente no primeiro
+    // campo vazio (ou cria um novo, no final, se não sobrar nenhum vazio).
+    useEffect(() => {
+        if (!autoPasteEnabled) return;
+        const targetWindow = pipWindow || window;
+
+        const handleAutoPasteFocus = async () => {
+            try {
+                const text = await targetWindow.navigator.clipboard.readText();
+                const trimmed = text.trim();
+                if (!trimmed || trimmed === lastAutoPastedRef.current) return;
+
+                const parts = trimmed.split(/\r\n|\n|\r/).map(s => s.trim()).filter(Boolean)
+                    .filter(p => parseEtiquetaTemplate(p) !== null);
+                if (parts.length === 0) return;
+
+                lastAutoPastedRef.current = trimmed;
+                setEtiquetas(prev => {
+                    const firstEmpty = prev.findIndex(v => !v.trim());
+                    const startIdx = firstEmpty !== -1 ? firstEmpty : prev.length;
+                    const needed = startIdx + parts.length;
+                    const next = needed > prev.length ? [...prev, ...Array(needed - prev.length).fill('')] : [...prev];
+                    parts.forEach((part, i) => { next[startIdx + i] = part; });
+                    return next;
+                });
+                setAutoPasteFlash(true);
+                setTimeout(() => setAutoPasteFlash(false), 1200);
+            } catch (err) {
+                if (!autoPasteWarnedRef.current) {
+                    autoPasteWarnedRef.current = true;
+                    console.warn('Colar automático: não foi possível ler a área de transferência (permissão negada ou navegador sem suporte).', err);
+                }
+            }
+        };
+
+        targetWindow.addEventListener('focus', handleAutoPasteFocus);
+        return () => targetWindow.removeEventListener('focus', handleAutoPasteFocus);
+    }, [autoPasteEnabled, pipWindow]);
 
     // Gera todas as etiquetas entre a inicial e a final digitadas, recalculando o
     // dígito verificador de cada uma (ver computeEtiquetaChecksum). Antes de gerar,
@@ -1021,6 +1076,22 @@ export default function ReanalisePage() {
                                     Etiquetas Internas ({etiquetas.length} arquivo{etiquetas.length !== 1 ? 's' : ''})
                                 </label>
                                 <div className="flex items-center gap-2">
+                                    <label
+                                        title="Toda vez que você copiar uma etiqueta em outro sistema e voltar pra essa janela, ela é colada sozinha aqui — sem precisar clicar no campo e apertar Ctrl+V"
+                                        className={`flex items-center gap-1.5 h-6 px-2 text-[10px] font-black uppercase tracking-wider border cursor-pointer select-none transition-colors ${
+                                            autoPasteEnabled
+                                                ? (autoPasteFlash ? 'text-white bg-purple-600 border-purple-600' : 'text-purple-700 bg-purple-50 border-purple-200')
+                                                : 'text-neutral-400 bg-neutral-50 border-neutral-200 hover:bg-neutral-100'
+                                        }`}
+                                    >
+                                        <input
+                                            type="checkbox"
+                                            checked={autoPasteEnabled}
+                                            onChange={e => setAutoPasteEnabled(e.target.checked)}
+                                            className="h-3 w-3 accent-purple-700"
+                                        />
+                                        Colar Automático
+                                    </label>
                                     <button
                                         type="button"
                                         onClick={() => { setShowRangeGen(v => !v); setRangeError(null); }}
@@ -1050,6 +1121,12 @@ export default function ReanalisePage() {
                                     </button>
                                 </div>
                             </div>
+
+                            {autoPasteEnabled && (
+                                <p className="text-[9px] text-purple-500 font-bold uppercase tracking-widest mb-2">
+                                    Ativo — copie a etiqueta em outro sistema e volte pra cá (ou pra janela flutuante) que ela entra sozinha
+                                </p>
+                            )}
 
                             {showRangeGen && (
                                 <div className="mb-2 p-2 border border-blue-200 bg-blue-50 space-y-2">
