@@ -87,11 +87,26 @@ const zeroDeviations = (): HVIResults => ({
 // por máquina, todas usando a mesma etiqueta daquele dia.
 const REPS_PER_IDENTIFICACAO = 10;
 
-const randomTime = () => {
+// Relógio contínuo de uma geração (uma máquina, do início ao fim do "Gerar"):
+// começa num horário aleatório do dia e avança entre 45s e 2min a cada arquivo,
+// simulando o tempo real que uma leitura leva na máquina física. Sem isso, uma
+// identificação inteira (10 repetições) saía toda com a MESMA hora — "travada".
+function createMachineClock() {
     const hour = 7 + Math.floor(Math.random() * 11); // 07:00–17:59
     const minute = Math.floor(Math.random() * 60);
-    return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
-};
+    const second = Math.floor(Math.random() * 60);
+    let current = new Date(2000, 0, 1, hour, minute, second).getTime();
+    let isFirst = true;
+    return () => {
+        if (!isFirst) {
+            const stepSeconds = 45 + Math.floor(Math.random() * (120 - 45 + 1)); // 45s–2min entre amostras
+            current += stepSeconds * 1000;
+        }
+        isFirst = false;
+        const d = new Date(current);
+        return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`;
+    };
+}
 
 // Faixas plausíveis de algodão pra preencher Valores-Alvo com um clique (testes).
 // "cg" fica de fora — tem formato especial ("11-1"), não é um decimal simples.
@@ -395,6 +410,12 @@ export default function Interlaboratorial() {
             const rows = [];
             const filesToDownload: { content: string; filename: string }[] = [];
 
+            // Um relógio só pra essa geração inteira (todas as identificações
+            // selecionadas nessa máquina) — continua avançando 45s–2min entre
+            // arquivos mesmo trocando de identificação, como uma máquina de
+            // verdade rodando amostra após amostra sem parar.
+            const nextTimeStr = createMachineClock();
+
             for (const ident of pending) {
                 const etiquetaVal = ident.etiquetas[dayIndex - 1];
                 const tv = (ident.targetValues as any)?.values as HVIResults;
@@ -407,10 +428,10 @@ export default function Interlaboratorial() {
                     const raw = b + (Math.random() * 2 - 1) * d;
                     return Math.min(b + d, Math.max(b - d, raw));
                 };
-                const timeStr = randomTime();
                 // Continua de onde parou, se já existirem repetições geradas antes (retomada de sessão interrompida)
                 const alreadyDone = repCountFor(ident.id, selectedMachineId);
                 for (let rep = alreadyDone + 1; rep <= REPS_PER_IDENTIFICACAO; rep++) {
+                    const timeStr = nextTimeStr();
                     const reading = {
                         mic: applyDev(tv.mic, dv.mic), uhml: applyDev(tv.uhml, dv.uhml), ui: applyDev(tv.ui, dv.ui),
                         str: applyDev(tv.str, dv.str), elg: applyDev(tv.elg, dv.elg), sfi: applyDev(tv.sfi, dv.sfi),
