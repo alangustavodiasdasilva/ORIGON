@@ -400,10 +400,8 @@ export default function AnalysisTable({ samples, onUpdateSample, onColorChange, 
                                         ) : (
                                             <button
                                                 onClick={async () => {
-                                                    if (!codigoOperador?.trim()) {
-                                                        alert('Preencha o "Código Operador" (acima da tabela) antes de gerar o arquivo.');
-                                                        return;
-                                                    }
+                                                    // Código do operador é confirmado por amostra dentro do próprio modal
+                                                    // de prévia (pré-preenchido com o valor daqui como conveniência).
                                                     const labIdStr = currentLab?.id ? String(currentLab.id) : (user?.lab_id ? String(user.lab_id) : undefined);
                                                     const result = await HVIFileGeneratorService.generatePreviewForSample(
                                                         sample, samples, tolerancias, undefined, undefined,
@@ -500,6 +498,7 @@ export default function AnalysisTable({ samples, onUpdateSample, onColorChange, 
                     originalSample={previewModal.sample}
                     generatedValues={previewModal.data.generatedValues}
                     balancedReadings={previewModal.data.balancedReadings}
+                    defaultCodigoOperador={codigoOperador}
                     onRegenerate={async (newReadings, config) => {
                         if (previewModal.sample) {
                             const labIdStr = currentLab?.id ? String(currentLab.id) : (user?.lab_id ? String(user.lab_id) : undefined);
@@ -515,7 +514,7 @@ export default function AnalysisTable({ samples, onUpdateSample, onColorChange, 
                                 configuracoesAnalise,
                                 undefined,
                                 labIdStr,
-                                codigoOperador
+                                config?.codigoOperador ?? codigoOperador
                             );
                             if (result.success && result.data) {
                                 setPreviewModal(prev => ({

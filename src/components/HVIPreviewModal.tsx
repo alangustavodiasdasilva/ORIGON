@@ -24,8 +24,9 @@ interface HVIPreviewModalProps {
     };
     balancedReadings?: Record<string, number[]>;
     machines?: Machine[];
-    onRegenerate?: (readings: Record<string, number[]>, config?: { customEtiqueta: string, customDate: string, customTime: string, customHvi: string }) => void;
+    onRegenerate?: (readings: Record<string, number[]>, config?: { customEtiqueta: string, customDate: string, customTime: string, customHvi: string, codigoOperador: string }) => void;
     onSaveField?: (field: string, value: any) => Promise<void>;
+    defaultCodigoOperador?: string;
 }
 
 export default function HVIPreviewModal({
@@ -40,7 +41,8 @@ export default function HVIPreviewModal({
     balancedReadings,
     machines = [],
     onRegenerate,
-    onSaveField
+    onSaveField,
+    defaultCodigoOperador
 }: HVIPreviewModalProps) {
     const { t } = useLanguage();
     const [editableReadings, setEditableReadings] = useState<Record<string, string[]>>({});
@@ -66,6 +68,10 @@ export default function HVIPreviewModal({
         return now.toTimeString().substring(0, 5);
     });
     const [customHvi, setCustomHvi] = useState(originalSample.hvi || '1');
+    // Código do operador precisa ser confirmado PRA CADA amostra gerada — vem
+    // pré-preenchido com o último usado na página (conveniência), mas fica em
+    // branco se não houver nenhum, exigindo digitação antes de poder baixar.
+    const [codigoOperador, setCodigoOperador] = useState(defaultCodigoOperador || '');
     const [isApproved, setIsApproved] = useState(false);
 
     const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -92,7 +98,7 @@ export default function HVIPreviewModal({
         }
     }, [balancedReadings, editableReadings]);
 
-    const triggerRegeneration = (overrides: { customEtiqueta?: string, customDate?: string, customTime?: string, customHvi?: string } = {}, immediate: boolean = false) => {
+    const triggerRegeneration = (overrides: { customEtiqueta?: string, customDate?: string, customTime?: string, customHvi?: string, codigoOperador?: string } = {}, immediate: boolean = false) => {
         setIsApproved(false);
         if (timeoutRef.current) clearTimeout(timeoutRef.current);
         
@@ -115,11 +121,12 @@ export default function HVIPreviewModal({
             
             const activeDate = overrides.customDate ?? customDate;
             const [y, m, d] = activeDate.split('-');
-            onRegenerate(safeReadings, { 
-                customEtiqueta: overrides.customEtiqueta ?? customEtiqueta, 
-                customDate: `${d}-${m}-${y}`, 
+            onRegenerate(safeReadings, {
+                customEtiqueta: overrides.customEtiqueta ?? customEtiqueta,
+                customDate: `${d}-${m}-${y}`,
                 customTime: overrides.customTime ?? customTime,
-                customHvi: overrides.customHvi ?? customHvi 
+                customHvi: overrides.customHvi ?? customHvi,
+                codigoOperador: overrides.codigoOperador ?? codigoOperador
             });
         };
 
@@ -357,6 +364,26 @@ export default function HVIPreviewModal({
                                             onSaveField?.('hora_analise', e.target.value);
                                         }}
                                         className="w-full px-3 py-2 text-sm border border-neutral-300 rounded focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                    />
+                                </div>
+                                <div className="w-full sm:w-32">
+                                    <label className="block text-[10px] font-bold text-neutral-500 uppercase tracking-wider mb-1">
+                                        Código Operador
+                                    </label>
+                                    <input
+                                        type="text"
+                                        title="Código de quem operou esta leitura"
+                                        placeholder="Ex: 01"
+                                        value={codigoOperador}
+                                        onChange={(e) => {
+                                            setCodigoOperador(e.target.value);
+                                            triggerRegeneration({ codigoOperador: e.target.value }, true);
+                                        }}
+                                        className={`w-full px-3 py-2 text-sm border rounded focus:outline-none focus:ring-1 ${
+                                            codigoOperador.trim()
+                                                ? 'border-neutral-300 focus:border-blue-500 focus:ring-blue-500'
+                                                : 'border-orange-400 bg-orange-50 focus:border-orange-500 focus:ring-orange-500'
+                                        }`}
                                     />
                                 </div>
                             </div>
@@ -658,11 +685,15 @@ export default function HVIPreviewModal({
                                     alert("Por favor, aprove os valores antes de baixar.");
                                     return;
                                 }
+                                if (!codigoOperador.trim()) {
+                                    alert('Preencha o "Código Operador" antes de baixar.');
+                                    return;
+                                }
                                 onConfirm();
                             }}
-                            disabled={!isApproved}
+                            disabled={!isApproved || !codigoOperador.trim()}
                             className={`h-12 px-8 rounded-none font-bold text-[10px] uppercase tracking-widest transition-colors flex items-center gap-2 ${
-                                !isApproved ? 'bg-neutral-300 text-neutral-500 cursor-not-allowed' : 'bg-black text-white hover:bg-neutral-800'
+                                !isApproved || !codigoOperador.trim() ? 'bg-neutral-300 text-neutral-500 cursor-not-allowed' : 'bg-black text-white hover:bg-neutral-800'
                             }`}
                         >
                             <Download className="h-4 w-4" />
