@@ -577,6 +577,7 @@ export default function Analysis() {
                             isProcessing={isProcessing}
                             highlightedSampleId={null}
                             loteId={loteId || undefined}
+                            loteLabId={lote?.lab_id || undefined}
                             tolerancias={tolerancias}
                             configuracoesAnalise={{
                                 ...(lote?.configuracoes_analise || {}),

@@ -18,6 +18,7 @@ interface AnalysisTableProps {
     isProcessing: boolean;
     highlightedSampleId?: string | null;
     loteId?: string;
+    loteLabId?: string;
     tolerancias?: {
         mic: number;
         len: number;
@@ -36,7 +37,7 @@ const COLORS = [
     { value: "#f59e0b", label: "Amarelo", name: "yellow" },
 ];
 
-export default function AnalysisTable({ samples, onUpdateSample, onColorChange, onDeleteSample, isProcessing, highlightedSampleId, loteId, tolerancias, configuracoesAnalise }: AnalysisTableProps) {
+export default function AnalysisTable({ samples, onUpdateSample, onColorChange, onDeleteSample, isProcessing, highlightedSampleId, loteId, loteLabId, tolerancias, configuracoesAnalise }: AnalysisTableProps) {
     const { t } = useLanguage();
     const { user, currentLab, isLoading } = useAuth();
     const fields = ['mic', 'len', 'unf', 'str', 'rd', 'b'] as const;
@@ -405,7 +406,11 @@ export default function AnalysisTable({ samples, onUpdateSample, onColorChange, 
                                                 onClick={async () => {
                                                     // Código do operador é confirmado por amostra dentro do próprio modal
                                                     // de prévia (pré-preenchido com o valor daqui como conveniência).
-                                                    const labIdStr = currentLab?.id ? String(currentLab.id) : (user?.lab_id ? String(user.lab_id) : undefined);
+                                                    // Prioriza o laboratório real do lote (loteLabId) sobre o laboratório
+                                                    // selecionado globalmente — se o admin_global não tiver "entrado" no
+                                                    // laboratório antes de abrir o lote, currentLab fica vazio e o nome
+                                                    // do arquivo saía com o padrão errado em vez do configurado pelo lab.
+                                                    const labIdStr = loteLabId ? String(loteLabId) : (currentLab?.id ? String(currentLab.id) : (user?.lab_id ? String(user.lab_id) : undefined));
                                                     const result = await HVIFileGeneratorService.generatePreviewForSample(
                                                         sample, samples, tolerancias, undefined, undefined,
                                                         sample.data_analise || undefined,
@@ -507,7 +512,7 @@ export default function AnalysisTable({ samples, onUpdateSample, onColorChange, 
                             if (config?.codigoOperador && config.codigoOperador !== lastCodigoOperador) {
                                 setLastCodigoOperador(config.codigoOperador);
                             }
-                            const labIdStr = currentLab?.id ? String(currentLab.id) : (user?.lab_id ? String(user.lab_id) : undefined);
+                            const labIdStr = loteLabId ? String(loteLabId) : (currentLab?.id ? String(currentLab.id) : (user?.lab_id ? String(user.lab_id) : undefined));
                             const result = await HVIFileGeneratorService.generatePreviewForSample(
                                 previewModal.sample,
                                 samples,
