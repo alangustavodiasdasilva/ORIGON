@@ -469,7 +469,12 @@ export default function AnalysisTable({ samples, onUpdateSample, onColorChange, 
                     onConfirm={async () => {
                         if (previewModal.data && previewModal.sample) {
                             try {
-                                await HVIFileGeneratorService.downloadHVIFile(previewModal.data.content, previewModal.data.filename, previewModal.data.files);
+                                // Mesma prioridade usada pra gerar a prévia: laboratório real do
+                                // lote antes do selecionado na sessão — senão a pasta de exportação
+                                // configurada pro lab do lote não era encontrada (resolvia pro lab
+                                // "ativo" errado, ou nenhum, e caía sempre no download padrão).
+                                const labIdStr = loteLabId ? String(loteLabId) : (currentLab?.id ? String(currentLab.id) : (user?.lab_id ? String(user.lab_id) : undefined));
+                                await HVIFileGeneratorService.downloadHVIFile(previewModal.data.content, previewModal.data.filename, previewModal.data.files, labIdStr);
                                 
                                 const br = previewModal.data.balancedReadings as any;
                                 if (br && br.mic) {
