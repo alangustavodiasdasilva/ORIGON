@@ -23,6 +23,7 @@ import { AnalistaService } from "@/entities/Analista";
 import { Modal } from "@/components/shared/Modal";
 import { HVIFileGeneratorService } from "@/services/HVIFileGeneratorService";
 import { ExcelImportModal } from "@/components/registro/ExcelImportModal";
+import { type Machine, MachineService } from "@/entities/Machine";
 import { cn } from "@/lib/utils";
 
 const classifySample = (row: HVIDataRow): string => {
@@ -60,6 +61,7 @@ export default function Registro() {
 
     const [lote, setLote] = useState<Lote | null>(null);
     const [samples, setSamples] = useState<Sample[]>([]);
+    const [machines, setMachines] = useState<Machine[]>([]);
 
     // States for the review flow
     const [isProcessing, setIsProcessing] = useState(false); // Processamento bloqueante (foreground)
@@ -147,7 +149,7 @@ export default function Registro() {
             }
 
             setEditingRows(rows.length > 0 ? [...rows] : [{
-                numero: '1', hvi: '1', data_analise: '', hora_analise: '',
+                numero: '1', hvi: machines[0]?.machineId || '1', data_analise: '', hora_analise: '',
                 mic: 0, len: 0, unf: 0, str: 0, rd: 0, b: 0
             }]);
             setCurrentRowIndex(0);
@@ -268,6 +270,35 @@ export default function Registro() {
         setSamples(s);
     };
 
+    // Máquinas reais do laboratório do lote — usadas pro seletor "Máquina HVI"
+    // e pra normalizar o valor salvo em amostra.hvi. Antes esse campo vinha de
+    // uma lista fixa 1-7 com dígito puro, desconectada do cadastro de máquinas
+    // (que usa "HVI X"), o que causava amostra.hvi != identificacao real da
+    // máquina e por isso o arquivo gerado pra "máquina 2" saía com dados de
+    // outra máquina.
+    useEffect(() => {
+        const labId = lote?.lab_id || user?.lab_id;
+        if (!labId) return;
+        let isActive = true;
+        MachineService.listByLab(labId)
+            .then(fetched => { if (isActive) setMachines(fetched); })
+            .catch(err => console.error("Erro ao buscar máquinas:", err));
+        return () => { isActive = false; };
+    }, [lote?.lab_id, user?.lab_id]);
+
+    // Converte um hvi bruto (dígito solto tipo "2", ou já "HVI 02") pro
+    // machineId canônico da máquina real cadastrada, quando existir match.
+    const normalizeHvi = (raw: string | undefined | null): string => {
+        const value = (raw || '').trim();
+        if (!value) return machines[0]?.machineId || '1';
+        const exact = machines.find(m => m.machineId === value);
+        if (exact) return exact.machineId;
+        const targetNum = value.replace(/\D/g, '');
+        const byDigits = targetNum ? machines.find(m => m.machineId.replace(/\D/g, '') === targetNum) : undefined;
+        if (byDigits) return byDigits.machineId;
+        return value;
+    };
+
     const handleDeleteSample = async (sampleId: string) => {
         try {
             await SampleService.delete(sampleId);
@@ -355,7 +386,7 @@ export default function Registro() {
                 return {
                     lote_id: loteId,
                     amostra_id: currentNextId,
-                    hvi: row.hvi || '1',
+                    hvi: normalizeHvi(row.hvi),
                     mala: editingMala || '',
                     etiqueta: editingEtiqueta || '',
                     data_analise: row.data_analise,
@@ -423,7 +454,7 @@ export default function Registro() {
                 return {
                     lote_id: loteId,
                     amostra_id: currentNextId,
-                    hvi: row.hvi || '1',
+                    hvi: normalizeHvi(row.hvi),
                     mala: malaId || '',
                     etiqueta: row.etiqueta || '',
                     data_analise: row.data_analise,
@@ -599,13 +630,18 @@ export default function Registro() {
                                         <label className="text-[9px] font-bold text-neutral-400 uppercase tracking-widest">Máquina HVI</label>
                                         <select
                                             title="Máquina HVI"
-                                            value={currentRow.hvi || '1'}
+                                            value={currentRow.hvi || (machines.length > 0 ? machines[0].machineId : '1')}
                                             onChange={(e) => updateCurrentRow('hvi', e.target.value)}
                                             className="w-full h-12 border-b-2 border-l-0 border-r-0 border-t-0 border-neutral-200 rounded-none font-mono text-lg bg-transparent px-0 focus:border-black focus:ring-0 cursor-pointer focus:outline-none"
                                         >
-                                            {[1, 2, 3, 4, 5, 6, 7].map(n => (
+                                            {machines.length > 0 ? machines.map(m => (
+                                                <option key={m.id} value={m.machineId}>{m.machineId} ({m.model === 'USTER' ? 'U' : 'P'})</option>
+                                            )) : [1, 2, 3, 4, 5, 6, 7].map(n => (
                                                 <option key={n} value={String(n)}>HVI 0{n}</option>
                                             ))}
+                                            {machines.length > 0 && currentRow.hvi && !machines.some(m => m.machineId === currentRow.hvi) && (
+                                                <option value={currentRow.hvi}>{currentRow.hvi}</option>
+                                            )}
                                         </select>
                                     </div>
                                 </div>
