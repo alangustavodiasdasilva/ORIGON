@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { Cpu, Download, CheckCircle2, AlertCircle, Loader2, Eye, Plus, X, PictureInPicture2, Eraser, ListPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -224,6 +224,13 @@ export default function ReanalisePage() {
     });
     const [codigoOperador, setCodigoOperador] = useState('');
 
+    // Descarta respostas de regeneração (auto-preview OU edição na tabela) que
+    // chegam fora de ordem — sem isso, editar rápido demais podia disparar duas
+    // gerações assíncronas sobrepostas, e a mais antiga terminando DEPOIS da mais
+    // nova sobrescrevia a prévia com um valor que não era mais o que o analista
+    // acabou de digitar (mesma classe de bug já corrigida em Verificacao.tsx).
+    const regenSeqRef = useRef(0);
+
     useEffect(() => {
         const labId = currentLab?.id || user?.lab_id;
         setLoadingMachines(true);
@@ -251,6 +258,7 @@ export default function ReanalisePage() {
     const generateAutoPreview = async () => {
         const machine = machines.find(m => m.id === selectedMachineId);
         if (!machine) return;
+        const seq = ++regenSeqRef.current;
         setIsAutoPreviewing(true);
         try {
             const effective = getEffectiveAvg();
@@ -293,6 +301,8 @@ export default function ReanalisePage() {
                 codigoOperador || undefined
             );
 
+            if (seq !== regenSeqRef.current) return; // resposta antiga — descarta
+
             if (result.success && result.data && result.data.files) {
                 setPreviewFiles(result.data.files.map((f: any) => ({ name: f.filename, content: f.content })));
                 setGridData(result.data.balancedReadings || null);
@@ -303,10 +313,11 @@ export default function ReanalisePage() {
                 setExportStatus({ ok: false, msg: result.message || 'Falha ao gerar prévia' });
             }
         } catch (err: any) {
+            if (seq !== regenSeqRef.current) return;
             setPreviewFiles(null);
             setExportStatus({ ok: false, msg: err.message || 'Erro inesperado' });
         } finally {
-            setIsAutoPreviewing(false);
+            if (seq === regenSeqRef.current) setIsAutoPreviewing(false);
         }
     };
 
@@ -321,6 +332,7 @@ export default function ReanalisePage() {
             newGridData[key] = arr;
         }
         setGridData(newGridData);
+        const seq = ++regenSeqRef.current;
 
         // Gera novos arquivos TXT sem re-randomizar
         const machine = machines.find(m => m.id === selectedMachineId);
@@ -363,6 +375,8 @@ export default function ReanalisePage() {
             labIdStr,
             codigoOperador || undefined
         );
+
+        if (seq !== regenSeqRef.current) return; // resposta antiga — descarta
 
         if (result.success && result.data && result.data.files) {
             setPreviewFiles(result.data.files.map((f: any) => ({ name: f.filename, content: f.content })));
