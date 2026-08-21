@@ -24,6 +24,7 @@ export interface InterlabGeneration {
     machineId: string;
     operatorCode: string | null;
     etiqueta: string;
+    repIndex: number;
     generatedTime: string;
     reading: Record<string, number>;
     filename: string;
@@ -51,6 +52,7 @@ const mapGeneration = (row: any): InterlabGeneration => ({
     machineId: row.machine_id,
     operatorCode: row.operator_code,
     etiqueta: row.etiqueta,
+    repIndex: row.rep_index,
     generatedTime: row.generated_time,
     reading: row.reading,
     filename: row.filename,
@@ -107,7 +109,7 @@ export const interlaboratorialService = {
 
     async saveGenerations(rows: Array<{
         labId: string; identificacaoId: string; dayIndex: number; machineId: string;
-        operatorCode: string; etiqueta: string; generatedTime: string;
+        operatorCode: string; etiqueta: string; repIndex: number; generatedTime: string;
         reading: Record<string, number>; filename: string; createdBy: string;
     }>): Promise<void> {
         const { error } = await supabase.from("interlab_generations").insert(rows.map(r => ({
@@ -117,6 +119,7 @@ export const interlaboratorialService = {
             machine_id: r.machineId,
             operator_code: r.operatorCode,
             etiqueta: r.etiqueta,
+            rep_index: r.repIndex,
             generated_time: r.generatedTime,
             reading: r.reading,
             filename: r.filename,

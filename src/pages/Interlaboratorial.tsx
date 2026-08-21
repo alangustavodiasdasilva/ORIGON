@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { FileDown, Trash2, Download, Plus, ChevronDown, ChevronRight, Loader2, X, CheckCircle2, Dices } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,6 +7,7 @@ import { useToast } from "@/contexts/ToastContext";
 import { AuditLogService } from "@/entities/AuditLog";
 import { HVIFileGeneratorService } from "@/services/HVIFileGeneratorService";
 import { MachineService, type Machine } from "@/entities/Machine";
+import { filenameConfigService } from "@/services/filenameConfig.service";
 import {
     interlaboratorialService,
     type InterlabIdentificacao,
@@ -81,6 +82,10 @@ const zeroDeviations = (): HVIResults => ({
     str: "0", elg: "0", mic: "0", mat: "0", rd: "0", plusB: "0",
     mst: "0", cg: "0", tmp: "0", rh: "0", sci: "0"
 });
+
+// Protocolo padrão: cada identificação é testada 10 vezes (10 repetições/arquivos)
+// por máquina, todas usando a mesma etiqueta daquele dia.
+const REPS_PER_IDENTIFICACAO = 10;
 
 const randomTime = () => {
     const hour = 7 + Math.floor(Math.random() * 11); // 07:00–17:59
@@ -274,27 +279,54 @@ export default function Interlaboratorial() {
     // ── Geração do dia, máquina por máquina ─────────────────────────────────
     const qualifyingForDay = identificacoes.filter(id => !!id.etiquetas[dayIndex - 1]);
 
+    const repCountFor = (identId: string, machineId: string) =>
+        generations.filter(g => g.dayIndex === dayIndex && g.identificacaoId === identId && g.machineId === machineId).length;
+
     const alreadyGeneratedIds = new Set(
-        generations
-            .filter(g => g.dayIndex === dayIndex && g.machineId === selectedMachineId)
-            .map(g => g.identificacaoId)
+        qualifyingForDay
+            .filter(id => repCountFor(id.id, selectedMachineId) >= REPS_PER_IDENTIFICACAO)
+            .map(id => id.id)
     );
 
     const pendingForDay = qualifyingForDay.filter(id => !alreadyGeneratedIds.has(id.id));
     const selectedPending = pendingForDay.filter(id => selectedIdentIds.has(id.id));
     const allPendingSelected = pendingForDay.length > 0 && pendingForDay.every(id => selectedIdentIds.has(id.id));
+    const filesToGenerateCount = selectedPending.reduce(
+        (sum, id) => sum + (REPS_PER_IDENTIFICACAO - repCountFor(id.id, selectedMachineId)), 0
+    );
 
     // Checklist geral — pra nenhuma combinação Identificação x Máquina ficar esquecida
-    const isCellDone = (identId: string, machineId: string) =>
-        generations.some(g => g.dayIndex === dayIndex && g.identificacaoId === identId && g.machineId === machineId);
+    const isCellDone = (identId: string, machineId: string) => repCountFor(identId, machineId) >= REPS_PER_IDENTIFICACAO;
 
     // Toda vez que trocar de Dia ou Máquina, seleciona por padrão todas as
     // identificações pendentes (mesmo comportamento de antes); o usuário pode
     // desmarcar as que não quer gerar.
+    const decidedIdentIdsRef = useRef<Set<string>>(new Set());
     useEffect(() => {
-        setSelectedIdentIds(new Set(qualifyingForDay.filter(id => !alreadyGeneratedIds.has(id.id)).map(i => i.id)));
+        const initial = new Set(qualifyingForDay.filter(id => !alreadyGeneratedIds.has(id.id)).map(i => i.id));
+        setSelectedIdentIds(initial);
+        decidedIdentIdsRef.current = new Set(initial);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [dayIndex, selectedMachineId]);
+
+    // Se uma identificação nova passar a valer pro dia/máquina atual (ex: acabou
+    // de ser cadastrada) sem trocar dia/máquina, ela entra marcada por padrão —
+    // sem mexer nas caixinhas que o usuário já desmarcou manualmente.
+    useEffect(() => {
+        setSelectedIdentIds(prev => {
+            const next = new Set(prev);
+            let changed = false;
+            pendingForDay.forEach(id => {
+                if (!decidedIdentIdsRef.current.has(id.id)) {
+                    next.add(id.id);
+                    decidedIdentIdsRef.current.add(id.id);
+                    changed = true;
+                }
+            });
+            return changed ? next : prev;
+        });
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [identificacoes]);
 
     const toggleIdentSelected = (id: string) => {
         setSelectedIdentIds(prev => {
@@ -359,6 +391,19 @@ export default function Interlaboratorial() {
             const machineNum = machine.machineId.replace(/\D/g, '') || '5';
             const lineName = `Line${machineNum}`;
 
+            // Quantos arquivos essa geração vai criar no total (soma das repetições
+            // que faltam em cada identificação selecionada), pra reservar de uma vez
+            // só um bloco de números — mesmo prefixo/sequência configurado em
+            // Configurações > Nome dos Arquivos Gerados, igual ao resto do sistema.
+            const totalToGenerate = pending.reduce(
+                (sum, id) => sum + (REPS_PER_IDENTIFICACAO - repCountFor(id.id, selectedMachineId)), 0
+            );
+            const reserved = labId ? await filenameConfigService.reserveSequence(labId, totalToGenerate) : null;
+            const filenamePrefix = reserved?.prefix ?? 'R_X';
+            const filenameDigits = reserved?.digits ?? 5;
+            const startSeq = reserved?.startSeq ?? 1;
+            let seqCursor = startSeq;
+
             const rows = [];
             const filesToDownload: { content: string; filename: string }[] = [];
 
@@ -366,31 +411,40 @@ export default function Interlaboratorial() {
                 const etiquetaVal = ident.etiquetas[dayIndex - 1];
                 const tv = (ident.targetValues as any)?.values as HVIResults;
                 const dv = (ident.targetValues as any)?.deviations as HVIResults;
+                // Nunca foge do intervalo estipulado (alvo ± desvio) — mesmo em cima de
+                // arredondamento (CNT/SCI), o clamp garante que a leitura fica dentro.
                 const applyDev = (base: string, dev: string) => {
                     const b = parseNumber(base), d = parseNumber(dev);
-                    return d === 0 ? b : b + (Math.random() * 2 - 1) * d;
-                };
-                const reading = {
-                    mic: applyDev(tv.mic, dv.mic), uhml: applyDev(tv.uhml, dv.uhml), ui: applyDev(tv.ui, dv.ui),
-                    str: applyDev(tv.str, dv.str), elg: applyDev(tv.elg, dv.elg), sfi: applyDev(tv.sfi, dv.sfi),
-                    rd: applyDev(tv.rd, dv.rd), plusB: applyDev(tv.plusB, dv.plusB),
-                    cnt: Math.round(applyDev(tv.cnt, dv.cnt)), sci: Math.round(applyDev(tv.sci, dv.sci) || 120),
-                    area: applyDev(tv.area, dv.area), mat: applyDev(tv.mat, dv.mat)
+                    if (d === 0) return b;
+                    const raw = b + (Math.random() * 2 - 1) * d;
+                    return Math.min(b + d, Math.max(b - d, raw));
                 };
                 const timeStr = randomTime();
-                const content = buildFileContent(etiquetaVal, tv.grd, reading, lineName, dateStr, timeStr);
-                const filename = `interlab_dia${dayIndex}_${ident.identificacao.replace(/[^a-zA-Z0-9]/g, '')}_${machine.machineId}.H1`;
-                filesToDownload.push({ content, filename });
-                rows.push({
-                    labId: labId!, identificacaoId: ident.id, dayIndex, machineId: selectedMachineId,
-                    operatorCode: operatorCode.trim(), etiqueta: etiquetaVal, generatedTime: timeStr,
-                    reading, filename, createdBy: user?.nome || "Analista"
-                });
+                // Continua de onde parou, se já existirem repetições geradas antes (retomada de sessão interrompida)
+                const alreadyDone = repCountFor(ident.id, selectedMachineId);
+                for (let rep = alreadyDone + 1; rep <= REPS_PER_IDENTIFICACAO; rep++) {
+                    const reading = {
+                        mic: applyDev(tv.mic, dv.mic), uhml: applyDev(tv.uhml, dv.uhml), ui: applyDev(tv.ui, dv.ui),
+                        str: applyDev(tv.str, dv.str), elg: applyDev(tv.elg, dv.elg), sfi: applyDev(tv.sfi, dv.sfi),
+                        rd: applyDev(tv.rd, dv.rd), plusB: applyDev(tv.plusB, dv.plusB),
+                        cnt: Math.round(applyDev(tv.cnt, dv.cnt)), sci: Math.round(applyDev(tv.sci || '130', dv.sci)),
+                        area: applyDev(tv.area, dv.area), mat: applyDev(tv.mat, dv.mat)
+                    };
+                    const content = buildFileContent(etiquetaVal, tv.grd, reading, lineName, dateStr, timeStr);
+                    const filename = `${filenamePrefix}${String(seqCursor).padStart(filenameDigits, '0')}.H1`;
+                    seqCursor++;
+                    filesToDownload.push({ content, filename });
+                    rows.push({
+                        labId: labId!, identificacaoId: ident.id, dayIndex, machineId: selectedMachineId,
+                        operatorCode: operatorCode.trim(), etiqueta: etiquetaVal, repIndex: rep, generatedTime: timeStr,
+                        reading, filename, createdBy: user?.nome || "Analista"
+                    });
+                }
             }
 
             await interlaboratorialService.saveGenerations(rows);
             AuditLogService.logAction('interlaboratorial', `dia${dayIndex}_${selectedMachineId}`, 'CREATE', null, {
-                nome: `Dia ${dayIndex} — ${machine.machineId}`, identificacoes: rows.length, operador: operatorCode
+                nome: `Dia ${dayIndex} — ${machine.machineId}`, identificacoes: pending.length, arquivos: rows.length, operador: operatorCode
             });
 
             for (const f of filesToDownload) {
@@ -648,6 +702,7 @@ export default function Interlaboratorial() {
                                 ) : qualifyingForDay.map(ident => {
                                     const done = alreadyGeneratedIds.has(ident.id);
                                     const checked = selectedIdentIds.has(ident.id);
+                                    const repCount = repCountFor(ident.id, selectedMachineId);
                                     return (
                                         <label
                                             key={ident.id}
@@ -670,10 +725,12 @@ export default function Interlaboratorial() {
                                             </span>
                                             {done ? (
                                                 <span className="flex items-center gap-1 text-emerald-600 text-[10px] uppercase tracking-widest">
-                                                    <CheckCircle2 className="h-3.5 w-3.5" /> Gerado
+                                                    <CheckCircle2 className="h-3.5 w-3.5" /> {REPS_PER_IDENTIFICACAO}/{REPS_PER_IDENTIFICACAO} Gerado
                                                 </span>
                                             ) : (
-                                                <span className="text-[10px] uppercase tracking-widest text-neutral-300">Pendente</span>
+                                                <span className="text-[10px] uppercase tracking-widest text-neutral-400">
+                                                    {repCount > 0 ? `${repCount}/${REPS_PER_IDENTIFICACAO} — continua` : `Pendente (${REPS_PER_IDENTIFICACAO} reps)`}
+                                                </span>
                                             )}
                                         </label>
                                     );
@@ -687,8 +744,13 @@ export default function Interlaboratorial() {
                             >
                                 {isGenerating ? <Loader2 className="h-5 w-5 mr-2 animate-spin" /> : <FileDown className="h-5 w-5 mr-2" />}
                                 Gerar Dia {dayIndex} — {selectedMachine ? `HVI ${selectedMachine.machineId}` : '(selecione a máquina)'}
-                                {selectedPending.length > 0 ? ` (${selectedPending.length})` : ''}
+                                {filesToGenerateCount > 0 ? ` (${filesToGenerateCount} arquivo${filesToGenerateCount === 1 ? '' : 's'})` : ''}
                             </Button>
+                            {selectedPending.length > 0 && (
+                                <p className="text-[9px] text-neutral-400 font-mono text-center -mt-2">
+                                    {REPS_PER_IDENTIFICACAO} repetições por identificação, todas com a mesma etiqueta do dia
+                                </p>
+                            )}
                         </div>
                     </div>
 
@@ -716,8 +778,8 @@ export default function Interlaboratorial() {
                                     </thead>
                                     <tbody>
                                         {qualifyingForDay.map(ident => {
-                                            const doneCount = machines.filter(m => isCellDone(ident.id, m.id)).length;
-                                            const allDone = doneCount === machines.length;
+                                            const machinesDone = machines.filter(m => isCellDone(ident.id, m.id)).length;
+                                            const allDone = machinesDone === machines.length;
                                             return (
                                                 <tr key={ident.id} className="border-t border-neutral-200">
                                                     <td className="p-2 sticky left-0 bg-white whitespace-nowrap">
@@ -725,18 +787,26 @@ export default function Interlaboratorial() {
                                                         <span className="text-neutral-400 mx-1.5">•</span>
                                                         <span className="text-neutral-500">{ident.etiquetas[dayIndex - 1]}</span>
                                                         <span className={`ml-2 text-[9px] ${allDone ? 'text-emerald-600' : 'text-neutral-400'}`}>
-                                                            ({doneCount}/{machines.length})
+                                                            ({machinesDone}/{machines.length} máquinas)
                                                         </span>
                                                     </td>
-                                                    {machines.map(m => (
-                                                        <td key={m.id} className="text-center p-2">
-                                                            {isCellDone(ident.id, m.id) ? (
-                                                                <CheckCircle2 className="h-4 w-4 text-emerald-600 inline-block" />
-                                                            ) : (
-                                                                <span className="inline-block h-2 w-2 rounded-full bg-neutral-200" />
-                                                            )}
-                                                        </td>
-                                                    ))}
+                                                    {machines.map(m => {
+                                                        const reps = repCountFor(ident.id, m.id);
+                                                        const complete = reps >= REPS_PER_IDENTIFICACAO;
+                                                        return (
+                                                            <td key={m.id} className="text-center p-2">
+                                                                {complete ? (
+                                                                    <span className="inline-flex items-center gap-1 text-emerald-600">
+                                                                        <CheckCircle2 className="h-4 w-4" />
+                                                                    </span>
+                                                                ) : reps > 0 ? (
+                                                                    <span className="text-amber-600 font-bold">{reps}/{REPS_PER_IDENTIFICACAO}</span>
+                                                                ) : (
+                                                                    <span className="inline-block h-2 w-2 rounded-full bg-neutral-200" />
+                                                                )}
+                                                            </td>
+                                                        );
+                                                    })}
                                                 </tr>
                                             );
                                         })}
@@ -780,13 +850,17 @@ export default function Interlaboratorial() {
                                                                 <th className="text-left p-2">Operador</th>
                                                                 <th className="text-left p-2">Identificação</th>
                                                                 <th className="text-left p-2">Etiqueta</th>
+                                                                <th className="text-center p-2">Rep</th>
                                                                 <th className="text-center p-2">Hora</th>
                                                                 {PREVIEW_COLUMNS.map(c => <th key={c.key} className="text-center p-2">{c.label}</th>)}
                                                                 <th className="p-2"></th>
                                                             </tr>
                                                         </thead>
                                                         <tbody>
-                                                            {dayGens.map(gen => {
+                                                            {dayGens
+                                                                .slice()
+                                                                .sort((a, b) => a.machineId.localeCompare(b.machineId) || a.identificacaoId.localeCompare(b.identificacaoId) || a.repIndex - b.repIndex)
+                                                                .map(gen => {
                                                                 const ident = identificacoes.find(i => i.id === gen.identificacaoId);
                                                                 return (
                                                                     <tr key={gen.id} className="border-t border-neutral-200">
@@ -794,6 +868,7 @@ export default function Interlaboratorial() {
                                                                         <td className="p-2 text-neutral-600">{gen.operatorCode}</td>
                                                                         <td className="p-2 text-neutral-900">{ident?.identificacao || '—'}</td>
                                                                         <td className="p-2 text-neutral-600">{gen.etiqueta}</td>
+                                                                        <td className="p-2 text-center text-neutral-500">{gen.repIndex}</td>
                                                                         <td className="p-2 text-center text-neutral-500">{gen.generatedTime}</td>
                                                                         {PREVIEW_COLUMNS.map(c => (
                                                                             <td key={c.key} className="p-2 text-center text-neutral-900">
