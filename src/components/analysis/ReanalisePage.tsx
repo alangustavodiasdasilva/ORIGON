@@ -461,7 +461,12 @@ export default function ReanalisePage() {
                 const trimmed = text.trim();
                 if (!trimmed || trimmed === lastAutoPastedRef.current) return;
 
-                const parts = trimmed.split(/\r\n|\n|\r/).map(s => s.trim()).filter(Boolean)
+                // Grades externas (ex: a tela de Revisão de HVI) costumam copiar a
+                // LINHA INTEIRA ao selecionar várias etiquetas — todas as colunas
+                // separadas por TAB, não só a etiqueta. Por isso quebra por TAB além
+                // de linha, e filtra só os pedaços que realmente têm cara de etiqueta
+                // (as outras colunas — números soltos, datas — não batem no formato).
+                const parts = trimmed.split(/\r\n|\n|\r|\t/).map(s => s.trim()).filter(Boolean)
                     .filter(p => parseEtiquetaTemplate(p) !== null);
                 if (parts.length === 0) return;
 
