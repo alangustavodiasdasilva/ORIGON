@@ -74,11 +74,24 @@ const saveStoredSamples = (samples: Sample[]) => {
 export const SampleService = {
     async list(): Promise<Sample[]> {
         if (isSupabaseEnabled()) {
-            const { data, error } = await supabase.from('amostras').select('*');
-            if (error) throw error;
-            const samples = data || [];
-            saveStoredSamples(samples);
-            return samples;
+            // O Supabase corta em 1000 linhas por requisição por padrão — com mais
+            // de 5 mil amostras no banco, um select('*') sem paginação vinha
+            // devolvendo só uma fatia (as mais antigas), fazendo relatórios/backup/
+            // busca global sumirem com tudo gerado mais recentemente. Pagina até
+            // esgotar.
+            const pageSize = 1000;
+            let from = 0;
+            let all: Sample[] = [];
+            while (true) {
+                const { data, error } = await supabase.from('amostras').select('*').range(from, from + pageSize - 1);
+                if (error) throw error;
+                const page = data || [];
+                all = all.concat(page);
+                if (page.length < pageSize) break;
+                from += pageSize;
+            }
+            saveStoredSamples(all);
+            return all;
         }
         return getStoredSamples();
     },
