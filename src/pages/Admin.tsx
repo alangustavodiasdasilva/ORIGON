@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
-import { Activity, Database, Server, ShieldCheck, Users, Trash2, Edit, LogOut, Lock, LockOpen, FileText, Turtle, ListChecks } from "lucide-react";
+import { Activity, Database, Server, ShieldCheck, Users, Trash2, Edit, LogOut, Lock, LockOpen, FileText, Turtle, ListChecks, FileBarChart } from "lucide-react";
 import { Navigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { AnalistaService, type Analista } from "@/entities/Analista";
@@ -8,6 +8,7 @@ import { useToast } from "@/contexts/ToastContext";
 import { useAuth } from "@/contexts/AuthContext";
 import LabsTab from "@/components/admin/LabsTab";
 import AnalystsTab from "@/components/admin/AnalystsTab";
+import GlobalReportTab from "@/components/admin/GlobalReportTab";
 import { LabService } from "@/entities/Lab";
 import type { Lab } from "@/entities/Lab";
 import { MigrationService } from "@/services/MigrationService";
@@ -118,13 +119,14 @@ export default function Admin() {
         { id: "machines", label: "Máquinas", icon: Server },
         { id: "audit", label: "Auditoria", icon: ShieldCheck },
         { id: "maintenance", label: "Manutenção", icon: Lock },
-        { id: "menu", label: "Menu por Lab", icon: ListChecks }
+        { id: "menu", label: "Menu por Lab", icon: ListChecks },
+        { id: "report", label: "Relatórios", icon: FileBarChart }
     ];
 
-    // Se não for admin_global, removemos as abas de labs, auditoria, manutenção e menu por lab
+    // Se não for admin_global, removemos as abas de labs, auditoria, manutenção, menu por lab e relatórios
     const filteredTabs = user?.acesso === 'admin_global'
         ? tabs
-        : tabs.filter(t => t.id !== 'labs' && t.id !== 'audit' && t.id !== 'maintenance' && t.id !== 'menu');
+        : tabs.filter(t => t.id !== 'labs' && t.id !== 'audit' && t.id !== 'maintenance' && t.id !== 'menu' && t.id !== 'report');
 
     return (
         <div className="max-w-7xl mx-auto space-y-16 animate-fade-in text-black pb-24">
@@ -214,6 +216,7 @@ export default function Admin() {
                 {activeTab === "audit" && <AuditLogsTab />}
                 {activeTab === "maintenance" && <MaintenanceTab />}
                 {activeTab === "menu" && <LabMenuTab />}
+                {activeTab === "report" && <GlobalReportTab />}
             </div>
         </div>
     );
