@@ -15,6 +15,7 @@ import {
     Menu,
     X,
     ScanLine,
+    KeyRound,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
@@ -28,6 +29,7 @@ import { PresenceIndicators } from "@/components/realtime/PresenceIndicators";
 import { NetworkMonitor } from "./NetworkMonitor";
 import { useAudioAlerts } from "@/hooks/useAudioAlerts";
 import { useEnabledMenuItems } from "@/hooks/useEnabledMenuItems";
+import { ChangePasswordModal } from "./ChangePasswordModal";
 
 export default function Layout() {
     const location = useLocation();
@@ -95,6 +97,7 @@ export default function Layout() {
     const latestToast = toasts[toasts.length - 1];
 
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+    const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
 
     return (
         <div className="flex min-h-screen bg-white text-black font-sans selection:bg-black selection:text-white">
@@ -161,6 +164,12 @@ export default function Layout() {
                                     <div className="text-[10px] text-neutral-400 font-mono uppercase">{user?.cargo || "Viewer"}</div>
                                 </div>
                             </div>
+                            <button
+                                onClick={() => { setIsChangePasswordOpen(true); setIsMobileMenuOpen(false); }}
+                                className="w-full h-10 flex items-center justify-center gap-2 bg-white border border-neutral-200 hover:bg-neutral-100 transition-colors text-[10px] font-bold uppercase tracking-widest text-neutral-500 mb-2"
+                            >
+                                <KeyRound className="h-3 w-3" /> Trocar Senha
+                            </button>
                             <button
                                 onClick={() => { logout(); setIsMobileMenuOpen(false); }}
                                 className="w-full h-10 flex items-center justify-center gap-2 bg-white border border-neutral-200 hover:bg-red-50 hover:border-red-200 hover:text-red-600 transition-colors text-[10px] font-bold uppercase tracking-widest text-neutral-500"
@@ -263,12 +272,21 @@ export default function Layout() {
                                     </span>
                                 </div>
                             </div>
-                            <button
-                                onClick={logout}
-                                className="flex items-center gap-3 text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400 hover:text-black transition-colors"
-                            >
-                                <LogOut className="h-3 w-3" /> {t('common.logout')}
-                            </button>
+                            <div className="flex items-center justify-between">
+                                <button
+                                    onClick={() => setIsChangePasswordOpen(true)}
+                                    className="flex items-center gap-3 text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400 hover:text-black transition-colors"
+                                    title="Trocar Senha"
+                                >
+                                    <KeyRound className="h-3 w-3" /> Senha
+                                </button>
+                                <button
+                                    onClick={logout}
+                                    className="flex items-center gap-3 text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400 hover:text-black transition-colors"
+                                >
+                                    <LogOut className="h-3 w-3" /> {t('common.logout')}
+                                </button>
+                            </div>
                         </>
                     )}
                 </div>
@@ -367,6 +385,8 @@ export default function Layout() {
                     </div>
                 </main>
             </div>
+
+            <ChangePasswordModal isOpen={isChangePasswordOpen} onClose={() => setIsChangePasswordOpen(false)} />
         </div>
     );
 }

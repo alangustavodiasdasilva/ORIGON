@@ -22,6 +22,12 @@ export interface Analista {
 
 const STORAGE_KEY = 'fibertech_analistas';
 
+// Todas as colunas exceto senha — a coluna senha teve SELECT revogado da API
+// pública (ver migração secure_analistas_credentials), então um select('*')
+// aqui daria "permission denied for column senha". Login, troca de senha e
+// ações de admin usam funções RPC dedicadas em vez de ler essa coluna.
+const SAFE_COLUMNS = 'id, nome, email, foto, lab_id, cargo, acesso, created_at, current_lote_id, can_view_operations';
+
 const isSupabaseEnabled = () => {
     const url = import.meta.env.VITE_SUPABASE_URL;
     const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -46,7 +52,7 @@ export const AnalistaService = {
     async list(): Promise<Analista[]> {
         if (isSupabaseEnabled()) {
             try {
-                const { data, error } = await supabase.from('analistas').select('*').order('nome');
+                const { data, error } = await supabase.from('analistas').select(SAFE_COLUMNS).order('nome');
                 if (error) throw error;
                 const analistas = data || [];
                 saveStoredAnalistas(analistas);
@@ -61,7 +67,7 @@ export const AnalistaService = {
     async listByLab(labId: string): Promise<Analista[]> {
         if (isSupabaseEnabled()) {
             try {
-                const { data, error } = await supabase.from('analistas').select('*').eq('lab_id', labId);
+                const { data, error } = await supabase.from('analistas').select(SAFE_COLUMNS).eq('lab_id', labId);
                 if (error) throw error;
                 return data || [];
             } catch (err) {
@@ -74,7 +80,7 @@ export const AnalistaService = {
     async get(id: string): Promise<Analista | undefined> {
         if (isSupabaseEnabled()) {
             try {
-                const { data, error } = await supabase.from('analistas').select('*').eq('id', id).single();
+                const { data, error } = await supabase.from('analistas').select(SAFE_COLUMNS).eq('id', id).single();
                 if (!error && data) return data;
             } catch (err) {
                 console.warn("Supabase get failed, falling back to local:", err);
@@ -121,7 +127,7 @@ export const AnalistaService = {
 
                 if (Object.keys(cleanData).length === 0) return undefined;
 
-                const { data: updated, error } = await supabase.from('analistas').update(cleanData).eq('id', id).select().single();
+                const { data: updated, error } = await supabase.from('analistas').update(cleanData).eq('id', id).select(SAFE_COLUMNS).single();
 
                 if (error) {
                     console.error(`Supabase update error for analista ${id}:`, error);
@@ -183,6 +189,47 @@ export const AnalistaService = {
         return () => {
             supabase.removeChannel(channel);
         };
+    },
+
+    // Criar ou editar analista (id + senha nunca passam pela API pública
+    // direto — vai tudo pra dentro do rpc_admin_upsert_analista, que exige a
+    // senha de quem está chamando pra provar que é admin de verdade).
+    async adminUpsert(callerId: string, callerHash: string, payload: {
+        targetId?: string | null;
+        nome: string;
+        email: string;
+        cargo: string;
+        acesso: string;
+        labId: string | null;
+        foto?: string | null;
+        newSenhaHash?: string;
+    }): Promise<Analista> {
+        const { data, error } = await supabase.rpc('rpc_admin_upsert_analista', {
+            p_caller_id: callerId,
+            p_caller_hash: callerHash,
+            p_target_id: payload.targetId || null,
+            p_nome: payload.nome,
+            p_email: payload.email,
+            p_cargo: payload.cargo,
+            p_acesso: payload.acesso,
+            p_lab_id: payload.labId,
+            p_foto: payload.foto || null,
+            p_new_senha_hash: payload.newSenhaHash || null
+        });
+        if (error) throw new Error(error.message);
+        AuditLogService.logAction('analistas', data.id, payload.targetId ? 'UPDATE' : 'CREATE', null, data);
+        return data;
+    },
+
+    async adminDelete(callerId: string, callerHash: string, targetId: string): Promise<void> {
+        const { data, error } = await supabase.rpc('rpc_admin_delete_analista', {
+            p_caller_id: callerId,
+            p_caller_hash: callerHash,
+            p_target_id: targetId
+        });
+        if (error) throw new Error(error.message);
+        if (!data) throw new Error("Permissão negada pelo servidor ou analista já excluído.");
+        AuditLogService.logAction('analistas', targetId, 'DELETE', null, null);
     },
 
     async updateLastActive(id: string, loteId?: string | null): Promise<void> {

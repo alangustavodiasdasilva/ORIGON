@@ -9,15 +9,59 @@ import { LabService } from "@/entities/Lab";
 import type { Lab } from "@/entities/Lab";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { useAuth } from "@/contexts/AuthContext";
+import { ConfirmPasswordModal } from "@/components/shared/ConfirmPasswordModal";
+import { hashPassword } from "@/lib/passwordHash";
 
 
 export default function AnalystsTab() {
-    const { user: currentUser, refreshUser, currentLab } = useAuth();
+    const { user: currentUser, refreshUser, currentLab, callerSenhaHash, confirmCallerPassword, clearCallerSenhaHash } = useAuth();
     const [analistas, setAnalistas] = useState<Analista[]>([]);
     const [labs, setLabs] = useState<Lab[]>([]);
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [editingAnalista, setEditingAnalista] = useState<Analista | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    // Ações de admin (criar/editar/excluir analista) exigem a senha de quem
+    // está logado — se o hash em memória sumiu (ex: página recarregada), pede
+    // de novo antes de repetir a ação pendente.
+    const [isReauthOpen, setIsReauthOpen] = useState(false);
+    const [isReauthSubmitting, setIsReauthSubmitting] = useState(false);
+    const pendingActionRef = useRef<((hash: string) => Promise<void>) | null>(null);
+
+    const isAuthError = (error: any) => typeof error?.message === 'string' && error.message.includes('autorizado');
+
+    const runAdminAction = async (fn: (hash: string) => Promise<void>) => {
+        if (callerSenhaHash) {
+            try {
+                await fn(callerSenhaHash);
+                return;
+            } catch (error: any) {
+                if (isAuthError(error)) {
+                    clearCallerSenhaHash();
+                } else {
+                    throw error;
+                }
+            }
+        }
+        pendingActionRef.current = fn;
+        setIsReauthOpen(true);
+    };
+
+    const handleReauthConfirm = async (password: string) => {
+        setIsReauthSubmitting(true);
+        try {
+            const hash = await confirmCallerPassword(password);
+            if (pendingActionRef.current) {
+                await pendingActionRef.current(hash);
+            }
+            setIsReauthOpen(false);
+        } catch (error: any) {
+            clearCallerSenhaHash();
+            alert(isAuthError(error) ? "Senha incorreta." : ("Erro: " + error.message));
+        } finally {
+            setIsReauthSubmitting(false);
+        }
+    };
 
     // Flag para bloquear o realtime durante operações de delete (evita race condition)
     const isDeleteInProgressRef = useRef(false);
@@ -141,34 +185,23 @@ export default function AnalystsTab() {
         }
 
         try {
-            let senhaAEnviar = senha;
+            const newSenhaHash = senha ? await hashPassword(senha) : undefined;
 
-            // Se uma senha foi informada, ela precisa ser hasheada para não quebrar o login
-            if (senha) {
-                const encoder = new TextEncoder();
-                const data = encoder.encode(senha);
-                const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-                const hashArray = Array.from(new Uint8Array(hashBuffer));
-                senhaAEnviar = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-            }
-
-            const payload = {
-                nome, email, cargo, acesso, foto,
-                ...(senha ? { senha: senhaAEnviar } : {}),
-                lab_id: labId || null
-            };
-
-            if (editingAnalista) {
-                await AnalistaService.update(editingAnalista.id, payload);
+            await runAdminAction(async (callerHash) => {
+                if (!currentUser) return;
+                await AnalistaService.adminUpsert(currentUser.id, callerHash, {
+                    targetId: editingAnalista?.id || null,
+                    nome, email, cargo, acesso, foto,
+                    labId: labId || null,
+                    newSenhaHash
+                });
                 // Se o analista editado for o usuário logado, atualiza o contexto
-                if (editingAnalista.id === currentUser?.id) {
+                if (editingAnalista && editingAnalista.id === currentUser?.id) {
                     await refreshUser();
                 }
-            } else {
-                await AnalistaService.create(payload as any);
-            }
-            setIsDialogOpen(false);
-            loadData();
+                setIsDialogOpen(false);
+                loadData();
+            });
         } catch (error) {
             console.error(error);
             alert("Erro ao salvar analista: " + (error instanceof Error ? error.message : "Erro desconhecido"));
@@ -187,7 +220,10 @@ export default function AnalystsTab() {
         setAnalistas(prev => prev.filter(a => a.id !== id));
 
         try {
-            await AnalistaService.delete(id);
+            await runAdminAction(async (callerHash) => {
+                if (!currentUser) return;
+                await AnalistaService.adminDelete(currentUser.id, callerHash, id);
+            });
         } catch (err) {
             console.error("Erro ao excluir analista:", err);
             // Em caso de erro, restaura a lista do banco
@@ -416,6 +452,13 @@ export default function AnalystsTab() {
                     </div>
                 </DialogContent>
             </Dialog>
+
+            <ConfirmPasswordModal
+                isOpen={isReauthOpen}
+                onClose={() => setIsReauthOpen(false)}
+                onConfirm={handleReauthConfirm}
+                isSubmitting={isReauthSubmitting}
+            />
         </div>
     );
 }

@@ -6,6 +6,8 @@ import { LabService, type Lab } from "@/entities/Lab";
 import { safeSetItem as safeSetLocalStorage } from "@/lib/safeStorage";
 import { labThrottleService } from "@/services/labThrottle.service";
 import { enableNetworkThrottle, disableNetworkThrottle } from "@/lib/networkThrottle";
+import { supabase } from "@/lib/supabase";
+import { hashPassword } from "@/lib/passwordHash";
 
 // Único admin_global de verdade — nunca sente a lentidão artificial que ele
 // mesmo liga pra um laboratório, mesmo entrando nesse lab pra conferir.
@@ -21,21 +23,20 @@ interface AuthContextType {
     deselectLab: () => void;
     isAuthenticated: boolean;
     isLoading: boolean;
+    // Hash da própria senha do usuário logado NESTA aba — nunca vai pro
+    // localStorage (só em memória, some ao atualizar a página). Usado só
+    // pra provar identidade em ações sensíveis de admin (criar/editar/excluir
+    // analista, redefinir senha de outro) sem reler a senha do banco.
+    callerSenhaHash: string | null;
+    changeOwnPassword: (currentPassword: string, newPassword: string) => Promise<boolean>;
+    // Recalcula e guarda o hash em memória a partir da senha digitada agora
+    // (usado quando callerSenhaHash sumiu, ex: depois de um F5) — quem chama
+    // ainda precisa tentar a ação real pro servidor confirmar se bateu.
+    confirmCallerPassword: (password: string) => Promise<string>;
+    clearCallerSenhaHash: () => void;
 }
 
 const AuthContext = createContext<AuthContextType>({} as AuthContextType);
-
-/**
- * Utilitário de Hash SHA-256 (Nativa do Browser)
- */
-async function hashPassword(password: string): Promise<string> {
-    if (!password) return "";
-    const encoder = new TextEncoder();
-    const data = encoder.encode(password);
-    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-}
 
 
 
@@ -44,6 +45,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const [user, setUser] = useState<Analista | null>(null);
     const [currentLab, setCurrentLab] = useState<Lab | null>(null);
     const [isLoading, setIsLoading] = useState(true);
+    // Só em memória (useState, nunca localStorage) — some se a página recarregar.
+    const [callerSenhaHash, setCallerSenhaHash] = useState<string | null>(null);
 
     useEffect(() => {
         // Check local storage for session
@@ -151,24 +154,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const login = async (email: string, senha: string): Promise<boolean> => {
         setIsLoading(true);
         try {
-            const users = await AnalistaService.list();
             const inputHash = await hashPassword(senha);
 
-            // Verifica se existe usuário com o par email/senha (checa ambos para compatibilidade legada se necessário)
-            const found = users.find(u => u.email === email && (u.senha === senha || u.senha === inputHash));
+            // A comparação de senha acontece dentro do Postgres (rpc_login) —
+            // o navegador nunca mais lê a coluna senha de ninguém, só manda o
+            // hash e recebe de volta os dados do usuário (sem senha) se bater.
+            const { data, error } = await supabase.rpc('rpc_login', { p_email: email, p_senha_hash: inputHash });
+            if (error) throw error;
+
+            const found: Analista | null = data || null;
 
             if (found) {
-                // Segurança: Remove a senha do objeto de sessão antes de salvar no localStorage
-                const { senha: _, ...userSession } = found;
-
-                // Se a senha no banco era texto puro, atualiza para hash (Migração Automática)
-                if (found.senha === senha) {
-                    await AnalistaService.update(found.id, { senha: inputHash });
-                    found.senha = inputHash;
-                }
-
                 setUser(found);
-                safeSetLocalStorage("fibertech_session", JSON.stringify(userSession));
+                setCallerSenhaHash(inputHash);
+                safeSetLocalStorage("fibertech_session", JSON.stringify(found));
 
                 // Load Lab Context
                 if (found.acesso === 'admin_global') {
@@ -230,9 +229,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const logout = () => {
         setUser(null);
         setCurrentLab(null);
+        setCallerSenhaHash(null);
         localStorage.removeItem("fibertech_session");
         localStorage.removeItem("fibertech_selected_lab");
     };
+
+    // Troca a própria senha — exige a senha atual (verificada dentro do
+    // Postgres, nunca no navegador). Atualiza o hash em memória também, senão
+    // ações de admin nesta mesma aba passariam a falhar com a senha antiga.
+    const changeOwnPassword = async (currentPassword: string, newPassword: string): Promise<boolean> => {
+        if (!user) return false;
+        const currentHash = await hashPassword(currentPassword);
+        const newHash = await hashPassword(newPassword);
+        const { data, error } = await supabase.rpc('rpc_change_own_password', {
+            p_analista_id: user.id,
+            p_current_hash: currentHash,
+            p_new_hash: newHash
+        });
+        if (error) throw error;
+        if (data === true) {
+            setCallerSenhaHash(newHash);
+            return true;
+        }
+        return false;
+    };
+
+    const confirmCallerPassword = async (password: string): Promise<string> => {
+        const hash = await hashPassword(password);
+        setCallerSenhaHash(hash);
+        return hash;
+    };
+
+    const clearCallerSenhaHash = () => setCallerSenhaHash(null);
 
     return (
         <AuthContext.Provider value={{
@@ -244,7 +272,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             selectLab,
             deselectLab,
             isAuthenticated: !!user,
-            isLoading
+            isLoading,
+            callerSenhaHash,
+            changeOwnPassword,
+            confirmCallerPassword,
+            clearCallerSenhaHash
         }}>
             {children}
         </AuthContext.Provider>
