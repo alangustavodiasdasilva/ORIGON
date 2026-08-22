@@ -27,6 +27,7 @@ import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { PresenceIndicators } from "@/components/realtime/PresenceIndicators";
 import { NetworkMonitor } from "./NetworkMonitor";
 import { useAudioAlerts } from "@/hooks/useAudioAlerts";
+import { useEnabledMenuItems } from "@/hooks/useEnabledMenuItems";
 
 export default function Layout() {
     const location = useLocation();
@@ -39,6 +40,7 @@ export default function Layout() {
 
     // Verificação de acesso para a navegação
     const isAdmin = user?.acesso === 'admin_global';
+    const enabledMenuItems = useEnabledMenuItems();
 
     useEffect(() => {
         // Heartbeat to keep user online and track context
@@ -64,10 +66,10 @@ export default function Layout() {
 
     const navItems = [
         { href: "/", label: t('nav.home'), icon: LayoutDashboard, public: true, prefetch: () => import("@/pages/Inicio") },
-        { href: "/lotes", label: t('nav.batches'), icon: Package, public: true, prefetch: () => import("@/pages/Home") },
-        { href: "/icac", label: "ICAC", icon: Microscope, public: true, prefetch: () => import("@/pages/Icac") },
-        { href: "/interlaboratorial", label: "Interlaboratorial", icon: Network, public: true, prefetch: () => import("@/pages/Interlaboratorial") },
-        { href: "/reanalise", label: "Reanálise", icon: ScanLine, public: true, prefetch: () => import("@/pages/Reanalise") },
+        { href: "/lotes", label: t('nav.batches'), icon: Package, public: true, key: "lotes" as const, prefetch: () => import("@/pages/Home") },
+        { href: "/icac", label: "ICAC", icon: Microscope, public: true, key: "icac" as const, prefetch: () => import("@/pages/Icac") },
+        { href: "/interlaboratorial", label: "Interlaboratorial", icon: Network, public: true, key: "interlaboratorial" as const, prefetch: () => import("@/pages/Interlaboratorial") },
+        { href: "/reanalise", label: "Reanálise", icon: ScanLine, public: true, key: "reanalise" as const, prefetch: () => import("@/pages/Reanalise") },
         // Verificação removida do menu a pedido do Alan — página/rota/dados continuam
         // intactos (só tirada da navegação), igual foi feito antes com ICAC.
         // { href: "/verificacao", label: "Verificação", icon: CheckCircle2, allowedRoles: ['admin_global', 'admin_lab', 'quality_admin'], prefetch: () => import("@/pages/Verificacao") },
@@ -120,6 +122,7 @@ export default function Layout() {
                             {navItems.map((item) => {
                                 const isAllowed = item.public || (user?.acesso && item.allowedRoles?.includes(user.acesso));
                                 if (!isAllowed) return null;
+                                if ('key' in item && item.key && !enabledMenuItems.includes(item.key)) return null;
 
                                 const isActive = location.pathname === item.href || (item.href !== "/" && location.pathname.startsWith(item.href));
                                 const Icon = item.icon;
@@ -190,6 +193,7 @@ export default function Layout() {
                     {navItems.map((item) => {
                         const isAllowed = item.public || (user?.acesso && item.allowedRoles?.includes(user.acesso));
                         if (!isAllowed) return null;
+                        if ('key' in item && item.key && !enabledMenuItems.includes(item.key)) return null;
 
                         const isActive = location.pathname === item.href || (item.href !== "/" && location.pathname.startsWith(item.href));
                         const Icon = item.icon;

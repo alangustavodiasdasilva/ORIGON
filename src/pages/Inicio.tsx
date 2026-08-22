@@ -5,11 +5,13 @@ import { useEffect, useState } from "react";
 import { LabService, type Lab } from "@/entities/Lab";
 import { Button } from "@/components/ui/button";
 import ExportFolderSection from "@/components/shared/ExportFolderSection";
+import { useEnabledMenuItems } from "@/hooks/useEnabledMenuItems";
 
 export default function Inicio() {
     const { user, currentLab, selectLab, deselectLab } = useAuth();
     const [labs, setLabs] = useState<Lab[]>([]);
     const [isLoadingLabs, setIsLoadingLabs] = useState(false);
+    const enabledMenuItems = useEnabledMenuItems();
 
     useEffect(() => {
         if (user?.acesso === 'admin_global' && !currentLab) {
@@ -92,7 +94,8 @@ export default function Inicio() {
             href: "/lotes",
             icon: Package,
             gradient: "from-blue-500/10 to-purple-500/10",
-            iconColor: "text-blue-600"
+            iconColor: "text-blue-600",
+            key: "lotes" as const
         },
         {
             title: "ICAC",
@@ -100,7 +103,8 @@ export default function Inicio() {
             href: "/icac",
             icon: Microscope,
             gradient: "from-emerald-500/10 to-teal-500/10",
-            iconColor: "text-emerald-600"
+            iconColor: "text-emerald-600",
+            key: "icac" as const
         },
         {
             title: "Reanálise",
@@ -108,7 +112,8 @@ export default function Inicio() {
             href: "/reanalise",
             icon: ScanLine,
             gradient: "from-amber-500/10 to-orange-500/10",
-            iconColor: "text-amber-600"
+            iconColor: "text-amber-600",
+            key: "reanalise" as const
         },
         {
             title: "Interlaboratorial",
@@ -116,7 +121,8 @@ export default function Inicio() {
             href: "/interlaboratorial",
             icon: Network,
             gradient: "from-indigo-500/10 to-sky-500/10",
-            iconColor: "text-indigo-600"
+            iconColor: "text-indigo-600",
+            key: "interlaboratorial" as const
         },
         ...(user?.acesso === 'admin_global' || user?.acesso === 'admin_lab' ? [{
             title: "Configurações",
@@ -124,9 +130,10 @@ export default function Inicio() {
             href: "/admin",
             icon: ShieldCheck,
             gradient: "from-neutral-500/10 to-neutral-700/10",
-            iconColor: "text-neutral-700"
+            iconColor: "text-neutral-700",
+            key: null
         }] : [])
-    ];
+    ].filter(action => !action.key || enabledMenuItems.includes(action.key));
 
     return (
         <div className="min-h-full relative z-10">

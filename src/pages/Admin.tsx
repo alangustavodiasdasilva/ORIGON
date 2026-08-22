@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
-import { Activity, Database, Server, ShieldCheck, Users, Trash2, Edit, LogOut, Lock, LockOpen, FileText, Turtle } from "lucide-react";
+import { Activity, Database, Server, ShieldCheck, Users, Trash2, Edit, LogOut, Lock, LockOpen, FileText, Turtle, ListChecks } from "lucide-react";
 import { Navigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { AnalistaService, type Analista } from "@/entities/Analista";
@@ -17,6 +17,8 @@ import AuditLogsTab from "@/components/admin/AuditLogsTab";
 import { systemStatusService, type SystemStatus, type LabLockInfo, type UserLockInfo } from "@/services/systemStatus.service";
 import { filenameConfigService, type LabFilenameConfig } from "@/services/filenameConfig.service";
 import { labThrottleService } from "@/services/labThrottle.service";
+import { labMenuService } from "@/services/labMenu.service";
+import { MENU_ITEMS, ALL_MENU_ITEM_KEYS, type MenuItemKey } from "@/lib/menuItems";
 
 // Único admin_global de verdade — a aba de Lentidão só aparece pra ele,
 // mesmo que outra conta admin_global venha a existir no futuro.
@@ -115,13 +117,14 @@ export default function Admin() {
         { id: "analysts", label: "Access Control", icon: Users },
         { id: "machines", label: "Máquinas", icon: Server },
         { id: "audit", label: "Auditoria", icon: ShieldCheck },
-        { id: "maintenance", label: "Manutenção", icon: Lock }
+        { id: "maintenance", label: "Manutenção", icon: Lock },
+        { id: "menu", label: "Menu por Lab", icon: ListChecks }
     ];
 
-    // Se não for admin_global, removemos as abas de labs, auditoria e manutenção
+    // Se não for admin_global, removemos as abas de labs, auditoria, manutenção e menu por lab
     const filteredTabs = user?.acesso === 'admin_global'
         ? tabs
-        : tabs.filter(t => t.id !== 'labs' && t.id !== 'audit' && t.id !== 'maintenance');
+        : tabs.filter(t => t.id !== 'labs' && t.id !== 'audit' && t.id !== 'maintenance' && t.id !== 'menu');
 
     return (
         <div className="max-w-7xl mx-auto space-y-16 animate-fade-in text-black pb-24">
@@ -210,6 +213,7 @@ export default function Admin() {
                 {activeTab === "machines" && <SystemConfigTab />}
                 {activeTab === "audit" && <AuditLogsTab />}
                 {activeTab === "maintenance" && <MaintenanceTab />}
+                {activeTab === "menu" && <LabMenuTab />}
             </div>
         </div>
     );
@@ -616,6 +620,100 @@ function LabThrottleTab() {
                                 className="w-full accent-amber-600"
                                 title={`Lentidão de ${lab.nome}`}
                             />
+                        </div>
+                    );
+                })}
+                {labs.length === 0 && (
+                    <p className="p-4 text-xs text-neutral-400 text-center">Nenhum laboratório cadastrado.</p>
+                )}
+            </div>
+        </div>
+    );
+}
+
+// Controle de quais abas do menu cada laboratório pode usar (Gerenciar Lotes,
+// ICAC, Interlaboratorial, Reanálise). Início e Configurações ficam de fora —
+// Início é sempre acessível, Configurações já é controlada por papel. Sem
+// registro pra um lab = todas as abas liberadas (default seguro).
+function LabMenuTab() {
+    const { user } = useAuth();
+    const { addToast } = useToast();
+    const [labs, setLabs] = useState<Lab[]>([]);
+    const [enabledByLab, setEnabledByLab] = useState<Record<string, MenuItemKey[]>>({});
+    const [isLoading, setIsLoading] = useState(true);
+    const [savingLabId, setSavingLabId] = useState<string | null>(null);
+
+    useEffect(() => {
+        Promise.all([LabService.list(), labMenuService.listAll()])
+            .then(([labsList, map]) => {
+                setLabs(labsList);
+                setEnabledByLab(map);
+                setIsLoading(false);
+            })
+            .catch(() => setIsLoading(false));
+    }, []);
+
+    const getEnabled = (labId: string): MenuItemKey[] => enabledByLab[labId] ?? ALL_MENU_ITEM_KEYS;
+
+    const handleToggleItem = async (labId: string, itemKey: MenuItemKey) => {
+        const current = getEnabled(labId);
+        const next = current.includes(itemKey) ? current.filter(k => k !== itemKey) : [...current, itemKey];
+
+        setEnabledByLab(prev => ({ ...prev, [labId]: next }));
+        setSavingLabId(labId);
+        try {
+            await labMenuService.set(labId, next, user?.nome || "Administrador");
+        } catch (error: any) {
+            addToast({ title: "Erro ao Salvar Menu", description: error.message, type: "error" });
+            setEnabledByLab(prev => ({ ...prev, [labId]: current }));
+        } finally {
+            setSavingLabId(null);
+        }
+    };
+
+    if (isLoading) {
+        return <div className="flex justify-center py-24"><Loader2 className="h-6 w-6 animate-spin text-neutral-400" /></div>;
+    }
+
+    return (
+        <div className="max-w-3xl space-y-3">
+            <p className="text-xs text-neutral-500 max-w-xl">
+                Escolha quais abas cada laboratório pode usar no menu. Desmarcar uma aba some com ela
+                do menu e da tela de Início pra quem é vinculado a esse laboratório — a página e os
+                dados continuam intactos, só ficam fora da navegação. Você (admin_global) sempre vê
+                todas as abas, em qualquer laboratório.
+            </p>
+            <div className="border border-neutral-200 divide-y divide-neutral-200">
+                {labs.map(lab => {
+                    const enabled = getEnabled(lab.id);
+                    return (
+                        <div key={lab.id} className="p-4 space-y-3">
+                            <div className="flex items-center justify-between">
+                                <p className="font-bold text-sm text-black flex items-center gap-2">
+                                    <ListChecks className="h-4 w-4 text-neutral-400" />
+                                    {lab.nome}
+                                </p>
+                                {savingLabId === lab.id && <Loader2 className="h-3.5 w-3.5 animate-spin text-neutral-400" />}
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                                {MENU_ITEMS.map(item => {
+                                    const isOn = enabled.includes(item.key);
+                                    return (
+                                        <button
+                                            key={item.key}
+                                            onClick={() => handleToggleItem(lab.id, item.key)}
+                                            className={cn(
+                                                "h-9 px-4 rounded-none font-black text-[10px] uppercase tracking-widest transition-colors border",
+                                                isOn
+                                                    ? "bg-black text-white border-black"
+                                                    : "bg-white text-neutral-400 border-neutral-200 hover:border-neutral-400"
+                                            )}
+                                        >
+                                            {item.label}
+                                        </button>
+                                    );
+                                })}
+                            </div>
                         </div>
                     );
                 })}
