@@ -6,9 +6,11 @@ import { cn } from "@/lib/utils";
 import { LabService, type Lab } from "@/entities/Lab";
 import { LoteService, type Lote } from "@/entities/Lote";
 import { SampleService, type Sample } from "@/entities/Sample";
+import { reanaliseGeracaoService } from "@/services/reanaliseGeracao.service";
 
 interface ReportRow {
     sampleId: string;
+    origem: "Lote" | "Reanálise";
     labId: string;
     labNome: string;
     loteNome: string;
@@ -45,21 +47,24 @@ export default function GlobalReportTab() {
     const [labs, setLabs] = useState<Lab[]>([]);
     const [lotes, setLotes] = useState<Lote[]>([]);
     const [samples, setSamples] = useState<Sample[]>([]);
+    const [reanaliseGeracoes, setReanaliseGeracoes] = useState<Awaited<ReturnType<typeof reanaliseGeracaoService.listAll>>>([]);
     const [isLoading, setIsLoading] = useState(true);
 
     const [filterLabId, setFilterLabId] = useState("");
     const [filterAnalista, setFilterAnalista] = useState("");
     const [filterMachine, setFilterMachine] = useState("");
     const [filterStatus, setFilterStatus] = useState<"" | "finalizada" | "pendente">("");
+    const [filterOrigem, setFilterOrigem] = useState<"" | "Lote" | "Reanálise">("");
     const [search, setSearch] = useState("");
 
     useEffect(() => {
         setIsLoading(true);
-        Promise.all([LabService.list(), LoteService.list(), SampleService.list()])
-            .then(([labsData, lotesData, samplesData]) => {
+        Promise.all([LabService.list(), LoteService.list(), SampleService.list(), reanaliseGeracaoService.listAll()])
+            .then(([labsData, lotesData, samplesData, reanaliseData]) => {
                 setLabs(labsData);
                 setLotes(lotesData);
                 setSamples(samplesData);
+                setReanaliseGeracoes(reanaliseData);
             })
             .finally(() => setIsLoading(false));
     }, []);
@@ -68,11 +73,12 @@ export default function GlobalReportTab() {
         const loteById = new Map(lotes.map(l => [l.id, l]));
         const labById = new Map(labs.map(l => [l.id, l]));
 
-        return samples.map(s => {
+        const loteRows: ReportRow[] = samples.map(s => {
             const lote = loteById.get(s.lote_id);
             const lab = lote?.lab_id ? labById.get(lote.lab_id) : undefined;
             return {
                 sampleId: s.id,
+                origem: "Lote",
                 labId: lote?.lab_id || "",
                 labNome: lab?.nome?.trim() || "Sem Laboratório",
                 loteNome: lote?.nome || "—",
@@ -88,7 +94,31 @@ export default function GlobalReportTab() {
                 finalizada: !!s.locked
             };
         });
-    }, [samples, lotes, labs]);
+
+        const reanaliseRows: ReportRow[] = reanaliseGeracoes.map(g => {
+            const lab = g.labId ? labById.get(g.labId) : undefined;
+            return {
+                sampleId: g.id,
+                origem: "Reanálise",
+                labId: g.labId || "",
+                labNome: lab?.nome?.trim() || "Sem Laboratório",
+                loteNome: "—",
+                analista: g.analistaNome || "—",
+                amostraId: "—",
+                etiqueta: g.etiquetas || "",
+                mala: g.os || "",
+                hvi: g.maquina || "",
+                mic: g.mic ?? undefined, len: g.len ?? undefined, unf: g.unf ?? undefined,
+                str: g.str ?? undefined, rd: g.rd ?? undefined, b: g.b ?? undefined,
+                cor: "",
+                dataAnalise: g.dataAnalise || "",
+                horaAnalise: g.horaAnalise || "",
+                finalizada: true
+            };
+        });
+
+        return [...loteRows, ...reanaliseRows];
+    }, [samples, lotes, labs, reanaliseGeracoes]);
 
     const analistaOptions = useMemo(() => {
         const set = new Set(rows.map(r => r.analista).filter(a => a && a !== "—"));
@@ -108,10 +138,11 @@ export default function GlobalReportTab() {
             if (filterMachine && r.hvi !== filterMachine) return false;
             if (filterStatus === "finalizada" && !r.finalizada) return false;
             if (filterStatus === "pendente" && r.finalizada) return false;
+            if (filterOrigem && r.origem !== filterOrigem) return false;
             if (q && !r.etiqueta.toLowerCase().includes(q) && !r.mala.toLowerCase().includes(q) && !r.loteNome.toLowerCase().includes(q)) return false;
             return true;
         });
-    }, [rows, filterLabId, filterAnalista, filterMachine, filterStatus, search]);
+    }, [rows, filterLabId, filterAnalista, filterMachine, filterStatus, filterOrigem, search]);
 
     const summaryByLab = useMemo(() => {
         const map = new Map<string, number>();
@@ -121,11 +152,11 @@ export default function GlobalReportTab() {
 
     const handleExportExcel = () => {
         const headers = [
-            "Laboratório", "Lote", "Analista Responsável", "Amostra", "Etiqueta", "Mala",
+            "Origem", "Laboratório", "Lote", "Analista Responsável", "Amostra", "Etiqueta", "Mala",
             "Máquina HVI", "MIC", "LEN", "UNF", "STR", "RD", "+B", "Classificação", "Data", "Hora", "Status"
         ];
         const wsData = [headers, ...filteredRows.map(r => [
-            r.labNome, r.loteNome, r.analista, r.amostraId, r.etiqueta, r.mala, r.hvi,
+            r.origem, r.labNome, r.loteNome, r.analista, r.amostraId, r.etiqueta, r.mala, r.hvi,
             r.mic ?? "", r.len ?? "", r.unf ?? "", r.str ?? "", r.rd ?? "", r.b ?? "",
             COLOR_LABELS[r.cor] || r.cor || "", r.dataAnalise, r.horaAnalise,
             r.finalizada ? "Finalizada" : "Pendente"
@@ -145,9 +176,10 @@ export default function GlobalReportTab() {
     return (
         <div className="space-y-8">
             <p className="text-xs text-neutral-500 max-w-2xl">
-                Visão geral de tudo que foi gerado em todos os laboratórios — cada linha é uma
-                amostra, com laboratório, analista responsável pelo lote, máquina, etiqueta e
-                resultado. Filtre e exporte pra Excel.
+                Visão geral de tudo que foi gerado em todos os laboratórios — junta o fluxo de
+                Lotes/Análise com as exportações feitas em Reanálise (que não passam por lote
+                nenhum), cada linha com laboratório, analista, máquina, etiqueta e resultado.
+                Use o filtro Origem pra separar um do outro. Filtre e exporte pra Excel.
             </p>
 
             {/* Resumo por laboratório */}
@@ -166,6 +198,19 @@ export default function GlobalReportTab() {
 
             {/* Filtros */}
             <div className="flex flex-wrap items-end gap-4 p-5 border border-neutral-200 bg-neutral-50">
+                <div className="space-y-1">
+                    <label className="text-[9px] font-bold uppercase text-neutral-400 tracking-widest">Origem</label>
+                    <select
+                        value={filterOrigem}
+                        onChange={e => setFilterOrigem(e.target.value as "" | "Lote" | "Reanálise")}
+                        className="h-10 px-3 border border-neutral-300 text-xs font-mono uppercase bg-white focus:outline-none focus:border-black min-w-[150px]"
+                        title="Filtrar por origem"
+                    >
+                        <option value="">Todas as Origens</option>
+                        <option value="Lote">Lotes / Análise</option>
+                        <option value="Reanálise">Reanálise</option>
+                    </select>
+                </div>
                 <div className="space-y-1">
                     <label className="text-[9px] font-bold uppercase text-neutral-400 tracking-widest">Laboratório</label>
                     <select
@@ -239,6 +284,7 @@ export default function GlobalReportTab() {
                 <table className="w-full text-left border-collapse text-xs">
                     <thead className="sticky top-0 bg-white z-10">
                         <tr className="border-b-2 border-black">
+                            <th className="py-3 px-3 font-bold uppercase tracking-widest">Origem</th>
                             <th className="py-3 px-3 font-bold uppercase tracking-widest">Laboratório</th>
                             <th className="py-3 px-3 font-bold uppercase tracking-widest">Lote</th>
                             <th className="py-3 px-3 font-bold uppercase tracking-widest">Analista</th>
@@ -259,6 +305,14 @@ export default function GlobalReportTab() {
                     <tbody className="divide-y divide-neutral-100">
                         {filteredRows.map(r => (
                             <tr key={r.sampleId} className="hover:bg-neutral-50">
+                                <td className="py-2 px-3">
+                                    <span className={cn(
+                                        "text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full",
+                                        r.origem === "Lote" ? "bg-blue-50 text-blue-700" : "bg-purple-50 text-purple-700"
+                                    )}>
+                                        {r.origem}
+                                    </span>
+                                </td>
                                 <td className="py-2 px-3 font-bold">{r.labNome}</td>
                                 <td className="py-2 px-3 font-mono text-neutral-600">{r.loteNome}</td>
                                 <td className="py-2 px-3">{r.analista}</td>

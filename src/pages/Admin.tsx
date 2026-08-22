@@ -117,16 +117,18 @@ export default function Admin() {
         { id: "labs", label: "Laboratórios", icon: Database },
         { id: "analysts", label: "Access Control", icon: Users },
         { id: "machines", label: "Máquinas", icon: Server },
-        { id: "audit", label: "Auditoria", icon: ShieldCheck },
+        // Auditoria removida do menu a pedido do Alan — página/rota/dados continuam
+        // intactos (só tirada da navegação), mesmo padrão já usado em outras abas.
+        // { id: "audit", label: "Auditoria", icon: ShieldCheck },
         { id: "maintenance", label: "Manutenção", icon: Lock },
         { id: "menu", label: "Menu por Lab", icon: ListChecks },
         { id: "report", label: "Relatórios", icon: FileBarChart }
     ];
 
-    // Se não for admin_global, removemos as abas de labs, auditoria, manutenção, menu por lab e relatórios
+    // Se não for admin_global, removemos as abas de labs, manutenção, menu por lab e relatórios
     const filteredTabs = user?.acesso === 'admin_global'
         ? tabs
-        : tabs.filter(t => t.id !== 'labs' && t.id !== 'audit' && t.id !== 'maintenance' && t.id !== 'menu' && t.id !== 'report');
+        : tabs.filter(t => t.id !== 'labs' && t.id !== 'maintenance' && t.id !== 'menu' && t.id !== 'report');
 
     return (
         <div className="max-w-7xl mx-auto space-y-16 animate-fade-in text-black pb-24">
