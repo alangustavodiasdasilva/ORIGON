@@ -256,37 +256,35 @@ export default function Layout() {
                     ) : (
                         <>
                             <div className="flex items-center gap-4 mb-6">
-                                <div className="w-10 h-10 border border-neutral-200 flex items-center justify-center text-xs font-bold bg-neutral-50 overflow-hidden">
+                                <div className="w-10 h-10 border border-neutral-200 flex items-center justify-center text-xs font-bold bg-neutral-50 overflow-hidden shrink-0">
                                     {user?.foto ? (
                                         <img src={user.foto} className="w-full h-full object-cover" alt="User" />
                                     ) : (
                                         getInitials(user?.nome || "")
                                     )}
                                 </div>
-                                <div className="flex flex-col">
-                                    <span className="text-xs font-bold uppercase tracking-wider text-black">
+                                <div className="flex flex-col min-w-0 flex-1">
+                                    <span className="text-xs font-bold uppercase tracking-wider text-black truncate">
                                         {user?.nome || "Analyst"}
                                     </span>
                                     <span className="text-[10px] text-neutral-400 font-mono">
                                         {user?.cargo || "Viewer"}
                                     </span>
                                 </div>
-                            </div>
-                            <div className="flex items-center justify-between">
                                 <button
                                     onClick={() => setIsChangePasswordOpen(true)}
-                                    className="flex items-center gap-3 text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400 hover:text-black transition-colors"
+                                    className="h-8 w-8 shrink-0 flex items-center justify-center text-neutral-400 hover:text-black hover:bg-neutral-100 rounded-full transition-colors"
                                     title="Trocar Senha"
                                 >
-                                    <KeyRound className="h-3 w-3" /> Senha
-                                </button>
-                                <button
-                                    onClick={logout}
-                                    className="flex items-center gap-3 text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400 hover:text-black transition-colors"
-                                >
-                                    <LogOut className="h-3 w-3" /> {t('common.logout')}
+                                    <KeyRound className="h-3.5 w-3.5" />
                                 </button>
                             </div>
+                            <button
+                                onClick={logout}
+                                className="flex items-center gap-3 text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400 hover:text-black transition-colors"
+                            >
+                                <LogOut className="h-3 w-3" /> {t('common.logout')}
+                            </button>
                         </>
                     )}
                 </div>
