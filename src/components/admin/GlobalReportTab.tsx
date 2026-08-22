@@ -50,6 +50,7 @@ export default function GlobalReportTab() {
     const [filterLabId, setFilterLabId] = useState("");
     const [filterAnalista, setFilterAnalista] = useState("");
     const [filterMachine, setFilterMachine] = useState("");
+    const [filterStatus, setFilterStatus] = useState<"" | "finalizada" | "pendente">("");
     const [search, setSearch] = useState("");
 
     useEffect(() => {
@@ -105,10 +106,12 @@ export default function GlobalReportTab() {
             if (filterLabId && r.labId !== filterLabId) return false;
             if (filterAnalista && r.analista !== filterAnalista) return false;
             if (filterMachine && r.hvi !== filterMachine) return false;
+            if (filterStatus === "finalizada" && !r.finalizada) return false;
+            if (filterStatus === "pendente" && r.finalizada) return false;
             if (q && !r.etiqueta.toLowerCase().includes(q) && !r.mala.toLowerCase().includes(q) && !r.loteNome.toLowerCase().includes(q)) return false;
             return true;
         });
-    }, [rows, filterLabId, filterAnalista, filterMachine, search]);
+    }, [rows, filterLabId, filterAnalista, filterMachine, filterStatus, search]);
 
     const summaryByLab = useMemo(() => {
         const map = new Map<string, number>();
@@ -199,6 +202,19 @@ export default function GlobalReportTab() {
                         {machineOptions.map(m => <option key={m} value={m}>{m}</option>)}
                     </select>
                 </div>
+                <div className="space-y-1">
+                    <label className="text-[9px] font-bold uppercase text-neutral-400 tracking-widest">Status</label>
+                    <select
+                        value={filterStatus}
+                        onChange={e => setFilterStatus(e.target.value as "" | "finalizada" | "pendente")}
+                        className="h-10 px-3 border border-neutral-300 text-xs font-mono uppercase bg-white focus:outline-none focus:border-black min-w-[160px]"
+                        title="Filtrar por status"
+                    >
+                        <option value="">Todos os Status</option>
+                        <option value="finalizada">Só Finalizadas (arquivo gerado)</option>
+                        <option value="pendente">Só Pendentes (sem arquivo)</option>
+                    </select>
+                </div>
                 <div className="space-y-1 flex-1 min-w-[200px]">
                     <label className="text-[9px] font-bold uppercase text-neutral-400 tracking-widest">Buscar (etiqueta, mala, lote)</label>
                     <input
@@ -236,6 +252,7 @@ export default function GlobalReportTab() {
                             <th className="py-3 px-3 font-bold uppercase tracking-widest text-right">RD</th>
                             <th className="py-3 px-3 font-bold uppercase tracking-widest text-right">+B</th>
                             <th className="py-3 px-3 font-bold uppercase tracking-widest">Data</th>
+                            <th className="py-3 px-3 font-bold uppercase tracking-widest">Hora</th>
                             <th className="py-3 px-3 font-bold uppercase tracking-widest">Status</th>
                         </tr>
                     </thead>
@@ -255,11 +272,14 @@ export default function GlobalReportTab() {
                                 <td className="py-2 px-3 text-right font-mono">{r.rd?.toFixed(1) ?? "—"}</td>
                                 <td className="py-2 px-3 text-right font-mono">{r.b?.toFixed(1) ?? "—"}</td>
                                 <td className="py-2 px-3 font-mono text-neutral-500 whitespace-nowrap">{r.dataAnalise || "—"}</td>
+                                <td className="py-2 px-3 font-mono text-neutral-500 whitespace-nowrap">{r.horaAnalise || "—"}</td>
                                 <td className="py-2 px-3">
                                     <span className={cn(
                                         "text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full",
                                         r.finalizada ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"
-                                    )}>
+                                    )}
+                                        title={r.finalizada ? "Arquivo HVI já gerado e confirmado" : "Amostra registrada, mas o arquivo HVI ainda não foi gerado/confirmado"}
+                                    >
                                         {r.finalizada ? "Finalizada" : "Pendente"}
                                     </span>
                                 </td>
