@@ -43,35 +43,40 @@ const fromRow = (r: any): ReanaliseGeracao => ({
     createdAt: r.created_at
 });
 
+interface GeracaoEntryBase {
+    labId?: string | null;
+    analistaNome?: string | null;
+    analistaId?: string | null;
+    maquina?: string | null;
+    os?: string | null;
+    codigoOperador?: string | null;
+    mic?: number; len?: number; unf?: number; str?: number; rd?: number; b?: number;
+    dataAnalise?: string | null;
+    horaAnalise?: string | null;
+}
+
 export const reanaliseGeracaoService = {
-    async create(entry: {
-        labId?: string | null;
-        analistaNome?: string | null;
-        analistaId?: string | null;
-        maquina?: string | null;
-        etiquetas?: string | null;
-        quantidade: number;
-        os?: string | null;
-        codigoOperador?: string | null;
-        mic?: number; len?: number; unf?: number; str?: number; rd?: number; b?: number;
-        dataAnalise?: string | null;
-        horaAnalise?: string | null;
-    }): Promise<void> {
-        if (!isSupabaseEnabled()) return;
-        const { error } = await supabase.from('reanalise_geracoes').insert([{
-            lab_id: entry.labId || null,
-            analista_nome: entry.analistaNome || null,
-            analista_id: entry.analistaId || null,
-            maquina: entry.maquina || null,
-            etiquetas: entry.etiquetas || null,
-            quantidade: entry.quantidade,
-            os: entry.os || null,
-            codigo_operador: entry.codigoOperador || null,
-            mic: entry.mic ?? null, len: entry.len ?? null, unf: entry.unf ?? null,
-            str: entry.str ?? null, rd: entry.rd ?? null, b: entry.b ?? null,
-            data_analise: entry.dataAnalise || null,
-            hora_analise: entry.horaAnalise || null
-        }]);
+    // Uma linha por etiqueta (não uma linha por exportação com todas as
+    // etiquetas juntas num texto só) — assim o relatório mostra cada etiqueta
+    // na sua própria linha, igual ao fluxo de Lotes/Análise, em vez de
+    // amontoar tudo numa célula só e cortar o resto.
+    async createMany(base: GeracaoEntryBase, etiquetas: string[]): Promise<void> {
+        if (!isSupabaseEnabled() || etiquetas.length === 0) return;
+        const rows = etiquetas.map(etiqueta => ({
+            lab_id: base.labId || null,
+            analista_nome: base.analistaNome || null,
+            analista_id: base.analistaId || null,
+            maquina: base.maquina || null,
+            etiquetas: etiqueta,
+            quantidade: 1,
+            os: base.os || null,
+            codigo_operador: base.codigoOperador || null,
+            mic: base.mic ?? null, len: base.len ?? null, unf: base.unf ?? null,
+            str: base.str ?? null, rd: base.rd ?? null, b: base.b ?? null,
+            data_analise: base.dataAnalise || null,
+            hora_analise: base.horaAnalise || null
+        }));
+        const { error } = await supabase.from('reanalise_geracoes').insert(rows);
         // Falha em registrar o histórico não deve travar o download do arquivo —
         // só loga, o analista já tem o arquivo em mãos de qualquer forma.
         if (error) console.warn("[ReanaliseGeracao] Falha ao registrar histórico:", error.message);

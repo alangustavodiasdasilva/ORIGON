@@ -788,21 +788,19 @@ export default function ReanalisePage() {
                 msg: `${result.data.files?.length ?? 1} arquivo(s) gerado(s) — ${result.data.machineModel}`
             });
 
-            // Histórico pro Relatório Geral (Admin) — não trava o fluxo se falhar,
-            // o arquivo já foi baixado de qualquer forma (ver reanaliseGeracao.service.ts).
-            reanaliseGeracaoService.create({
+            // Histórico pro Relatório Geral (Admin) — uma linha por etiqueta, não
+            // trava o fluxo se falhar (o arquivo já foi baixado de qualquer forma).
+            reanaliseGeracaoService.createMany({
                 labId: labIdStr,
                 analistaNome: user?.nome,
                 analistaId: user?.id,
                 maquina: selectedMachine.machineId,
-                etiquetas: etiquetas.filter(Boolean).join('; '),
-                quantidade: etiquetas.filter(Boolean).length || reps,
                 os: osInput,
                 codigoOperador,
                 mic: effective.mic, len: effective.len, unf: effective.unf,
                 str: effective.str, rd: effective.rd, b: effective.b,
                 dataAnalise: customDate, horaAnalise: customTime
-            }).catch(() => { /* silencioso — já logado dentro do service */ });
+            }, etiquetas.filter(Boolean)).catch(() => { /* silencioso — já logado dentro do service */ });
         } catch (err: any) {
             setExportStatus({ ok: false, msg: 'Erro ao exportar: ' + (err?.message || 'desconhecido') });
         } finally {

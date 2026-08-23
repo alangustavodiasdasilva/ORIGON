@@ -316,7 +316,7 @@ export default function GlobalReportTab() {
                                 <td className="py-2 px-3 font-bold">{r.labNome}</td>
                                 <td className="py-2 px-3 font-mono text-neutral-600">{r.loteNome}</td>
                                 <td className="py-2 px-3">{r.analista}</td>
-                                <td className="py-2 px-3 font-mono text-neutral-600 truncate max-w-[160px]">{r.etiqueta || "—"}</td>
+                                <td className="py-2 px-3 font-mono text-neutral-600 whitespace-nowrap">{r.etiqueta || "—"}</td>
                                 <td className="py-2 px-3 font-mono text-neutral-600">{r.mala || "—"}</td>
                                 <td className="py-2 px-3 font-mono">{r.hvi || "—"}</td>
                                 <td className="py-2 px-3 text-right font-mono">{r.mic?.toFixed(2) ?? "—"}</td>
