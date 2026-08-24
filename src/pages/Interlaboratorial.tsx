@@ -37,7 +37,7 @@ const randomInRange = (min: number, max: number, decimals: number): string =>
 interface HVIResults {
     grd: string; area: string; cnt: string; uhml: string; ui: string; sfi: string;
     str: string; elg: string; mic: string; mat: string; rd: string; plusB: string;
-    mst: string; cg: string; tmp: string; rh: string; sci: string;
+    mst: string; cg: string; tmp: string; rh: string; sci: string; leaf: string;
 }
 
 const USTER_FIELDS: { key: keyof HVIResults; label: string; decimals: number; hasDev: boolean }[] = [
@@ -55,9 +55,29 @@ const USTER_FIELDS: { key: keyof HVIResults; label: string; decimals: number; ha
     { key: "plusB", label: "+B", decimals: 1, hasDev: true },
     { key: "mst", label: "MST", decimals: 1, hasDev: true },
     { key: "cg", label: "CG", decimals: 0, hasDev: false },
+    { key: "leaf", label: "LEAF", decimals: 0, hasDev: false },
     { key: "tmp", label: "TMP", decimals: 1, hasDev: true },
     { key: "rh", label: "RH", decimals: 1, hasDev: true },
     { key: "sci", label: "SCI", decimals: 1, hasDev: true },
+];
+
+// Colunas visíveis na planilha de Valores-Alvo — os mesmos 13 parâmetros da tela
+// de Reanálise, na mesma ordem. Os demais campos do arquivo (GRD, MST, TMP, RH,
+// SCI) continuam usando os valores padrão automáticos, sem poluir a entrada.
+const TARGET_COLUMNS: { key: keyof HVIResults; label: string; decimals: number; hasDev: boolean }[] = [
+    { key: "mic", label: "MIC", decimals: 2, hasDev: true },
+    { key: "uhml", label: "LEN", decimals: 2, hasDev: true },
+    { key: "ui", label: "UNF", decimals: 1, hasDev: true },
+    { key: "str", label: "STR", decimals: 1, hasDev: true },
+    { key: "elg", label: "ELG", decimals: 1, hasDev: true },
+    { key: "rd", label: "RD", decimals: 1, hasDev: true },
+    { key: "plusB", label: "+b", decimals: 1, hasDev: true },
+    { key: "cg", label: "CG", decimals: 0, hasDev: false },
+    { key: "leaf", label: "LEAF", decimals: 0, hasDev: false },
+    { key: "area", label: "AREA", decimals: 2, hasDev: true },
+    { key: "cnt", label: "CNT", decimals: 0, hasDev: true },
+    { key: "mat", label: "MAT", decimals: 2, hasDev: true },
+    { key: "sfi", label: "SFI", decimals: 1, hasDev: true },
 ];
 
 const PREVIEW_COLUMNS: { key: string; label: string; decimals: number }[] = [
@@ -75,12 +95,12 @@ const PREVIEW_COLUMNS: { key: string; label: string; decimals: number }[] = [
 const emptyResults = (): HVIResults => ({
     grd: "3", area: "0.25", cnt: "029", uhml: "", ui: "", sfi: "",
     str: "", elg: "", mic: "", mat: "", rd: "", plusB: "",
-    mst: "07.4", cg: "\"11-1\"", tmp: "24.3", rh: "49.3", sci: ""
+    mst: "07.4", cg: "\"11-1\"", tmp: "24.3", rh: "49.3", sci: "", leaf: "3"
 });
 const zeroDeviations = (): HVIResults => ({
     grd: "0", area: "0", cnt: "0", uhml: "0", ui: "0", sfi: "0",
     str: "0", elg: "0", mic: "0", mat: "0", rd: "0", plusB: "0",
-    mst: "0", cg: "0", tmp: "0", rh: "0", sci: "0"
+    mst: "0", cg: "0", tmp: "0", rh: "0", sci: "0", leaf: "0"
 });
 
 // Protocolo padrão: cada identificação é testada 10 vezes (10 repetições/arquivos)
@@ -112,6 +132,7 @@ function createMachineClock() {
 // "cg" fica de fora — tem formato especial ("11-1"), não é um decimal simples.
 const RANDOM_RANGES: Partial<Record<keyof HVIResults, { min: number; max: number; deviation: number }>> = {
     grd: { min: 1, max: 4, deviation: 0 },
+    leaf: { min: 1, max: 4, deviation: 0 },
     area: { min: 0.20, max: 0.30, deviation: 0.02 },
     cnt: { min: 24, max: 34, deviation: 2 },
     uhml: { min: 27, max: 31, deviation: 0.5 },
@@ -202,6 +223,38 @@ export default function Interlaboratorial() {
         if (dev === 0) return null;
         const base = parseNumber(results[field]);
         return `${(base - dev).toFixed(config.decimals)} - ${(base + dev).toFixed(config.decimals)}`;
+    };
+
+    // Navegação estilo planilha (igual à tela de Reanálise): Enter/→ avança, ←
+    // volta, ↓ pula da linha Valor pra Desvio e ↑ volta. Colunas sem desvio
+    // (CG, LEAF) não têm campo na linha Desvio, então são puladas.
+    const focusTargetCell = (ownerDoc: Document, row: 'val' | 'dev', index: number, dir: 1 | -1 = 1) => {
+        let i = index;
+        while (i >= 0 && i < TARGET_COLUMNS.length) {
+            const col = TARGET_COLUMNS[i];
+            if (row === 'val' || col.hasDev) {
+                const el = ownerDoc.getElementById(`ilab-${row}-${col.key}`) as HTMLInputElement | null;
+                if (el) { el.focus(); el.select(); return; }
+            }
+            i += dir;
+        }
+    };
+
+    const handleTargetKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, index: number, row: 'val' | 'dev') => {
+        const ownerDoc = e.currentTarget.ownerDocument;
+        if (e.key === 'Enter' || e.key === 'ArrowRight') {
+            e.preventDefault();
+            focusTargetCell(ownerDoc, row, index + 1, 1);
+        } else if (e.key === 'ArrowLeft') {
+            e.preventDefault();
+            focusTargetCell(ownerDoc, row, index - 1, -1);
+        } else if (e.key === 'ArrowDown' && row === 'val') {
+            e.preventDefault();
+            focusTargetCell(ownerDoc, 'dev', index, 1);
+        } else if (e.key === 'ArrowUp' && row === 'dev') {
+            e.preventDefault();
+            focusTargetCell(ownerDoc, 'val', index, 1);
+        }
     };
 
     // ── Formulário: nova Identificação ──────────────────────────────────────
@@ -361,7 +414,7 @@ export default function Interlaboratorial() {
             sampleObj, dateStr, timeStr, 1, 1, lineName,
             reading.mic, reading.uhml, reading.ui, reading.str, reading.elg, reading.sfi,
             reading.uhml * 0.95, reading.cnt, reading.sci, reading.rd, reading.plusB,
-            grd || "31-1", reading.area, 3, reading.mat, 2000
+            grd || "31-1", reading.area, reading.leaf || 3, reading.mat, 2000
         );
     };
 
@@ -436,7 +489,8 @@ export default function Interlaboratorial() {
                         str: applyDev(tv.str, dv.str), elg: applyDev(tv.elg, dv.elg), sfi: applyDev(tv.sfi, dv.sfi),
                         rd: applyDev(tv.rd, dv.rd), plusB: applyDev(tv.plusB, dv.plusB),
                         cnt: Math.round(applyDev(tv.cnt, dv.cnt)), sci: Math.round(applyDev(tv.sci || '130', dv.sci)),
-                        area: applyDev(tv.area, dv.area), mat: applyDev(tv.mat, dv.mat)
+                        area: applyDev(tv.area, dv.area), mat: applyDev(tv.mat, dv.mat),
+                        leaf: parseNumber(tv.leaf) || 3
                     };
                     const content = buildFileContent(etiquetaVal, tv.grd, reading, lineName, dateStr, timeStr);
                     const filename = `${filenamePrefix}${String(seqCursor).padStart(filenameDigits, '0')}.H1`;
@@ -568,43 +622,90 @@ export default function Interlaboratorial() {
                                             <Dices className="h-3 w-3" /> Gerar Valores Aleatórios (Teste)
                                         </button>
                                     </div>
-                                    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-9 gap-2">
-                                        {USTER_FIELDS.map(({ label, key, hasDev, decimals }) => (
-                                            <div key={key} className="bg-white p-1.5 rounded border border-neutral-200 flex flex-col justify-between">
-                                                <label className="block text-[9px] uppercase tracking-wider text-neutral-500 font-mono text-center mb-1">{label}</label>
-                                                <div className="flex flex-col gap-1">
-                                                    <Input
-                                                        type="text"
-                                                        inputMode="decimal"
-                                                        value={newResults[key]}
-                                                        onChange={e => setNewResults(prev => ({
-                                                            ...prev,
-                                                            [key]: key === 'cg' ? e.target.value : formatDecimalInput(e.target.value, decimals)
-                                                        }))}
-                                                        className="font-mono text-xs h-8 text-center border-neutral-200 bg-white"
-                                                        placeholder="Valor"
-                                                    />
-                                                    {hasDev ? (
-                                                        <>
-                                                            <Input
+
+                                    {/* Planilha estilo Reanálise: uma linha de Valor e uma de Desvio ±
+                                        por parâmetro. A linha Faixa mostra o intervalo (Valor ± Desvio)
+                                        em que cada leitura gerada vai cair. */}
+                                    <div className="border border-neutral-200 shadow-sm bg-white overflow-x-auto custom-scrollbar">
+                                        <table className="w-full border-collapse min-w-[760px]">
+                                            <thead>
+                                                <tr className="bg-neutral-100">
+                                                    <th className="border-r border-b border-neutral-200 py-2 px-2 text-left w-24">
+                                                        <span className="text-[9px] font-black uppercase text-neutral-500 tracking-widest pl-1">Tipo</span>
+                                                    </th>
+                                                    {TARGET_COLUMNS.map(c => (
+                                                        <th key={c.key} className="border-r border-b border-neutral-200 last:border-r-0 py-2 px-1 text-center select-none">
+                                                            <span className="text-[9px] font-black uppercase text-neutral-500 tracking-widest">{c.label}</span>
+                                                        </th>
+                                                    ))}
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {/* Linha Valor */}
+                                                <tr>
+                                                    <td className="border-r border-neutral-200 bg-neutral-50 text-[10px] font-bold uppercase text-neutral-500 pl-4 py-2">Valor</td>
+                                                    {TARGET_COLUMNS.map((c, index) => (
+                                                        <td key={c.key} className="border-r border-neutral-200 last:border-r-0 p-0 relative">
+                                                            <input
+                                                                id={`ilab-val-${c.key}`}
                                                                 type="text"
                                                                 inputMode="decimal"
-                                                                value={newDeviations[key]}
-                                                                onChange={e => setNewDeviations(prev => ({ ...prev, [key]: formatDecimalInput(e.target.value, decimals) }))}
-                                                                className="font-mono text-[10px] h-6 text-center border-dashed bg-transparent border-neutral-300"
-                                                                placeholder="+/-"
+                                                                title={`Valor — ${c.label}`}
+                                                                value={newResults[c.key]}
+                                                                placeholder="0"
+                                                                onChange={e => setNewResults(prev => ({
+                                                                    ...prev,
+                                                                    [c.key]: c.key === 'cg' ? e.target.value : formatDecimalInput(e.target.value, c.decimals)
+                                                                }))}
+                                                                onFocus={e => e.target.select()}
+                                                                onKeyDown={e => handleTargetKeyDown(e, index, 'val')}
+                                                                className="w-full h-11 text-center text-[13px] font-mono font-bold text-black border-none focus:bg-blue-50 focus:ring-inset focus:ring-2 focus:ring-blue-500 focus:relative focus:z-10 outline-none transition-colors"
                                                             />
-                                                            {parseNumber(newDeviations[key]) > 0 ? (
-                                                                <span className="text-[9px] text-neutral-400 font-mono text-center block h-3 leading-3">
-                                                                    [{getMinMax(newResults, newDeviations, key)}]
-                                                                </span>
-                                                            ) : <div className="h-3" />}
-                                                        </>
-                                                    ) : <div className="flex-1 min-h-[1.5rem]" />}
-                                                </div>
-                                            </div>
-                                        ))}
+                                                        </td>
+                                                    ))}
+                                                </tr>
+                                                {/* Linha Desvio ± */}
+                                                <tr className="border-t border-neutral-200">
+                                                    <td className="border-r border-neutral-200 bg-neutral-50 text-[10px] font-bold uppercase text-neutral-500 pl-4 py-2">Desvio ±</td>
+                                                    {TARGET_COLUMNS.map((c, index) => (
+                                                        <td key={c.key} className="border-r border-neutral-200 last:border-r-0 p-0 relative">
+                                                            {c.hasDev ? (
+                                                                <input
+                                                                    id={`ilab-dev-${c.key}`}
+                                                                    type="text"
+                                                                    inputMode="decimal"
+                                                                    title={`Desvio ± — ${c.label}`}
+                                                                    value={newDeviations[c.key]}
+                                                                    placeholder="0"
+                                                                    onChange={e => setNewDeviations(prev => ({ ...prev, [c.key]: formatDecimalInput(e.target.value, c.decimals) }))}
+                                                                    onFocus={e => e.target.select()}
+                                                                    onKeyDown={e => handleTargetKeyDown(e, index, 'dev')}
+                                                                    className="w-full h-10 text-center text-[12px] font-mono text-neutral-700 border-none focus:bg-blue-50 focus:ring-inset focus:ring-2 focus:ring-blue-500 focus:relative focus:z-10 outline-none transition-colors"
+                                                                />
+                                                            ) : (
+                                                                <div className="w-full h-10 flex items-center justify-center text-neutral-300 text-xs">—</div>
+                                                            )}
+                                                        </td>
+                                                    ))}
+                                                </tr>
+                                                {/* Linha Faixa (somente leitura) */}
+                                                <tr className="border-t border-neutral-200 bg-neutral-50/40">
+                                                    <td className="border-r border-neutral-200 bg-neutral-50 text-[10px] font-bold uppercase text-neutral-400 pl-4 py-1.5">Faixa</td>
+                                                    {TARGET_COLUMNS.map(c => {
+                                                        const range = c.hasDev ? getMinMax(newResults, newDeviations, c.key) : null;
+                                                        return (
+                                                            <td key={c.key} className="border-r border-neutral-200 last:border-r-0 text-center py-1.5">
+                                                                <span className="text-[9px] font-mono text-neutral-400 whitespace-nowrap">{range || '—'}</span>
+                                                            </td>
+                                                        );
+                                                    })}
+                                                </tr>
+                                            </tbody>
+                                        </table>
                                     </div>
+                                    <p className="text-[9px] text-neutral-400 font-mono">
+                                        As leituras geradas ficam sempre dentro de <strong>Valor ± Desvio</strong> em cada parâmetro. CG e LEAF saem fixos (sem variação).
+                                    </p>
                                 </div>
 
                                 <Button onClick={saveNewIdentificacao} className="w-full h-10 bg-black text-white hover:bg-neutral-800 font-mono uppercase text-xs tracking-widest">
