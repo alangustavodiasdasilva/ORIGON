@@ -90,22 +90,7 @@ export const SampleService = {
                 if (page.length < pageSize) break;
                 from += pageSize;
             }
-            // Só mantém o cache local se ele couber no localStorage (limite do
-            // navegador é ~5 MB). Com milhares de amostras esse JSON passa de
-            // 10 MB e a gravação: (1) é SÍNCRONA, travando a aba enquanto grava;
-            // (2) estoura a cota e falha; (3) pior — deixa o localStorage cheio,
-            // fazendo a gravação do cache de LOTES falhar também. Aí, num
-            // soluço de conexão, LoteService.list() cai no fallback local e
-            // mostra uma lista de lotes velha/incompleta (às vezes só 1 lote).
-            // Quando não cabe, apagamos o cache pra liberar espaço — com o
-            // Supabase ligado ele nunca é lido por list() de qualquer forma.
-            const MAX_CACHE_BYTES = 2 * 1024 * 1024; // 2 MB
-            const json = JSON.stringify(all);
-            if (json.length <= MAX_CACHE_BYTES) {
-                safeSetItem(STORAGE_KEY, json);
-            } else {
-                try { localStorage.removeItem(STORAGE_KEY); } catch { /* ignorado */ }
-            }
+            saveStoredSamples(all);
             return all;
         }
         return getStoredSamples();
