@@ -48,19 +48,25 @@ export default function Home() {
     useEffect(() => {
         loadLotes();
 
-        // Subscribe to real-time changes
-        const unsubLotes = LoteService.subscribe(() => {
-            loadLotes();
-        });
-        const unsubSamples = SampleService.subscribe(() => {
-            loadLotes();
-        });
+        // Recarga silenciosa (sem piscar o esqueleto) e com debounce: enquanto
+        // alguém digita amostras, chegam muitas notificações em rajada — sem isso
+        // a tela de lotes ficava recarregando/piscando a cada amostra inserida.
+        let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+        const scheduleSilentReload = () => {
+            if (debounceTimer) clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => loadLotes(true), 400);
+        };
+
+        const unsubLotes = LoteService.subscribe(scheduleSilentReload);
+        const unsubSamples = SampleService.subscribe(scheduleSilentReload);
 
         return () => {
+            if (debounceTimer) clearTimeout(debounceTimer);
             unsubLotes();
             unsubSamples();
         };
-    }, [user, currentLab]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [user?.id, currentLab?.id]);
 
     // Auto-fill city from user's lab or selected lab
     useEffect(() => {
@@ -116,8 +122,10 @@ export default function Home() {
         return () => clearInterval(interval);
     }, []);
 
-    const loadLotes = async () => {
-        setIsLoading(true);
+    const loadLotes = async (silent = false) => {
+        // Só mostra o esqueleto na carga inicial/manual — recargas em tempo real
+        // (novas amostras, edições) atualizam os cards sem piscar a tela toda.
+        if (!silent) setIsLoading(true);
         try {
             let data = await LoteService.list();
 
@@ -154,7 +162,7 @@ export default function Home() {
         } catch (error) {
             console.error(error);
         } finally {
-            setIsLoading(false);
+            if (!silent) setIsLoading(false);
         }
     };
 
@@ -217,7 +225,7 @@ export default function Home() {
             await LoteService.update(loteToEdit.id, { nome: editName, cidade: editCidade });
             addToast({ title: "Updated", type: "success" });
             setLoteToEdit(null);
-            loadLotes();
+            loadLotes(true);
         } catch (error) {
             addToast({ title: "Update Error", type: "error" });
         }
@@ -232,7 +240,7 @@ export default function Home() {
                 description: `Batch ${lote.nome} is now ${newStatus === 'aberto' ? 'Open' : 'Locked'}.`,
                 type: "success"
             });
-            loadLotes();
+            loadLotes(true);
         } catch (error) {
             addToast({ title: "Status Update Error", type: "error" });
         }
@@ -259,7 +267,7 @@ export default function Home() {
                 type: "info"
             });
             setLoteToDelete(null);
-            loadLotes();
+            loadLotes(true);
         } catch (error: any) {
             console.error("Erro ao deletar lote:", error);
             addToast({ 

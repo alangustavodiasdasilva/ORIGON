@@ -121,10 +121,24 @@ export const SampleService = {
         if (loteIds.length === 0) return counts;
 
         if (isSupabaseEnabled()) {
-            const { data, error } = await supabase.from('amostras').select('lote_id').in('lote_id', loteIds);
-            if (error) throw error;
-            for (const row of data || []) {
-                counts[row.lote_id] = (counts[row.lote_id] || 0) + 1;
+            // Pagina até esgotar — o Supabase corta em 1000 linhas por requisição.
+            // Sem isso, lotes com muitas amostras vinham com a contagem cortada
+            // (ou lotes recém-lançados apareciam com "00" no card).
+            const pageSize = 1000;
+            let from = 0;
+            while (true) {
+                const { data, error } = await supabase
+                    .from('amostras')
+                    .select('lote_id')
+                    .in('lote_id', loteIds)
+                    .range(from, from + pageSize - 1);
+                if (error) throw error;
+                const page = data || [];
+                for (const row of page) {
+                    counts[row.lote_id] = (counts[row.lote_id] || 0) + 1;
+                }
+                if (page.length < pageSize) break;
+                from += pageSize;
             }
             return counts;
         }
