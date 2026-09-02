@@ -126,8 +126,10 @@ export default function Home() {
         // Só mostra o esqueleto na carga inicial/manual — recargas em tempo real
         // (novas amostras, edições) atualizam os cards sem piscar a tela toda.
         if (!silent) setIsLoading(true);
+
+        let data: Lote[] = [];
         try {
-            let data = await LoteService.list();
+            data = await LoteService.list();
 
             // Filter logic (CORRECTED):
             // 1. If currentLab is selected → Show ONLY batches from that lab
@@ -144,25 +146,30 @@ export default function Home() {
             // If admin_global with NO currentLab → show ALL (no filter)
 
             setLotes(data);
-
-            // Contagem tratada à parte: se ela falhar (ex: instabilidade de rede),
-            // os cards continuam mostrando nome/data normalmente, e tentamos de
-            // novo uma vez em vez de deixar tudo "00" até o próximo F5 manual.
-            const loteIds = data.map(l => l.id);
-            try {
-                setSampleCounts(await SampleService.countsByLotes(loteIds));
-            } catch (countError) {
-                console.error("Falha ao buscar contagem de amostras, tentando novamente:", countError);
-                try {
-                    setSampleCounts(await SampleService.countsByLotes(loteIds));
-                } catch (retryError) {
-                    console.error("Segunda tentativa de contagem também falhou:", retryError);
-                }
-            }
         } catch (error) {
             console.error(error);
         } finally {
+            // Libera a tela ASSIM QUE os lotes chegam. A contagem de amostras é
+            // pesada (varre milhares de linhas) — antes ela segurava o esqueleto
+            // e os lotes só apareciam quando a contagem terminava, causando a
+            // demora/"tela travada em carregando" em conexões lentas.
             if (!silent) setIsLoading(false);
+        }
+
+        // Contagem em SEGUNDO PLANO — não bloqueia a exibição dos lotes; os
+        // números de amostras preenchem sozinhos assim que chegam. Se falhar
+        // (instabilidade de rede), tenta de novo uma vez.
+        const loteIds = data.map(l => l.id);
+        if (loteIds.length === 0) return;
+        try {
+            setSampleCounts(await SampleService.countsByLotes(loteIds));
+        } catch (countError) {
+            console.error("Falha ao buscar contagem de amostras, tentando novamente:", countError);
+            try {
+                setSampleCounts(await SampleService.countsByLotes(loteIds));
+            } catch (retryError) {
+                console.error("Segunda tentativa de contagem também falhou:", retryError);
+            }
         }
     };
 
