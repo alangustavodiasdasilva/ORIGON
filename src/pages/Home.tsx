@@ -25,10 +25,6 @@ import { AnalistaService } from "@/entities/Analista";
 export default function Home() {
     const [lotes, setLotes] = useState<Lote[]>([]);
     const [sampleCounts, setSampleCounts] = useState<Record<string, number>>({});
-    // Enquanto a contagem (em segundo plano) não chega, mostramos "…" no card em
-    // vez de "00" — um "00" no lote cheio dava a impressão de que as amostras
-    // tinham sumido.
-    const [countsLoaded, setCountsLoaded] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState("");
 
@@ -52,25 +48,19 @@ export default function Home() {
     useEffect(() => {
         loadLotes();
 
-        // Recarga silenciosa (sem piscar o esqueleto) e com debounce: enquanto
-        // alguém digita amostras, chegam muitas notificações em rajada — sem isso
-        // a tela de lotes ficava recarregando/piscando a cada amostra inserida.
-        let debounceTimer: ReturnType<typeof setTimeout> | null = null;
-        const scheduleSilentReload = () => {
-            if (debounceTimer) clearTimeout(debounceTimer);
-            debounceTimer = setTimeout(() => loadLotes(true), 400);
-        };
-
-        const unsubLotes = LoteService.subscribe(scheduleSilentReload);
-        const unsubSamples = SampleService.subscribe(scheduleSilentReload);
+        // Subscribe to real-time changes
+        const unsubLotes = LoteService.subscribe(() => {
+            loadLotes();
+        });
+        const unsubSamples = SampleService.subscribe(() => {
+            loadLotes();
+        });
 
         return () => {
-            if (debounceTimer) clearTimeout(debounceTimer);
             unsubLotes();
             unsubSamples();
         };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [user?.id, currentLab?.id]);
+    }, [user, currentLab]);
 
     // Auto-fill city from user's lab or selected lab
     useEffect(() => {
@@ -126,14 +116,10 @@ export default function Home() {
         return () => clearInterval(interval);
     }, []);
 
-    const loadLotes = async (silent = false) => {
-        // Só mostra o esqueleto na carga inicial/manual — recargas em tempo real
-        // (novas amostras, edições) atualizam os cards sem piscar a tela toda.
-        if (!silent) setIsLoading(true);
-
-        let data: Lote[] = [];
+    const loadLotes = async () => {
+        setIsLoading(true);
         try {
-            data = await LoteService.list();
+            let data = await LoteService.list();
 
             // Filter logic (CORRECTED):
             // 1. If currentLab is selected → Show ONLY batches from that lab
@@ -150,32 +136,25 @@ export default function Home() {
             // If admin_global with NO currentLab → show ALL (no filter)
 
             setLotes(data);
+
+            // Contagem tratada à parte: se ela falhar (ex: instabilidade de rede),
+            // os cards continuam mostrando nome/data normalmente, e tentamos de
+            // novo uma vez em vez de deixar tudo "00" até o próximo F5 manual.
+            const loteIds = data.map(l => l.id);
+            try {
+                setSampleCounts(await SampleService.countsByLotes(loteIds));
+            } catch (countError) {
+                console.error("Falha ao buscar contagem de amostras, tentando novamente:", countError);
+                try {
+                    setSampleCounts(await SampleService.countsByLotes(loteIds));
+                } catch (retryError) {
+                    console.error("Segunda tentativa de contagem também falhou:", retryError);
+                }
+            }
         } catch (error) {
             console.error(error);
         } finally {
-            // Libera a tela ASSIM QUE os lotes chegam. A contagem de amostras é
-            // pesada (varre milhares de linhas) — antes ela segurava o esqueleto
-            // e os lotes só apareciam quando a contagem terminava, causando a
-            // demora/"tela travada em carregando" em conexões lentas.
-            if (!silent) setIsLoading(false);
-        }
-
-        // Contagem em SEGUNDO PLANO — não bloqueia a exibição dos lotes; os
-        // números de amostras preenchem sozinhos assim que chegam. Se falhar
-        // (instabilidade de rede), tenta de novo uma vez.
-        const loteIds = data.map(l => l.id);
-        if (loteIds.length === 0) { setCountsLoaded(true); return; }
-        try {
-            setSampleCounts(await SampleService.countsByLotes(loteIds));
-            setCountsLoaded(true);
-        } catch (countError) {
-            console.error("Falha ao buscar contagem de amostras, tentando novamente:", countError);
-            try {
-                setSampleCounts(await SampleService.countsByLotes(loteIds));
-                setCountsLoaded(true);
-            } catch (retryError) {
-                console.error("Segunda tentativa de contagem também falhou:", retryError);
-            }
+            setIsLoading(false);
         }
     };
 
@@ -238,7 +217,7 @@ export default function Home() {
             await LoteService.update(loteToEdit.id, { nome: editName, cidade: editCidade });
             addToast({ title: "Updated", type: "success" });
             setLoteToEdit(null);
-            loadLotes(true);
+            loadLotes();
         } catch (error) {
             addToast({ title: "Update Error", type: "error" });
         }
@@ -253,7 +232,7 @@ export default function Home() {
                 description: `Batch ${lote.nome} is now ${newStatus === 'aberto' ? 'Open' : 'Locked'}.`,
                 type: "success"
             });
-            loadLotes(true);
+            loadLotes();
         } catch (error) {
             addToast({ title: "Status Update Error", type: "error" });
         }
@@ -280,7 +259,7 @@ export default function Home() {
                 type: "info"
             });
             setLoteToDelete(null);
-            loadLotes(true);
+            loadLotes();
         } catch (error: any) {
             console.error("Erro ao deletar lote:", error);
             addToast({ 
@@ -432,9 +411,7 @@ export default function Home() {
                                     <div>
                                         <span className="text-[9px] uppercase tracking-widest text-neutral-400 block mb-2">{t('home.data_points')}</span>
                                         <div className="text-3xl font-mono">
-                                            {countsLoaded
-                                                ? (sampleCounts[lote.id] || 0).toString().padStart(2, '0')
-                                                : <span className="text-neutral-300">…</span>}
+                                            {(sampleCounts[lote.id] || 0).toString().padStart(2, '0')}
                                         </div>
                                     </div>
                                 </div>
