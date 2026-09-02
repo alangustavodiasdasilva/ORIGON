@@ -121,23 +121,35 @@ export const SampleService = {
         if (loteIds.length === 0) return counts;
 
         if (isSupabaseEnabled()) {
-            // Pagina até esgotar — o Supabase corta em 1000 linhas por requisição.
-            // Sem isso, lotes com muitas amostras vinham com a contagem cortada
-            // (ou lotes recém-lançados apareciam com "00" no card).
+            // 1ª opção: função agregada no banco (uma requisição só, rápida) —
+            // conta lá e devolve apenas {lote_id, total}, sem transferir milhares
+            // de linhas nem sofrer o corte de 1000 do Supabase.
+            const { data, error } = await supabase.rpc('amostras_count_by_lote');
+            if (!error && Array.isArray(data)) {
+                const wanted = new Set(loteIds);
+                for (const row of data as { lote_id: string; total: number }[]) {
+                    if (wanted.has(row.lote_id)) counts[row.lote_id] = Number(row.total) || 0;
+                }
+                return counts;
+            }
+
+            // Fallback (função ainda não criada / erro): pagina o método antigo
+            // até esgotar, pra não cortar em 1000 linhas.
+            console.warn('RPC amostras_count_by_lote indisponível, usando fallback paginado:', error);
             const pageSize = 1000;
             let from = 0;
             while (true) {
-                const { data, error } = await supabase
+                const { data: page, error: pErr } = await supabase
                     .from('amostras')
                     .select('lote_id')
                     .in('lote_id', loteIds)
                     .range(from, from + pageSize - 1);
-                if (error) throw error;
-                const page = data || [];
-                for (const row of page) {
+                if (pErr) throw pErr;
+                const rows = page || [];
+                for (const row of rows) {
                     counts[row.lote_id] = (counts[row.lote_id] || 0) + 1;
                 }
-                if (page.length < pageSize) break;
+                if (rows.length < pageSize) break;
                 from += pageSize;
             }
             return counts;

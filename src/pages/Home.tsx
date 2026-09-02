@@ -25,6 +25,10 @@ import { AnalistaService } from "@/entities/Analista";
 export default function Home() {
     const [lotes, setLotes] = useState<Lote[]>([]);
     const [sampleCounts, setSampleCounts] = useState<Record<string, number>>({});
+    // Enquanto a contagem (em segundo plano) não chega, mostramos "…" no card em
+    // vez de "00" — um "00" no lote cheio dava a impressão de que as amostras
+    // tinham sumido.
+    const [countsLoaded, setCountsLoaded] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState("");
 
@@ -160,13 +164,15 @@ export default function Home() {
         // números de amostras preenchem sozinhos assim que chegam. Se falhar
         // (instabilidade de rede), tenta de novo uma vez.
         const loteIds = data.map(l => l.id);
-        if (loteIds.length === 0) return;
+        if (loteIds.length === 0) { setCountsLoaded(true); return; }
         try {
             setSampleCounts(await SampleService.countsByLotes(loteIds));
+            setCountsLoaded(true);
         } catch (countError) {
             console.error("Falha ao buscar contagem de amostras, tentando novamente:", countError);
             try {
                 setSampleCounts(await SampleService.countsByLotes(loteIds));
+                setCountsLoaded(true);
             } catch (retryError) {
                 console.error("Segunda tentativa de contagem também falhou:", retryError);
             }
@@ -426,7 +432,9 @@ export default function Home() {
                                     <div>
                                         <span className="text-[9px] uppercase tracking-widest text-neutral-400 block mb-2">{t('home.data_points')}</span>
                                         <div className="text-3xl font-mono">
-                                            {(sampleCounts[lote.id] || 0).toString().padStart(2, '0')}
+                                            {countsLoaded
+                                                ? (sampleCounts[lote.id] || 0).toString().padStart(2, '0')
+                                                : <span className="text-neutral-300">…</span>}
                                         </div>
                                     </div>
                                 </div>

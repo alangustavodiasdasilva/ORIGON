@@ -32,8 +32,12 @@ export const labMenuService = {
 
     subscribe(labId: string, callback: (enabledItems: MenuItemKey[]) => void): () => void {
         if (!isSupabaseEnabled()) return () => {};
+        // Nome de canal ÚNICO por assinatura (igual aos outros serviços). Com um
+        // nome fixo, reassinar o mesmo lab reaproveitava um canal já inscrito e o
+        // Supabase quebrava com "cannot add postgres_changes callbacks ... after
+        // subscribe()", derrubando o app inteiro pela ErrorBoundary.
         const channel = supabase
-            .channel(`lab-menu-config-${labId}`)
+            .channel(`lab-menu-config-${labId}-${Math.random().toString(36).slice(2, 9)}`)
             .on("postgres_changes", { event: "*", schema: "public", table: "lab_menu_config", filter: `lab_id=eq.${labId}` },
                 (payload: any) => { callback(Array.isArray(payload.new?.enabled_items) ? payload.new.enabled_items : ALL_MENU_ITEM_KEYS); })
             .subscribe();
