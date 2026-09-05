@@ -434,44 +434,59 @@ export default function Analysis() {
     // escolher as amostras e gerar os dados, entao viajam juntas para o PiP.
     const pipContent = (
         <div className="space-y-6">
-                        {/* Barra de Tolerâncias para Lotes */}
-                        <div className="bg-white border border-neutral-100 p-4 shadow-sm flex items-center gap-6 overflow-x-auto min-w-0">
-                            <div className="flex flex-col leading-none border-r border-neutral-200 pr-4 shrink-0">
-                                <span className="text-[10px] font-black text-neutral-400 uppercase tracking-widest leading-none mb-1">Configuração</span>
-                                <span className="text-sm font-serif font-bold text-black">Geração HVI (Variação)</span>
+                        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 border border-neutral-200 p-6 bg-neutral-50">
+                            <div className="flex items-center gap-2">
+                                <Filter className="h-4 w-4 text-black" />
+                                <span className="text-[10px] uppercase tracking-widest font-bold">Grade Filter</span>
                             </div>
-                            <div className="flex items-center gap-4">
-                                {[
-                                    { id: 'mic', label: 'Mic' },
-                                    { id: 'len', label: 'Len' },
-                                    { id: 'unf', label: 'Unf' },
-                                    { id: 'str', label: 'Str' },
-                                    { id: 'rd', label: 'Rd' },
-                                    { id: 'b', label: '+b' }
-                                ].map((tol) => (
-                                    <div key={tol.id} className="flex flex-col items-center gap-1">
-                                        <label className="text-[10px] font-bold text-neutral-400 uppercase">{tol.label}</label>
-                                        <input
-                                            type="number"
-                                            step="0.01"
-                                            title={`Tolerância ${tol.label}`}
-                                            value={tolerancias[tol.id as keyof typeof tolerancias]}
-                                            onChange={(e) => {
-                                                const val = parseFloat(e.target.value);
-                                                if (!isNaN(val)) {
-                                                    setTolerancias(prev => ({ ...prev, [tol.id]: val }));
-                                                }
-                                            }}
-                                            className="w-14 h-8 text-center border border-neutral-200 rounded text-[11px] font-black text-black bg-neutral-50/30 focus:border-black outline-none transition-all disabled:opacity-50"
-                                        />
-                                    </div>
+
+                            <div className="flex flex-wrap items-center gap-2">
+                                {(['#10b981', '#f59e0b', '#ef4444', '#3b82f6'] as const).map(c => (
+                                    <button
+                                        key={c}
+                                        title={`Filtrar por cor: ${c === '#ef4444' ? 'Vermelho' : c === '#3b82f6' ? 'Azul' : c === '#10b981' ? 'Verde' : 'Alerta'}`}
+                                        onClick={() => setFilterColor(filterColor === c ? null : c)}
+                                        className={cn(
+                                            "w-8 h-8 transition-all border border-neutral-300",
+                                            filterColor === c ? 'ring-2 ring-black ring-offset-2' : 'hover:opacity-80',
+                                            c === '#10b981' ? 'bg-[#10b981]' : 
+                                            c === '#f59e0b' ? 'bg-[#f59e0b]' : 
+                                            c === '#ef4444' ? 'bg-[#ef4444]' : 
+                                            'bg-[#3b82f6]'
+                                        )}
+                                    />
                                 ))}
-                            </div>
-                            <div className="ml-auto shrink-0 flex items-center gap-4">
-                                <div className="px-3 py-1.5 bg-blue-50 border border-blue-200 rounded text-[9px] font-bold text-blue-700 uppercase tracking-tight">
-                                    <span className="opacity-70 mr-1 italic">Objetivo:</span>
-                                    Calibrar variação das sub-medições no arquivo TXT
+                                {filterColor && (
+                                    <Button variant="ghost" size="sm" onClick={() => setFilterColor(null)} className="h-8 px-4 ml-2 rounded-none text-[9px] font-bold text-black border border-black hover:bg-black hover:text-white uppercase">
+                                        Clear
+                                    </Button>
+                                )}
+                                <div className="h-8 w-[1px] bg-neutral-300 mx-4 hidden md:block" />
+                                <div className="relative">
+                                    <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-neutral-400" />
+                                    <input
+                                        type="text"
+                                        value={searchQuery}
+                                        onChange={(e) => setSearchQuery(e.target.value)}
+                                        placeholder="Pesquisar etiqueta..."
+                                        title="Pesquisar por etiqueta — só filtra a tabela, não muda a média"
+                                        className="h-8 w-48 pl-7 pr-7 text-[11px] font-mono border border-neutral-300 rounded-none focus:border-black outline-none"
+                                    />
+                                    {searchQuery && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setSearchQuery("")}
+                                            title="Limpar pesquisa"
+                                            className="absolute right-1.5 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-black"
+                                        >
+                                            <X className="h-3.5 w-3.5" />
+                                        </button>
+                                    )}
                                 </div>
+                                <div className="h-8 w-[1px] bg-neutral-300 mx-4 hidden md:block" />
+                                <span className="text-xs font-mono font-bold">
+                                    {displayedSamples.length} RECORDS
+                                </span>
                             </div>
                         </div>
                     {/* Table Container */}
@@ -594,59 +609,44 @@ export default function Analysis() {
                 <div className="space-y-12 pt-4">
                 {/* Metrics Header */}
                 <div className="flex flex-col gap-6">
-                    <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 border border-neutral-200 p-6 bg-neutral-50">
-                        <div className="flex items-center gap-2">
-                            <Filter className="h-4 w-4 text-black" />
-                            <span className="text-[10px] uppercase tracking-widest font-bold">Grade Filter</span>
+                    {/* Barra de Tolerâncias para Lotes */}
+                    <div className="bg-white border border-neutral-100 p-4 shadow-sm flex items-center gap-6 overflow-x-auto min-w-0">
+                        <div className="flex flex-col leading-none border-r border-neutral-200 pr-4 shrink-0">
+                            <span className="text-[10px] font-black text-neutral-400 uppercase tracking-widest leading-none mb-1">Configuração</span>
+                            <span className="text-sm font-serif font-bold text-black">Geração HVI (Variação)</span>
                         </div>
-
-                        <div className="flex flex-wrap items-center gap-2">
-                            {(['#10b981', '#f59e0b', '#ef4444', '#3b82f6'] as const).map(c => (
-                                <button
-                                    key={c}
-                                    title={`Filtrar por cor: ${c === '#ef4444' ? 'Vermelho' : c === '#3b82f6' ? 'Azul' : c === '#10b981' ? 'Verde' : 'Alerta'}`}
-                                    onClick={() => setFilterColor(filterColor === c ? null : c)}
-                                    className={cn(
-                                        "w-8 h-8 transition-all border border-neutral-300",
-                                        filterColor === c ? 'ring-2 ring-black ring-offset-2' : 'hover:opacity-80',
-                                        c === '#10b981' ? 'bg-[#10b981]' : 
-                                        c === '#f59e0b' ? 'bg-[#f59e0b]' : 
-                                        c === '#ef4444' ? 'bg-[#ef4444]' : 
-                                        'bg-[#3b82f6]'
-                                    )}
-                                />
+                        <div className="flex items-center gap-4">
+                            {[
+                                { id: 'mic', label: 'Mic' },
+                                { id: 'len', label: 'Len' },
+                                { id: 'unf', label: 'Unf' },
+                                { id: 'str', label: 'Str' },
+                                { id: 'rd', label: 'Rd' },
+                                { id: 'b', label: '+b' }
+                            ].map((tol) => (
+                                <div key={tol.id} className="flex flex-col items-center gap-1">
+                                    <label className="text-[10px] font-bold text-neutral-400 uppercase">{tol.label}</label>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        title={`Tolerância ${tol.label}`}
+                                        value={tolerancias[tol.id as keyof typeof tolerancias]}
+                                        onChange={(e) => {
+                                            const val = parseFloat(e.target.value);
+                                            if (!isNaN(val)) {
+                                                setTolerancias(prev => ({ ...prev, [tol.id]: val }));
+                                            }
+                                        }}
+                                        className="w-14 h-8 text-center border border-neutral-200 rounded text-[11px] font-black text-black bg-neutral-50/30 focus:border-black outline-none transition-all disabled:opacity-50"
+                                    />
+                                </div>
                             ))}
-                            {filterColor && (
-                                <Button variant="ghost" size="sm" onClick={() => setFilterColor(null)} className="h-8 px-4 ml-2 rounded-none text-[9px] font-bold text-black border border-black hover:bg-black hover:text-white uppercase">
-                                    Clear
-                                </Button>
-                            )}
-                            <div className="h-8 w-[1px] bg-neutral-300 mx-4 hidden md:block" />
-                            <div className="relative">
-                                <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-neutral-400" />
-                                <input
-                                    type="text"
-                                    value={searchQuery}
-                                    onChange={(e) => setSearchQuery(e.target.value)}
-                                    placeholder="Pesquisar etiqueta..."
-                                    title="Pesquisar por etiqueta — só filtra a tabela, não muda a média"
-                                    className="h-8 w-48 pl-7 pr-7 text-[11px] font-mono border border-neutral-300 rounded-none focus:border-black outline-none"
-                                />
-                                {searchQuery && (
-                                    <button
-                                        type="button"
-                                        onClick={() => setSearchQuery("")}
-                                        title="Limpar pesquisa"
-                                        className="absolute right-1.5 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-black"
-                                    >
-                                        <X className="h-3.5 w-3.5" />
-                                    </button>
-                                )}
+                        </div>
+                        <div className="ml-auto shrink-0 flex items-center gap-4">
+                            <div className="px-3 py-1.5 bg-blue-50 border border-blue-200 rounded text-[9px] font-bold text-blue-700 uppercase tracking-tight">
+                                <span className="opacity-70 mr-1 italic">Objetivo:</span>
+                                Calibrar variação das sub-medições no arquivo TXT
                             </div>
-                            <div className="h-8 w-[1px] bg-neutral-300 mx-4 hidden md:block" />
-                            <span className="text-xs font-mono font-bold">
-                                {displayedSamples.length} RECORDS
-                            </span>
                         </div>
                     </div>
 
