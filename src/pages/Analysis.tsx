@@ -494,6 +494,9 @@ export default function Analysis() {
                         <div className="overflow-x-auto">
                             <AnalysisTable
                                 key={`analysis-table-${refreshTrigger}`}
+                                // Com o PiP aberto, os modais (gerar/ajustar valores) abrem
+                                // dentro da janela flutuante, junto da tabela.
+                                portalTarget={pipWindow ? pipWindow.document.body : undefined}
                                 samples={displayedSamples}
                                 onUpdateSample={handleUpdateSample}
                                 onColorChange={handleColorChange}

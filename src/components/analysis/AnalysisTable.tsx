@@ -11,6 +11,8 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
 
 interface AnalysisTableProps {
+    /** Onde montar os modais — usado para abrir dentro da janela flutuante (PiP). */
+    portalTarget?: HTMLElement | null;
     samples: Sample[];
     onUpdateSample: (id: string, field: string, value: any) => Promise<void>;
     onColorChange: (id: string, color: string) => void;
@@ -37,7 +39,7 @@ const COLORS = [
     { value: "#f59e0b", label: "Amarelo", name: "yellow" },
 ];
 
-export default function AnalysisTable({ samples, onUpdateSample, onColorChange, onDeleteSample, isProcessing, highlightedSampleId, loteId, loteLabId, tolerancias, configuracoesAnalise }: AnalysisTableProps) {
+export default function AnalysisTable({ samples, onUpdateSample, onColorChange, onDeleteSample, isProcessing, highlightedSampleId, loteId, loteLabId, tolerancias, configuracoesAnalise, portalTarget }: AnalysisTableProps) {
     const { t } = useLanguage();
     const { user, currentLab, isLoading } = useAuth();
     const fields = ['mic', 'len', 'unf', 'str', 'rd', 'b'] as const;
@@ -463,6 +465,8 @@ export default function AnalysisTable({ samples, onUpdateSample, onColorChange, 
             {/* HVI Preview Modal */}
             {previewModal.data && previewModal.sample && (
                 <HVIPreviewModal
+                    portalTarget={portalTarget}
+                    hideRawPreview={!!portalTarget}
                     isOpen={previewModal.isOpen}
                     machines={machines}
                     onClose={() => setPreviewModal({ isOpen: false, data: null, sample: null })}

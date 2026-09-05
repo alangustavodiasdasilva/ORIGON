@@ -27,6 +27,12 @@ interface HVIPreviewModalProps {
     onRegenerate?: (readings: Record<string, number[]>, config?: { customEtiqueta: string, customDate: string, customTime: string, customHvi: string, codigoOperador: string }) => void;
     onSaveField?: (field: string, value: any) => Promise<void>;
     defaultCodigoOperador?: string;
+    /** Onde montar o modal. Serve para abri-lo dentro da janela flutuante (PiP)
+     *  em vez da janela principal. Padrão: document.body. */
+    portalTarget?: HTMLElement | null;
+    /** Esconde a "Prévia Completa do Arquivo" (o texto bruto). Usado no PiP,
+     *  onde o espaço é curto e essa parte não é necessária. */
+    hideRawPreview?: boolean;
 }
 
 export default function HVIPreviewModal({
@@ -42,7 +48,9 @@ export default function HVIPreviewModal({
     machines = [],
     onRegenerate,
     onSaveField,
-    defaultCodigoOperador
+    defaultCodigoOperador,
+    portalTarget,
+    hideRawPreview
 }: HVIPreviewModalProps) {
     const { t } = useLanguage();
     const [editableReadings, setEditableReadings] = useState<Record<string, string[]>>({});
@@ -654,15 +662,18 @@ export default function HVIPreviewModal({
 
                     </div>
 
-                    {/* RIGHT COLUMN: Full File Preview */}
-                    <div className="w-full lg:w-5/12 p-8 overflow-y-auto bg-neutral-100 flex flex-col shadow-inner">
-                        <h4 className="text-xs font-bold uppercase tracking-widest text-neutral-500 mb-3 shrink-0">
-                            Prévia Completa do Arquivo
-                        </h4>
-                        <div className="bg-white p-4 border border-neutral-200 font-mono text-[10px] overflow-auto flex-1 shadow-sm">
-                            <pre className="whitespace-pre-wrap break-words">{content}</pre>
+                    {/* RIGHT COLUMN: Full File Preview — escondida no PiP, onde o
+                        espaço é curto e essa parte não é necessária. */}
+                    {!hideRawPreview && (
+                        <div className="w-full lg:w-5/12 p-8 overflow-y-auto bg-neutral-100 flex flex-col shadow-inner">
+                            <h4 className="text-xs font-bold uppercase tracking-widest text-neutral-500 mb-3 shrink-0">
+                                Prévia Completa do Arquivo
+                            </h4>
+                            <div className="bg-white p-4 border border-neutral-200 font-mono text-[10px] overflow-auto flex-1 shadow-sm">
+                                <pre className="whitespace-pre-wrap break-words">{content}</pre>
+                            </div>
                         </div>
-                    </div>
+                    )}
                 </div>
 
                 {/* Footer */}
@@ -703,6 +714,6 @@ export default function HVIPreviewModal({
                 </div>
             </div>
         </div>,
-        document.body
+        portalTarget || document.body
     );
 }
