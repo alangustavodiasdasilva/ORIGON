@@ -198,7 +198,7 @@ export const MachineService = {
         if (!isSupabaseEnabled()) return () => { };
 
         const channel = supabase
-            .channel('maquinas-changes')
+            .channel(`maquinas-changes-${Math.random().toString(36).substr(2, 9)}`)
             .on(
                 'postgres_changes',
                 { event: '*', schema: 'public', table: 'maquinas' },
