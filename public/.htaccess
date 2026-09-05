@@ -8,6 +8,26 @@
   RewriteRule . /index.html [L]
 </IfModule>
 
+# Compressao: sem isso a hospedagem entrega os ~1,9 MB de JS crus, enquanto o
+# GitHub Pages comprime sozinho — era por isso que o origo-hvi.com demorava
+# muito mais pra abrir os lotes que o espelho do Pages.
+<IfModule mod_deflate.c>
+  AddOutputFilterByType DEFLATE text/html text/plain text/xml text/css
+  AddOutputFilterByType DEFLATE application/javascript application/x-javascript text/javascript
+  AddOutputFilterByType DEFLATE application/json application/xml
+  AddOutputFilterByType DEFLATE image/svg+xml application/wasm
+</IfModule>
+
+# Os arquivos em /assets/ tem hash no nome (mudam a cada build), entao podem ser
+# guardados pra sempre: o navegador deixa de rebaixar os mesmos MB toda visita.
+<IfModule mod_headers.c>
+  <FilesMatch "\.(js|css|woff2?|ttf|eot|otf|svg|png|jpg|jpeg|gif|webp|ico|wasm|mp3)$">
+    Header set Cache-Control "public, max-age=31536000, immutable"
+  </FilesMatch>
+</IfModule>
+
+# O index.html NUNCA e cacheado — e ele que aponta pros arquivos novos, entao
+# uma atualizacao aparece na hora, sem precisar de Ctrl+Shift+R.
 <FilesMatch "\.(html|htm)$">
   FileETag None
   <IfModule mod_headers.c>
