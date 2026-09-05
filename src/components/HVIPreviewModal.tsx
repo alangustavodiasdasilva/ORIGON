@@ -287,8 +287,9 @@ export default function HVIPreviewModal({
 
                 {/* Content */}
                 <div className="flex-1 overflow-hidden bg-neutral-50 flex flex-col lg:flex-row">
-                    {/* LEFT COLUMN: Tables */}
-                    <div className="w-full lg:w-7/12 p-6 sm:p-8 overflow-y-auto border-b lg:border-b-0 lg:border-r border-neutral-200">
+                    {/* LEFT COLUMN: Tables — sem a prévia à direita (no PiP), ocupa
+                        a largura toda em vez de deixar 5/12 vazios. */}
+                    <div className={`w-full p-6 sm:p-8 overflow-y-auto border-b border-neutral-200 ${hideRawPreview ? '' : 'lg:w-7/12 lg:border-b-0 lg:border-r'}`}>
                         {/* HEADER CONFIGURATION */}
                         <div className="bg-white border border-neutral-200 shadow-sm mb-6 p-4">
                             <h3 className="text-xs font-bold uppercase tracking-widest text-neutral-500 mb-4">Configuração do Cabeçalho</h3>
