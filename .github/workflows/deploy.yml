@@ -8,7 +8,7 @@ on:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -21,8 +21,23 @@ jobs:
       - name: Install Dependencies
         run: npm ci
 
+      # --- Site principal: origo-hvi.com (serve na raiz "/") ---
       - name: Build Project
         run: npm run build
 
       - name: Upload via FTP
         run: node deploy_ftp.mjs
+
+      # --- Espelho: usuario.github.io/ORIGON/ (serve na subpasta "/ORIGON/") ---
+      # Rebuild com base diferente: o mesmo build nao serve pros dois, senao os
+      # arquivos JS/CSS sao procurados no caminho errado e a pagina fica em branco.
+      - name: Build Project (GitHub Pages)
+        run: npm run build
+        env:
+          VITE_BASE: /ORIGON/
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./dist

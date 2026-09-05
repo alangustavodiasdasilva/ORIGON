@@ -6,7 +6,12 @@ import tailwindcss from '@tailwindcss/vite'
 
 // https://vite.dev/config/
 export default defineConfig({
-  base: '/',
+  // Caminho base do site. Padrão '/' — usado pela hospedagem (origo-hvi.com),
+  // que serve na raiz do domínio. O GitHub Pages serve numa subpasta
+  // (usuario.github.io/ORIGON/), então lá o build roda com VITE_BASE=/ORIGON/.
+  // Sem isso, o mesmo build quebra num dos dois: os arquivos JS/CSS são
+  // procurados no caminho errado e não carregam.
+  base: process.env.VITE_BASE || '/',
   plugins: [
     react(),
     tailwindcss(),
