@@ -263,14 +263,17 @@ export default function HVIPreviewModal({
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in">
             {/* ... Modal Content ... */}
             <div className="w-full max-w-[95vw] max-h-[95vh] bg-white flex flex-col shadow-2xl border border-black">
-                {/* Header */}
-                <div className="h-16 bg-white border-b border-black flex items-center justify-between px-8 shrink-0">
+                {/* Header — compacto no PiP: o titulo longo some e fica so o
+                    arquivo, liberando altura numa janela pequena. */}
+                <div className={`bg-white border-b border-black flex items-center justify-between shrink-0 ${hideRawPreview ? 'h-10 px-4' : 'h-16 px-8'}`}>
                     <div className="flex items-center gap-4">
-                        <Eye className="h-5 w-5 text-black" />
+                        {!hideRawPreview && <Eye className="h-5 w-5 text-black" />}
                         <div>
-                            <h3 className="text-sm font-bold uppercase tracking-widest text-black">
-                                Comparativo: Valores Atuais vs Arquivo HVI
-                            </h3>
+                            {!hideRawPreview && (
+                                <h3 className="text-sm font-bold uppercase tracking-widest text-black">
+                                    Comparativo: Valores Atuais vs Arquivo HVI
+                                </h3>
+                            )}
                             <p className="text-[10px] font-mono text-neutral-400 uppercase">
                                 {machineModel} • {filename}
                             </p>
@@ -642,24 +645,27 @@ export default function HVIPreviewModal({
                         </div>
                     )}
                     
-                        {/* APPROVAL SECTION */}
-                        <div className="mt-8 flex flex-col items-center justify-center p-6 bg-blue-50 border border-blue-100 rounded-lg shadow-sm">
-                            <p className="text-xs font-medium text-blue-800 mb-4 text-center">
-                                Os valores digitados precisam ser revisados pelo analista antes de prosseguir.
-                                Esta aprovação será registrada no histórico da amostra.
-                            </p>
-                            <Button 
-                                onClick={() => setIsApproved(true)}
-                                disabled={isApproved}
-                                className={`h-10 px-8 font-bold text-[10px] uppercase tracking-widest transition-all ${
-                                    isApproved 
-                                    ? 'bg-green-600 text-white hover:bg-green-700' 
-                                    : 'bg-blue-600 text-white hover:bg-blue-700'
-                                }`}
-                            >
-                                {isApproved ? '✓ Valores Aprovados' : 'Aprovar Valores'}
-                            </Button>
-                        </div>
+                        {/* APPROVAL SECTION — no PiP este bloco some e o botao de
+                            aprovar vai para o rodape, junto do confirmar. */}
+                        {!hideRawPreview && (
+                            <div className="mt-8 flex flex-col items-center justify-center p-6 bg-blue-50 border border-blue-100 rounded-lg shadow-sm">
+                                <p className="text-xs font-medium text-blue-800 mb-4 text-center">
+                                    Os valores digitados precisam ser revisados pelo analista antes de prosseguir.
+                                    Esta aprovação será registrada no histórico da amostra.
+                                </p>
+                                <Button
+                                    onClick={() => setIsApproved(true)}
+                                    disabled={isApproved}
+                                    className={`h-10 px-8 font-bold text-[10px] uppercase tracking-widest transition-all ${
+                                        isApproved
+                                        ? 'bg-green-600 text-white hover:bg-green-700'
+                                        : 'bg-blue-600 text-white hover:bg-blue-700'
+                                    }`}
+                                >
+                                    {isApproved ? '✓ Valores Aprovados' : 'Aprovar Valores'}
+                                </Button>
+                            </div>
+                        )}
 
                     </div>
 
@@ -677,17 +683,39 @@ export default function HVIPreviewModal({
                     )}
                 </div>
 
-                {/* Footer */}
-                <div className="h-20 bg-white border-t border-black flex items-center justify-between px-8 shrink-0">
-                    <div className="text-xs text-neutral-500">
-                        <p className="font-bold uppercase tracking-widest mb-1">⚠️ Importante:</p>
-                        <p>O arquivo HVI utiliza a média dos dados para a cor <span className="font-bold text-black">{originalSample?.cor}</span>.</p>
-                    </div>
-                    <div className="flex items-center gap-4">
+                {/* Footer — no PiP fica mais baixo, com a nota reduzida e o botao
+                    de aprovar integrado aqui, junto do confirmar. */}
+                <div className={`bg-white border-t border-black flex items-center justify-between shrink-0 ${hideRawPreview ? 'h-14 px-4 gap-3' : 'h-20 px-8'}`}>
+                    {hideRawPreview ? (
+                        <p className="text-[10px] text-neutral-500 leading-tight min-w-0 truncate">
+                            <span className="font-bold">⚠️</span> Usa a média da cor{' '}
+                            <span className="font-bold text-black">{originalSample?.cor}</span>
+                        </p>
+                    ) : (
+                        <div className="text-xs text-neutral-500">
+                            <p className="font-bold uppercase tracking-widest mb-1">⚠️ Importante:</p>
+                            <p>O arquivo HVI utiliza a média dos dados para a cor <span className="font-bold text-black">{originalSample?.cor}</span>.</p>
+                        </div>
+                    )}
+                    <div className={`flex items-center shrink-0 ${hideRawPreview ? 'gap-2' : 'gap-4'}`}>
+                        {hideRawPreview && (
+                            <Button
+                                onClick={() => setIsApproved(true)}
+                                disabled={isApproved}
+                                title="Os valores precisam ser revisados antes de baixar. A aprovação fica registrada no histórico da amostra."
+                                className={`h-9 px-4 rounded-none font-bold text-[10px] uppercase tracking-widest transition-all ${
+                                    isApproved
+                                    ? 'bg-green-600 text-white hover:bg-green-700'
+                                    : 'bg-blue-600 text-white hover:bg-blue-700'
+                                }`}
+                            >
+                                {isApproved ? '✓ Aprovado' : 'Aprovar'}
+                            </Button>
+                        )}
                         <Button
                             onClick={onClose}
                             variant="ghost"
-                            className="h-12 px-6 rounded-none border border-neutral-200 text-black hover:bg-neutral-100 font-bold text-[10px] uppercase tracking-widest transition-colors"
+                            className={`rounded-none border border-neutral-200 text-black hover:bg-neutral-100 font-bold text-[10px] uppercase tracking-widest transition-colors ${hideRawPreview ? 'h-9 px-3' : 'h-12 px-6'}`}
                         >
                             {t('hvi.cancel')}
                         </Button>
@@ -704,12 +732,12 @@ export default function HVIPreviewModal({
                                 onConfirm();
                             }}
                             disabled={!isApproved || !codigoOperador.trim()}
-                            className={`h-12 px-8 rounded-none font-bold text-[10px] uppercase tracking-widest transition-colors flex items-center gap-2 ${
+                            className={`rounded-none font-bold text-[10px] uppercase tracking-widest transition-colors flex items-center gap-2 ${hideRawPreview ? 'h-9 px-4' : 'h-12 px-8'} ${
                                 !isApproved || !codigoOperador.trim() ? 'bg-neutral-300 text-neutral-500 cursor-not-allowed' : 'bg-black text-white hover:bg-neutral-800'
                             }`}
                         >
-                            <Download className="h-4 w-4" />
-                            {t('hvi.confirm_download')}
+                            <Download className={hideRawPreview ? 'h-3.5 w-3.5' : 'h-4 w-4'} />
+                            {hideRawPreview ? 'Baixar' : t('hvi.confirm_download')}
                         </Button>
                     </div>
                 </div>

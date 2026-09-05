@@ -401,20 +401,25 @@ export default function Analysis() {
         }
         try {
             const pip = await (window as any).documentPictureInPicture.requestWindow({ width: 1100, height: 800 });
-            // Copia os estilos da pagina, senao a janela abre sem formatacao
+            // Copia os estilos da pagina, senao a janela abre sem formatacao.
+            // Quando a folha vem de um arquivo (href), apenas apontamos o <link>:
+            // serializar regra a regra o CSS do Tailwind gera um <style> enorme
+            // embutido, que deixava a janela flutuante pesada e travando.
             [...document.styleSheets].forEach((styleSheet) => {
+                if (styleSheet.href) {
+                    const link = pip.document.createElement('link');
+                    link.rel = 'stylesheet';
+                    link.href = styleSheet.href;
+                    pip.document.head.appendChild(link);
+                    return;
+                }
                 try {
                     const cssRules = [...styleSheet.cssRules].map(r => r.cssText).join('');
-                    const style = document.createElement('style');
+                    const style = pip.document.createElement('style');
                     style.textContent = cssRules;
                     pip.document.head.appendChild(style);
                 } catch {
-                    if (styleSheet.href) {
-                        const link = document.createElement('link');
-                        link.rel = 'stylesheet';
-                        link.href = styleSheet.href;
-                        pip.document.head.appendChild(link);
-                    }
+                    /* folha inacessivel (cross-origin) — ignora */
                 }
             });
             pip.document.documentElement.style.height = '100%';
