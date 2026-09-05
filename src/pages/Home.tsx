@@ -119,7 +119,7 @@ export default function Home() {
     const loadLotes = async () => {
         setIsLoading(true);
         try {
-            let data = await LoteService.list();
+            let data = await LoteService.listSummary();
 
             // Filter logic (CORRECTED):
             // 1. If currentLab is selected → Show ONLY batches from that lab

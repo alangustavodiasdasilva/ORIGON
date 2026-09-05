@@ -73,6 +73,36 @@ export const LoteService = {
         return getStoredLotes();
     },
 
+    /**
+     * Listagem enxuta para a tela de Lotes: traz tudo MENOS `configuracoes_analise`.
+     *
+     * Essa coluna guarda os templates de cor (com imagens) e sozinha soma ~25 MB
+     * dos 33 MB da tabela. Com `select('*')`, a listagem tentava baixar os 33 MB
+     * inteiros e estourava o statement_timeout do banco (3s no anon / 8s no
+     * authenticated), devolvendo erro 500 — o Postgres registra isso como
+     * "canceling statement due to statement timeout" (código 57014). Aí o list()
+     * caía no cache do localStorage e a tela mostrava lotes antigos (ou nenhum).
+     *
+     * Aqui não gravamos no cache local de propósito: o registro vem incompleto
+     * (sem configuracoes_analise) e sobrescrever o cache estragaria o backup,
+     * que depende do list() completo.
+     */
+    async listSummary(): Promise<Lote[]> {
+        if (isSupabaseEnabled()) {
+            try {
+                const { data, error } = await supabase
+                    .from('lotes')
+                    .select('id,nome,descricao,cidade,lab_id,status,analista_responsavel,created_at,updated_at')
+                    .order('created_at', { ascending: false });
+                if (error) throw error;
+                return data || [];
+            } catch (err) {
+                console.warn("Supabase LoteService.listSummary failed, falling back to local:", err);
+            }
+        }
+        return getStoredLotes();
+    },
+
     async get(id: string): Promise<Lote | undefined> {
         if (isSupabaseEnabled()) {
             try {
