@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { safeSetItem } from "@/lib/safeStorage";
 import {
@@ -10,7 +11,8 @@ import {
     ImagePlus,
     Lock,
     Search,
-    X
+    X,
+    PictureInPicture2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { Sample } from "@/entities/Sample";
@@ -361,6 +363,12 @@ export default function Analysis() {
     
     const [activeTab, setActiveTab] = useState<'geral' | 'gerados'>('geral');
 
+    // Janela flutuante (Picture-in-Picture) — mesma tecnica ja usada na Reanalise.
+    // Permite deixar a tabela e a geracao visiveis por cima de outro programa
+    // (ex: o software do HVI) sem ficar alternando de janela.
+    const [pipWindow, setPipWindow] = useState<Window | null>(null);
+
+
     const handleBulkColorUpdate = async (updates: Record<string, string>) => {
         setIsProcessing(true);
         try {
@@ -381,6 +389,114 @@ export default function Analysis() {
 
     if (!loteId) return <div className="p-10 text-center font-mono uppercase tracking-widest text-[10px]">NO_BATCH_ID</div>;
     if (!lote) return <div className="p-10 text-center animate-pulse font-mono uppercase tracking-widest text-[10px]">LOADING_METRICS...</div>;
+
+    const togglePiP = async () => {
+        if (pipWindow) {
+            pipWindow.close();
+            return;
+        }
+        if (!('documentPictureInPicture' in window)) {
+            alert('Janela flutuante nao suportada neste navegador. Use o Chrome ou Edge atualizado.');
+            return;
+        }
+        try {
+            const pip = await (window as any).documentPictureInPicture.requestWindow({ width: 1100, height: 800 });
+            // Copia os estilos da pagina, senao a janela abre sem formatacao
+            [...document.styleSheets].forEach((styleSheet) => {
+                try {
+                    const cssRules = [...styleSheet.cssRules].map(r => r.cssText).join('');
+                    const style = document.createElement('style');
+                    style.textContent = cssRules;
+                    pip.document.head.appendChild(style);
+                } catch {
+                    if (styleSheet.href) {
+                        const link = document.createElement('link');
+                        link.rel = 'stylesheet';
+                        link.href = styleSheet.href;
+                        pip.document.head.appendChild(link);
+                    }
+                }
+            });
+            pip.document.documentElement.style.height = '100%';
+            pip.document.body.className = 'bg-neutral-50 p-4';
+            pip.document.body.style.height = '100%';
+            pip.document.body.style.overflowY = 'auto';
+            pip.document.body.style.margin = '0';
+            pip.addEventListener('pagehide', () => setPipWindow(null));
+            setPipWindow(pip);
+        } catch (error) {
+            console.error('Erro ao abrir a janela flutuante:', error);
+        }
+    };
+
+    // Conteudo que vai para a janela flutuante (PiP): o painel de variacao da
+    // geracao HVI + a tabela de amostras. Sao as duas partes usadas juntas para
+    // escolher as amostras e gerar os dados, entao viajam juntas para o PiP.
+    const pipContent = (
+        <div className="space-y-6">
+                        {/* Barra de Tolerâncias para Lotes */}
+                        <div className="bg-white border border-neutral-100 p-4 shadow-sm flex items-center gap-6 overflow-x-auto min-w-0">
+                            <div className="flex flex-col leading-none border-r border-neutral-200 pr-4 shrink-0">
+                                <span className="text-[10px] font-black text-neutral-400 uppercase tracking-widest leading-none mb-1">Configuração</span>
+                                <span className="text-sm font-serif font-bold text-black">Geração HVI (Variação)</span>
+                            </div>
+                            <div className="flex items-center gap-4">
+                                {[
+                                    { id: 'mic', label: 'Mic' },
+                                    { id: 'len', label: 'Len' },
+                                    { id: 'unf', label: 'Unf' },
+                                    { id: 'str', label: 'Str' },
+                                    { id: 'rd', label: 'Rd' },
+                                    { id: 'b', label: '+b' }
+                                ].map((tol) => (
+                                    <div key={tol.id} className="flex flex-col items-center gap-1">
+                                        <label className="text-[10px] font-bold text-neutral-400 uppercase">{tol.label}</label>
+                                        <input
+                                            type="number"
+                                            step="0.01"
+                                            title={`Tolerância ${tol.label}`}
+                                            value={tolerancias[tol.id as keyof typeof tolerancias]}
+                                            onChange={(e) => {
+                                                const val = parseFloat(e.target.value);
+                                                if (!isNaN(val)) {
+                                                    setTolerancias(prev => ({ ...prev, [tol.id]: val }));
+                                                }
+                                            }}
+                                            className="w-14 h-8 text-center border border-neutral-200 rounded text-[11px] font-black text-black bg-neutral-50/30 focus:border-black outline-none transition-all disabled:opacity-50"
+                                        />
+                                    </div>
+                                ))}
+                            </div>
+                            <div className="ml-auto shrink-0 flex items-center gap-4">
+                                <div className="px-3 py-1.5 bg-blue-50 border border-blue-200 rounded text-[9px] font-bold text-blue-700 uppercase tracking-tight">
+                                    <span className="opacity-70 mr-1 italic">Objetivo:</span>
+                                    Calibrar variação das sub-medições no arquivo TXT
+                                </div>
+                            </div>
+                        </div>
+                    {/* Table Container */}
+                    <div className="overflow-hidden border border-black">
+                        <div className="overflow-x-auto">
+                            <AnalysisTable
+                                key={`analysis-table-${refreshTrigger}`}
+                                samples={displayedSamples}
+                                onUpdateSample={handleUpdateSample}
+                                onColorChange={handleColorChange}
+                                onDeleteSample={handleDeleteSample}
+                                isProcessing={isProcessing}
+                                highlightedSampleId={null}
+                                loteId={loteId || undefined}
+                                loteLabId={lote?.lab_id || undefined}
+                                tolerancias={tolerancias}
+                                configuracoesAnalise={{
+                                    ...(lote?.configuracoes_analise || {}),
+                                    manual_overrides: manualOverrides
+                                }}
+                            />
+                        </div>
+                    </div>
+        </div>
+    );
 
     return (
         <div className="space-y-8 animate-fade-in relative pb-24 text-black">
@@ -437,6 +553,15 @@ export default function Analysis() {
                             <Download className="h-4 w-4 text-blue-600" />
                             <span className="text-[10px] font-bold uppercase tracking-widest text-neutral-600">Exportar (Excel)</span>
                         </Button>
+                        <Button
+                            variant="outline"
+                            onClick={togglePiP}
+                            title={pipWindow ? "Retornar para a pagina" : "Abrir tabela e geracao numa janela flutuante"}
+                            className={`h-10 rounded-none flex items-center gap-2 ${pipWindow ? 'bg-blue-600 text-white hover:bg-blue-700 border-transparent' : 'border-neutral-200 hover:border-black hover:bg-neutral-50'}`}
+                        >
+                            <PictureInPicture2 className={`h-4 w-4 ${pipWindow ? 'text-white' : 'text-blue-600'}`} />
+                            <span className={`text-[10px] font-bold uppercase tracking-widest ${pipWindow ? 'text-white' : 'text-neutral-600'}`}>Janela Flutuante</span>
+                        </Button>
                     </div>
                 </div>
 
@@ -462,6 +587,8 @@ export default function Analysis() {
                     </button>
                 </div>
             </div>
+
+            {pipWindow && createPortal(<div className="min-w-[900px]">{pipContent}</div>, pipWindow.document.body)}
 
             {activeTab === 'geral' && (
                 <div className="space-y-12 pt-4">
@@ -523,69 +650,21 @@ export default function Analysis() {
                         </div>
                     </div>
 
-                    {/* Barra de Tolerâncias para Lotes */}
-                    <div className="bg-white border border-neutral-100 p-4 shadow-sm flex items-center gap-6 overflow-x-auto min-w-0">
-                        <div className="flex flex-col leading-none border-r border-neutral-200 pr-4 shrink-0">
-                            <span className="text-[10px] font-black text-neutral-400 uppercase tracking-widest leading-none mb-1">Configuração</span>
-                            <span className="text-sm font-serif font-bold text-black">Geração HVI (Variação)</span>
-                        </div>
-                        <div className="flex items-center gap-4">
-                            {[
-                                { id: 'mic', label: 'Mic' },
-                                { id: 'len', label: 'Len' },
-                                { id: 'unf', label: 'Unf' },
-                                { id: 'str', label: 'Str' },
-                                { id: 'rd', label: 'Rd' },
-                                { id: 'b', label: '+b' }
-                            ].map((tol) => (
-                                <div key={tol.id} className="flex flex-col items-center gap-1">
-                                    <label className="text-[10px] font-bold text-neutral-400 uppercase">{tol.label}</label>
-                                    <input
-                                        type="number"
-                                        step="0.01"
-                                        title={`Tolerância ${tol.label}`}
-                                        value={tolerancias[tol.id as keyof typeof tolerancias]}
-                                        onChange={(e) => {
-                                            const val = parseFloat(e.target.value);
-                                            if (!isNaN(val)) {
-                                                setTolerancias(prev => ({ ...prev, [tol.id]: val }));
-                                            }
-                                        }}
-                                        className="w-14 h-8 text-center border border-neutral-200 rounded text-[11px] font-black text-black bg-neutral-50/30 focus:border-black outline-none transition-all disabled:opacity-50"
-                                    />
-                                </div>
-                            ))}
-                        </div>
-                        <div className="ml-auto shrink-0 flex items-center gap-4">
-                            <div className="px-3 py-1.5 bg-blue-50 border border-blue-200 rounded text-[9px] font-bold text-blue-700 uppercase tracking-tight">
-                                <span className="opacity-70 mr-1 italic">Objetivo:</span>
-                                Calibrar variação das sub-medições no arquivo TXT
-                            </div>
-                        </div>
+                {/* Painel de geracao + tabela. Quando o PiP esta aberto, o conteudo
+                    vive na janela flutuante e aqui fica so o aviso. */}
+                {pipWindow ? (
+                    <div className="w-full border border-dashed border-blue-300 bg-blue-50/50 flex flex-col items-center justify-center text-blue-600 rounded-lg gap-2 py-10 px-6 text-center">
+                        <PictureInPicture2 className="w-8 h-8 opacity-50" />
+                        <span className="text-[11px] font-bold uppercase tracking-widest">
+                            Tabela e geracao estao na janela flutuante
+                        </span>
+                        <Button variant="outline" size="sm" onClick={togglePiP} className="mt-3 h-8 text-[10px] uppercase font-bold text-blue-700 bg-white hover:bg-blue-50">
+                            Retornar a pagina
+                        </Button>
                     </div>
+                ) : pipContent}
                 </div>
 
-                {/* Table Container */}
-                <div className="overflow-hidden border border-black">
-                    <div className="overflow-x-auto">
-                        <AnalysisTable
-                            key={`analysis-table-${refreshTrigger}`}
-                            samples={displayedSamples}
-                            onUpdateSample={handleUpdateSample}
-                            onColorChange={handleColorChange}
-                            onDeleteSample={handleDeleteSample}
-                            isProcessing={isProcessing}
-                            highlightedSampleId={null}
-                            loteId={loteId || undefined}
-                            loteLabId={lote?.lab_id || undefined}
-                            tolerancias={tolerancias}
-                            configuracoesAnalise={{
-                                ...(lote?.configuracoes_analise || {}),
-                                manual_overrides: manualOverrides
-                            }}
-                        />
-                    </div>
-                </div>
 
                 {/* Individual Performance & Generation Metrics - Moved Bottom */}
                 <div className="space-y-12 pt-12 border-t border-neutral-200">
